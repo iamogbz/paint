@@ -1,6 +1,6 @@
-import React, { useState, useRef, useCallback, useEffect } from 'react';
-import { Sparkles, Eye, Paintbrush } from 'lucide-react';
-import { soundEffects } from '../utils/soundEffects';
+import React, { useState, useRef, useCallback, useEffect } from "react";
+import { Sparkles, Eye, Split } from "lucide-react";
+import { soundEffects } from "../utils/soundEffects";
 
 interface ImageComparisonSliderProps {
   originalUrl: string;
@@ -16,8 +16,8 @@ export const ImageComparisonSlider: React.FC<ImageComparisonSliderProps> = ({
   cartoonUrl,
   width,
   height,
-  altText = 'Artwork comparison',
-  activeHighlightHex
+  altText = "Artwork comparison",
+  activeHighlightHex,
 }) => {
   const [sliderPosition, setSliderPosition] = useState<number>(50); // 0% to 100%
   const [isDragging, setIsDragging] = useState<boolean>(false);
@@ -39,10 +39,13 @@ export const ImageComparisonSlider: React.FC<ImageComparisonSliderProps> = ({
     soundEffects.playBrushSwoosh();
   };
 
-  const handleMouseMove = useCallback((e: MouseEvent) => {
-    if (!isDragging) return;
-    updateSliderPosition(e.clientX);
-  }, [isDragging, updateSliderPosition]);
+  const handleMouseMove = useCallback(
+    (e: MouseEvent) => {
+      if (!isDragging) return;
+      updateSliderPosition(e.clientX);
+    },
+    [isDragging, updateSliderPosition]
+  );
 
   const handleMouseUp = useCallback(() => {
     if (isDragging) {
@@ -58,12 +61,15 @@ export const ImageComparisonSlider: React.FC<ImageComparisonSliderProps> = ({
     }
   };
 
-  const handleTouchMove = useCallback((e: TouchEvent) => {
-    if (!isDragging) return;
-    if (e.touches.length > 0) {
-      updateSliderPosition(e.touches[0].clientX);
-    }
-  }, [isDragging, updateSliderPosition]);
+  const handleTouchMove = useCallback(
+    (e: TouchEvent) => {
+      if (!isDragging) return;
+      if (e.touches.length > 0) {
+        updateSliderPosition(e.touches[0].clientX);
+      }
+    },
+    [isDragging, updateSliderPosition]
+  );
 
   const handleTouchEnd = useCallback(() => {
     setIsDragging(false);
@@ -71,18 +77,24 @@ export const ImageComparisonSlider: React.FC<ImageComparisonSliderProps> = ({
 
   useEffect(() => {
     if (isDragging) {
-      window.addEventListener('mousemove', handleMouseMove);
-      window.addEventListener('mouseup', handleMouseUp);
-      window.addEventListener('touchmove', handleTouchMove);
-      window.addEventListener('touchend', handleTouchEnd);
+      window.addEventListener("mousemove", handleMouseMove);
+      window.addEventListener("mouseup", handleMouseUp);
+      window.addEventListener("touchmove", handleTouchMove);
+      window.addEventListener("touchend", handleTouchEnd);
     }
     return () => {
-      window.removeEventListener('mousemove', handleMouseMove);
-      window.removeEventListener('mouseup', handleMouseUp);
-      window.removeEventListener('touchmove', handleTouchMove);
-      window.removeEventListener('touchend', handleTouchEnd);
+      window.removeEventListener("mousemove", handleMouseMove);
+      window.removeEventListener("mouseup", handleMouseUp);
+      window.removeEventListener("touchmove", handleTouchMove);
+      window.removeEventListener("touchend", handleTouchEnd);
     };
-  }, [isDragging, handleMouseMove, handleMouseUp, handleTouchMove, handleTouchEnd]);
+  }, [
+    isDragging,
+    handleMouseMove,
+    handleMouseUp,
+    handleTouchMove,
+    handleTouchEnd,
+  ]);
 
   // Quick preset buttons (Full Cartoon, 50/50 Split, Full Original)
   const setPreset = (pos: number) => {
@@ -93,39 +105,39 @@ export const ImageComparisonSlider: React.FC<ImageComparisonSliderProps> = ({
   return (
     <div className="flex flex-col items-center w-full">
       {/* Quick Mode Controls */}
-      <div className="flex items-center gap-1.5 mb-3 bg-white/40 backdrop-blur-md p-1.5 rounded-full border-[2.5px] border-[#000000] shadow-[3px_3px_0px_0px_#000000]">
+      <div className="absolute top-0 -translate-y-[160%] flex items-center gap-1.5 mb-3 bg-white/40 backdrop-blur-md p-1.5 rounded-full border-[2.5px] border-[#000000] shadow-[3px_3px_0px_0px_#000000]">
         <button
-          onClick={() => setPreset(100)}
-          className={`px-3.5 py-1 rounded-full text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1 border-2 ${
-            sliderPosition >= 95
-              ? 'bg-[#E63946] text-white border-[#000000] shadow-[2px_2px_0px_0px_#000000] scale-105'
-              : 'border-transparent text-[#000000] hover:bg-white/60'
-          }`}
-        >
-          <Sparkles className="w-3.5 h-3.5" />
-          Cartoon
-        </button>
-        <button
-          onClick={() => setPreset(50)}
-          className={`px-3.5 py-1 rounded-full text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1 border-2 ${
-            sliderPosition > 5 && sliderPosition < 95
-              ? 'bg-[#2A9D8F] text-white border-[#000000] shadow-[2px_2px_0px_0px_#000000] scale-105'
-              : 'border-transparent text-[#000000] hover:bg-white/60'
-          }`}
-        >
-          <Paintbrush className="w-3.5 h-3.5" />
-          Split Slider
-        </button>
-        <button
+          title="Show Original"
           onClick={() => setPreset(0)}
           className={`px-3.5 py-1 rounded-full text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1 border-2 ${
             sliderPosition <= 5
-              ? 'bg-[#1D3557] text-white border-[#000000] shadow-[2px_2px_0px_0px_#000000] scale-105'
-              : 'border-transparent text-[#000000] hover:bg-white/60'
+              ? "bg-[#1D3557] text-white border-[#000000] shadow-[2px_2px_0px_0px_#000000] scale-105"
+              : "border-transparent text-[#000000] hover:bg-white/60"
           }`}
         >
           <Eye className="w-3.5 h-3.5" />
-          Original
+        </button>
+        <button
+          title="50/50 Split"
+          onClick={() => setPreset(50)}
+          className={`px-3.5 py-1 rounded-full text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1 border-2 ${
+            sliderPosition > 5 && sliderPosition < 95
+              ? "bg-[#2A9D8F] text-white border-[#000000] shadow-[2px_2px_0px_0px_#000000] scale-105"
+              : "border-transparent text-[#000000] hover:bg-white/60"
+          }`}
+        >
+          <Split className="w-3.5 h-3.5" />
+        </button>
+        <button
+          title="Show Painting"
+          onClick={() => setPreset(100)}
+          className={`px-3.5 py-1 rounded-full text-xs font-black uppercase tracking-wider transition-all flex items-center gap-1 border-2 ${
+            sliderPosition >= 95
+              ? "bg-[#E63946] text-white border-[#000000] shadow-[2px_2px_0px_0px_#000000] scale-105"
+              : "border-transparent text-[#000000] hover:bg-white/60"
+          }`}
+        >
+          <Sparkles className="w-3.5 h-3.5" />
         </button>
       </div>
 
@@ -153,16 +165,13 @@ export const ImageComparisonSlider: React.FC<ImageComparisonSliderProps> = ({
             src={cartoonUrl}
             alt={`Cartoon ${altText}`}
             className="absolute inset-0 w-full h-full object-contain pointer-events-none max-w-none"
-            style={{ width: containerRef.current?.clientWidth ? `${containerRef.current.clientWidth}px` : '100%', height: '100%' }}
+            style={{
+              width: containerRef.current?.clientWidth
+                ? `${containerRef.current.clientWidth}px`
+                : "100%",
+              height: "100%",
+            }}
           />
-        </div>
-
-        {/* Badges on overlay */}
-        <div className="absolute top-3 left-3 bg-[#E63946] text-white text-[10px] sm:text-[11px] font-black px-3 py-1 rounded-full shadow-md border-[2px] border-white pointer-events-none uppercase tracking-wider">
-          🎨 Cartoon Palette
-        </div>
-        <div className="absolute top-3 right-3 bg-[#1D3557] text-white text-[10px] sm:text-[11px] font-black px-3 py-1 rounded-full shadow-md border-[2px] border-white pointer-events-none uppercase tracking-wider">
-          📷 Original Photo
         </div>
 
         {/* Divider Bar & Handle */}
@@ -170,15 +179,11 @@ export const ImageComparisonSlider: React.FC<ImageComparisonSliderProps> = ({
           className="absolute top-0 bottom-0 w-1 bg-white shadow-[0_0_10px_rgba(0,0,0,0.5)] pointer-events-none z-10 flex items-center justify-center"
           style={{ left: `${sliderPosition}%` }}
         >
-          <div className="w-10 h-10 -ml-5 bg-white border-[3px] border-[#000000] rounded-full shadow-[3px_3px_0px_0px_#000000] flex items-center justify-center text-[#000000] font-black text-sm hover:scale-110 active:scale-95 transition-transform pointer-events-auto">
-            <span className="text-xs tracking-tighter">◀ ▶</span>
+          <div className="w-10 h-10 bg-black border-[3px] border-[#FFF] rounded-full shadow-[3px_3px_0px_0px_#FFF] flex items-center justify-center text-[#FFF] font-white text-sm hover:scale-110 active:scale-95 transition-transform pointer-events-auto">
+            <Split className="p-2 w-7 h-7 text-xs tracking-tighter" />
           </div>
         </div>
       </div>
-
-      <p className="text-xs text-[#4A2810] font-black uppercase tracking-wider mt-2.5 flex items-center gap-1.5">
-        <span>👆 Drag slider left / right to compare photo & cartoon</span>
-      </p>
     </div>
   );
 };

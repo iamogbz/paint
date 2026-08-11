@@ -1,6 +1,6 @@
 import React from 'react';
 import { ProcessedArtwork } from '../types';
-import { X, Download, Trash2, CheckCircle2, ClipboardList, Plus, Sparkles } from 'lucide-react';
+import { X, Download, Trash2, CheckCircle2, ClipboardList, Plus, Sparkles, Image } from 'lucide-react';
 import { soundEffects } from '../utils/soundEffects';
 
 interface ArtworkGalleryModalProps {
@@ -27,7 +27,7 @@ export const ArtworkGalleryModal: React.FC<ArtworkGalleryModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-3 sm:p-5 animate-in fade-in duration-200">
       <div className="bg-white/70 backdrop-blur-xl border-[4px] border-[#000000] w-full max-w-2xl max-h-[85vh] rounded-[32px] p-4 sm:p-6 shadow-[10px_10px_0px_0px_#000000] flex flex-col relative overflow-hidden">
-        
+
         {/* Header */}
         <div className="flex items-center justify-between pb-4 border-b-2 border-[#000000]/20">
           <div className="flex items-center gap-2.5">
@@ -36,10 +36,10 @@ export const ArtworkGalleryModal: React.FC<ArtworkGalleryModalProps> = ({
             </div>
             <div>
               <h2 className="text-xl font-black italic text-[#4A2810] tracking-tight">
-                Artwork Clipboard
+                Existing Paintings
               </h2>
               <p className="text-xs font-bold uppercase text-[#4A2810]">
-                {artworks.length} saved cartoon {artworks.length === 1 ? 'artwork' : 'artworks'}
+                {artworks.length} saved {artworks.length === 1 ? 'artwork' : 'artworks'}
               </p>
             </div>
           </div>
@@ -77,7 +77,7 @@ export const ArtworkGalleryModal: React.FC<ArtworkGalleryModalProps> = ({
                 }`}
               >
                 {/* Thumbnail */}
-                <div 
+                <div
                   onClick={() => {
                     soundEffects.playPop();
                     onSelectArtwork(art);
@@ -106,7 +106,7 @@ export const ArtworkGalleryModal: React.FC<ArtworkGalleryModalProps> = ({
                     <p className="text-xs text-[#4A2810] font-bold">
                       Created: {dateStr} • {art.width}×{art.height}px
                     </p>
-                    
+
                     {/* Color Swatch Previews */}
                     <div className="flex items-center gap-1 mt-2 flex-wrap">
                       <span className="text-[10px] font-black text-[#000000] uppercase mr-1">
@@ -190,8 +190,8 @@ export const ArtworkGalleryModal: React.FC<ArtworkGalleryModalProps> = ({
             }}
             className="bg-[#2A9D8F] hover:bg-[#1d7369] text-white font-black px-4 py-2.5 rounded-[20px] border-[3px] border-[#000000] shadow-[3px_3px_0px_0px_#000000] text-xs sm:text-sm flex items-center gap-2 active:scale-95 transition-all uppercase"
           >
-            <Plus className="w-4 h-4" />
-            Upload New Photo
+            <Image className="w-4 h-4" />
+            Start a new painting
           </button>
 
           <button

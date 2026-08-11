@@ -83,7 +83,7 @@ export const PaletteDisplay: React.FC<PaletteDisplayProps> = ({
       <div className="absolute -top-10 -right-10 w-40 h-40 bg-white/30 rounded-full blur-2xl pointer-events-none" />
 
       {/* Palette Header */}
-      <div className="flex flex-col sm:flex-row sm:items-center justify-between gap-2 mb-4 pb-3 border-b-3 border-[#000000]/20">
+      <div className="flex flex-row items-center justify-between gap-2 mb-4 pb-3 border-b-3 border-[#000000]/20">
         {/* <div className="flex items-center gap-2.5">
           <div className="w-10 h-10 rounded-2xl bg-[#FFD166] border-[3px] border-[#000000] flex items-center justify-center text-[#000000] font-bold shadow-[2px_2px_0px_0px_#000000]">
             <Palette className="w-5 h-5" />

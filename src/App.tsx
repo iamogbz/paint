@@ -124,7 +124,7 @@ export default function App() {
       </div>
 
       {/* Main Container - Desktop centered mobile layout */}
-      <div className="relative z-10 w-full max-w-2xl mx-auto px-2 sm:px-4 pt-3 flex flex-col items-center">
+      <div className="relative z-10 w-full max-w-2xl mx-auto px-2 pt-0 flex flex-col items-center">
         {/* FIRST THING USER SEES: EASEL BOARD (No App Header above it) */}
         <EaselBoard
           currentArtwork={currentArtwork}

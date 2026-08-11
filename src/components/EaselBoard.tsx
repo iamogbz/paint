@@ -6,17 +6,12 @@ import {
   Image as ImageIcon,
   ClipboardList,
   Download,
-  Settings,
-  Volume2,
-  VolumeX,
   Sparkles,
-  Share2,
-  PlusCircle,
-  Palette,
   Loader2,
+  Image,
 } from "lucide-react";
 import { soundEffects } from "../utils/soundEffects";
-import { getSampleImages, SampleImage } from "../data/sampleImages";
+import { getSampleImages } from "../data/sampleImages";
 
 interface EaselBoardProps {
   currentArtwork: ProcessedArtwork | null;
@@ -85,12 +80,9 @@ export const EaselBoard: React.FC<EaselBoardProps> = ({
   };
 
   return (
-    <div className="w-full max-w-2xl mx-auto pt-2 pb-4 px-2 sm:px-4 relative flex flex-col items-center">
+    <div className="w-full max-w-2xl mx-auto pt-2 pb-4 px-2 sm:px-4 relative flex flex-col items-center overflow-scroll">
       {/* Wooden Easel Top Wooden Clamp */}
-      <div className="w-48 sm:w-64 h-6 bg-[#8B5E3C] border-3 border-[#3D2314] rounded-t-xl shadow-md z-20 flex items-center justify-center relative">
-        <div className="w-12 h-3 bg-[#D4A373] border border-[#3D2314] rounded-full shadow-inner" />
-        <div className="absolute -top-3 w-8 h-4 bg-[#4A2810] border border-[#3D2314] rounded-t-md" />
-      </div>
+      <div className="w-48 sm:w-64 h-6 bg-[#8B5E3C] border-3 border-[#3D2314] rounded-t-xl shadow-md z-20 flex items-center justify-center relative"></div>
 
       {/* Main Easel Canvas Frame */}
       <div className="w-full bg-[#8B5E3C] border-[4px] border-[#4A2810] rounded-[28px] p-3 sm:p-5 shadow-[12px_12px_0px_0px_rgba(0,0,0,0.15)] relative z-10 overflow-hidden">
@@ -99,6 +91,7 @@ export const EaselBoard: React.FC<EaselBoardProps> = ({
           {/* Left: View Other Artworks button if user has at least one artwork uploaded */}
           {hasArtworks ? (
             <button
+              title="Open Gallery"
               onClick={() => {
                 soundEffects.playPop();
                 onOpenGallery();
@@ -107,7 +100,6 @@ export const EaselBoard: React.FC<EaselBoardProps> = ({
               className="bg-[#FFFFFF] text-[#000000] border-[3px] border-[#000000] rounded-[24px] px-4 py-2 sm:px-5 sm:py-2.5 flex items-center gap-2.5 shadow-[5px_5px_0px_0px_#000000] hover:translate-y-0.5 hover:shadow-[2px_2px_0px_0px_#000000] transition-all font-black text-xs sm:text-sm uppercase tracking-tight active:scale-95"
             >
               <ClipboardList className="w-4 h-4 text-[#000000]" />
-              <span>View Other Artworks</span>
             </button>
           ) : (
             <div className="flex items-center gap-2 bg-white/40 backdrop-blur-md px-3 py-1.5 rounded-full border-2 border-[#4A2810]">
@@ -132,11 +124,11 @@ export const EaselBoard: React.FC<EaselBoardProps> = ({
             {/* New Upload Button if artwork is displayed */}
             {currentArtwork && !isProcessing && (
               <button
+                title="Change Image"
                 onClick={() => fileInputRef.current?.click()}
                 className="bg-[#2A9D8F] text-white border-[3px] border-[#000000] rounded-[20px] px-3.5 py-2 font-black text-xs flex items-center gap-1.5 shadow-[3px_3px_0px_0px_#000000] hover:translate-y-0.5 hover:shadow-[1px_1px_0px_0px_#000000] transition-all active:scale-95"
               >
-                <PlusCircle className="w-4 h-4" />
-                <span className="hidden sm:inline uppercase">New Photo</span>
+                <Image className="w-4 h-4" />
               </button>
             )}
           </div>
