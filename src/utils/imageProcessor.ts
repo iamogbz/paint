@@ -327,6 +327,7 @@ export async function processImageToCartoonPalette(
     width,
     height,
     createdAt: Date.now(),
+    modifiedAt: Date.now(),
     colorStats,
     totalPixels,
   };

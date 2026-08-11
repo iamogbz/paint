@@ -210,6 +210,7 @@ export interface ProcessedArtwork {
   width: number;
   height: number;
   createdAt: number;
+  modifiedAt: number;
   colorStats: UsedColorStat[];
   totalPixels: number;
 }

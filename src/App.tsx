@@ -7,7 +7,7 @@ import { ArtworkGalleryModal } from "./components/ArtworkGalleryModal";
 import { soundEffects } from "./utils/soundEffects";
 import confetti from "canvas-confetti";
 
-const STORAGE_KEY = "paint_part_sd_artworks_v1";
+const STORAGE_KEY_ALL_ARTWORKS = "paint_part_sd_artworks_v1";
 
 export default function App() {
   const [artworks, setArtworks] = useState<ProcessedArtwork[]>([]);
@@ -25,11 +25,13 @@ export default function App() {
   // Load saved artworks on startup
   useEffect(() => {
     try {
-      const saved = localStorage.getItem(STORAGE_KEY);
+      const saved = localStorage.getItem(STORAGE_KEY_ALL_ARTWORKS);
       if (saved) {
         const parsed: ProcessedArtwork[] = JSON.parse(saved);
         if (parsed && parsed.length > 0) {
-          setArtworks(parsed);
+          setArtworks(
+            parsed.sort((a, b) => (b.modifiedAt || 0) - (a.modifiedAt || 0))
+          ); // Most recent first
           setCurrentArtwork(parsed[0]);
         }
       }
@@ -42,10 +44,29 @@ export default function App() {
   const saveArtworksList = (newList: ProcessedArtwork[]) => {
     setArtworks(newList);
     try {
-      localStorage.setItem(STORAGE_KEY, JSON.stringify(newList));
+      localStorage.setItem(STORAGE_KEY_ALL_ARTWORKS, JSON.stringify(newList));
     } catch (e) {
       console.warn("Could not save to localStorage", e);
     }
+  };
+
+  const handleSelectArtwork = (artwork: ProcessedArtwork) => {
+    const updatedArtwork = {
+      ...artwork,
+      modifiedAt: Date.now(), // Update modified timestamp
+    };
+    let newList = [];
+    const artworkIdx = artworks.findIndex((a) => a.id === artwork.id);
+    if (artworkIdx === -1) newList.push(updatedArtwork, ...artworks);
+    else {
+      newList.push(
+        ...artworks.slice(0, artworkIdx),
+        updatedArtwork,
+        ...artworks.slice(artworkIdx + 1)
+      );
+    }
+    saveArtworksList(newList);
+    setCurrentArtwork(updatedArtwork);
   };
 
   // Convert uploaded image
@@ -60,8 +81,6 @@ export default function App() {
         imageSrc,
         artworkName
       );
-
-      console.log("Processed new artwork:", newArtwork);
 
       const updatedList = [newArtwork, ...artworks];
       saveArtworksList(updatedList);
@@ -92,13 +111,15 @@ export default function App() {
   // Delete artwork
   const handleDeleteArtwork = (id: string) => {
     const updated = artworks.filter((art) => art.id !== id);
-    saveArtworksList(updated);
     if (currentArtwork?.id === id) {
-      setCurrentArtwork(updated.length > 0 ? updated[0] : null);
+      const nextFirstArtwork = updated.length > 0 ? updated[0] : null;
+      nextFirstArtwork.modifiedAt = Date.now(); // Update modified timestamp
+      setCurrentArtwork(nextFirstArtwork);
     }
+    saveArtworksList(updated);
   };
 
-  // Toggle sound
+  // TODO: enable Toggle sound
   const handleToggleSound = () => {
     const next = !soundEnabled;
     setSoundEnabled(next);
@@ -159,7 +180,7 @@ export default function App() {
         onClose={() => setIsGalleryOpen(false)}
         artworks={artworks}
         activeArtworkId={currentArtwork?.id || null}
-        onSelectArtwork={(art) => setCurrentArtwork(art)}
+        onSelectArtwork={handleSelectArtwork}
         onDeleteArtwork={handleDeleteArtwork}
         onUploadNew={() => {
           setCurrentArtwork(null);
