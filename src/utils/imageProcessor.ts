@@ -1,11 +1,17 @@
-import { PALETTE_COLORS, PaletteColor, ProcessedArtwork, ProcessingSettings, UsedColorStat } from '../types';
-import { findClosestPaletteColorFast } from './colorUtils';
+import {
+  PALETTE_COLOR,
+  PALETTE_COLORS,
+  ProcessedArtwork,
+  ProcessingSettings,
+  UsedColorStat,
+} from "../types";
+import { findClosestPaletteColorFast } from "./colorUtils";
 
 export const DEFAULT_SETTINGS: ProcessingSettings = {
   smoothness: 3, // 1 (mild) to 5 (strong painterly)
   outlineStrength: 2, // 0 (none) to 4 (bold cartoon)
-  outlineColorHex: '#000000',
-  cleanJaggies: true
+  outlineColorHex: "#000000",
+  cleanJaggies: true,
 };
 
 /**
@@ -14,7 +20,7 @@ export const DEFAULT_SETTINGS: ProcessingSettings = {
 export function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.crossOrigin = 'anonymous';
+    img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
     img.onerror = (err) => reject(err);
     img.src = src;
@@ -24,7 +30,11 @@ export function loadImage(src: string): Promise<HTMLImageElement> {
 /**
  * Resizes image dimensions to fit within maxDim (800px max width or height)
  */
-export function calculateTargetDimensions(width: number, height: number, maxDim = 800): { width: number; height: number } {
+export function calculateTargetDimensions(
+  width: number,
+  height: number,
+  maxDim = 800
+): { width: number; height: number } {
   if (width <= maxDim && height <= maxDim) {
     return { width, height };
   }
@@ -60,7 +70,9 @@ function applyKuwaharaFilter(
       // Region 4: [x, x+radius] x [y, y+radius]
 
       let minVariance = Infinity;
-      let bestR = 0, bestG = 0, bestB = 0;
+      let bestR = 0,
+        bestG = 0,
+        bestB = 0;
 
       const subRegions = [
         { xStart: x - radius, xEnd: x, yStart: y - radius, yEnd: y },
@@ -71,8 +83,12 @@ function applyKuwaharaFilter(
 
       for (let s = 0; s < 4; s++) {
         const reg = subRegions[s];
-        let sumR = 0, sumG = 0, sumB = 0;
-        let sumSqR = 0, sumSqG = 0, sumSqB = 0;
+        let sumR = 0,
+          sumG = 0,
+          sumB = 0;
+        let sumSqR = 0,
+          sumSqG = 0,
+          sumSqB = 0;
         let count = 0;
 
         for (let ry = reg.yStart; ry <= reg.yEnd; ry++) {
@@ -82,8 +98,12 @@ function applyKuwaharaFilter(
             const g = srcData[idx + 1];
             const b = srcData[idx + 2];
 
-            sumR += r; sumG += g; sumB += b;
-            sumSqR += r * r; sumSqG += g * g; sumSqB += b * b;
+            sumR += r;
+            sumG += g;
+            sumB += b;
+            sumSqR += r * r;
+            sumSqG += g * g;
+            sumSqB += b * b;
             count++;
           }
         }
@@ -92,9 +112,9 @@ function applyKuwaharaFilter(
         const meanG = sumG / count;
         const meanB = sumB / count;
 
-        const varR = (sumSqR / count) - (meanR * meanR);
-        const varG = (sumSqG / count) - (meanG * meanG);
-        const varB = (sumSqB / count) - (meanB * meanB);
+        const varR = sumSqR / count - meanR * meanR;
+        const varG = sumSqG / count - meanG * meanG;
+        const varB = sumSqB / count - meanB * meanB;
         const totalVariance = varR + varG + varB;
 
         if (totalVariance < minVariance) {
@@ -131,7 +151,9 @@ function detectSobelEdges(
       // Luminance values around pixel
       const getLum = (px: number, py: number) => {
         const idx = (py * width + px) * 4;
-        return 0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2];
+        return (
+          0.299 * data[idx] + 0.587 * data[idx + 1] + 0.114 * data[idx + 2]
+        );
       };
 
       const g00 = getLum(x - 1, y - 1);
@@ -165,7 +187,7 @@ function applyMajorityCurveSmoothing(
   height: number
 ) {
   const copy = new Int16Array(colorIndices);
-  
+
   for (let y = 1; y < height - 1; y++) {
     for (let x = 1; x < width - 1; x++) {
       const idx = y * width + x;
@@ -203,34 +225,38 @@ function applyMajorityCurveSmoothing(
 export async function processImageToCartoonPalette(
   imageSrc: string,
   settings: ProcessingSettings = DEFAULT_SETTINGS,
-  artworkName = 'Cartoon Artwork'
+  artworkName = "Cartoon Artwork"
 ): Promise<ProcessedArtwork> {
   const img = await loadImage(imageSrc);
-  const { width, height } = calculateTargetDimensions(img.width, img.height, 800);
+  const { width, height } = calculateTargetDimensions(
+    img.width,
+    img.height,
+    800
+  );
 
   // Canvas for scaling original image
-  const origCanvas = document.createElement('canvas');
+  const origCanvas = document.createElement("canvas");
   origCanvas.width = width;
   origCanvas.height = height;
-  const origCtx = origCanvas.getContext('2d');
-  if (!origCtx) throw new Error('Could not create canvas context');
+  const origCtx = origCanvas.getContext("2d");
+  if (!origCtx) throw new Error("Could not create canvas context");
 
   // Draw scaled original
   origCtx.imageSmoothingEnabled = true;
-  origCtx.imageSmoothingQuality = 'high';
+  origCtx.imageSmoothingQuality = "high";
   origCtx.drawImage(img, 0, 0, width, height);
-  const originalDataUrl = origCanvas.toDataURL('image/png');
+  const originalDataUrl = origCanvas.toDataURL("image/png");
 
   // Source pixel data
   const origImgData = origCtx.getImageData(0, 0, width, height);
   const rawPixels = origImgData.data;
 
   // 1. Painterly smoothing pass (Kuwahara filter)
-  const smoothedCanvas = document.createElement('canvas');
+  const smoothedCanvas = document.createElement("canvas");
   smoothedCanvas.width = width;
   smoothedCanvas.height = height;
-  const smoothedCtx = smoothedCanvas.getContext('2d');
-  if (!smoothedCtx) throw new Error('Could not create canvas context');
+  const smoothedCtx = smoothedCanvas.getContext("2d");
+  if (!smoothedCtx) throw new Error("Could not create canvas context");
 
   const smoothedImgData = smoothedCtx.createImageData(width, height);
   const smoothedPixels = smoothedImgData.data;
@@ -246,13 +272,16 @@ export async function processImageToCartoonPalette(
   // 2. Cartoon Edge Detection (Sobel)
   const edgeThresholds = [200, 150, 110, 80, 50]; // mapping outlineStrength 0..4
   const edgeThreshold = edgeThresholds[Math.min(settings.outlineStrength, 4)];
-  const edgeMask = settings.outlineStrength > 0
-    ? detectSobelEdges(smoothedPixels, width, height, edgeThreshold)
-    : new Uint8Array(width * height);
+  const edgeMask =
+    settings.outlineStrength > 0
+      ? detectSobelEdges(smoothedPixels, width, height, edgeThreshold)
+      : new Uint8Array(width * height);
 
   // Outline color mapping
-  const outlinePaletteColor = PALETTE_COLORS.find(c => c.hexCode.toUpperCase() === settings.outlineColorHex.toUpperCase())
-    || PALETTE_COLORS.find(c => c.id === 'pure-black')!;
+  const outlinePaletteColor =
+    PALETTE_COLORS.find(
+      (c) => c.hexCode.toUpperCase() === settings.outlineColorHex.toUpperCase()
+    ) || PALETTE_COLORS.find((c) => c.id === PALETTE_COLOR.pure_black.id)!;
 
   // 3. Palette Quantization
   const colorIndices = new Int16Array(width * height);
@@ -261,7 +290,9 @@ export async function processImageToCartoonPalette(
   for (let i = 0; i < width * height; i++) {
     if (edgeMask[i] === 1) {
       // Outline pixel
-      const outlineIndex = PALETTE_COLORS.findIndex(c => c.id === outlinePaletteColor.id);
+      const outlineIndex = PALETTE_COLORS.findIndex(
+        (c) => c.id === outlinePaletteColor.id
+      );
       colorIndices[i] = outlineIndex;
     } else {
       const pxIdx = i * 4;
@@ -270,7 +301,7 @@ export async function processImageToCartoonPalette(
       const b = smoothedPixels[pxIdx + 2];
 
       const closest = findClosestPaletteColorFast(r, g, b);
-      const palIdx = PALETTE_COLORS.findIndex(c => c.id === closest.id);
+      const palIdx = PALETTE_COLORS.findIndex((c) => c.id === closest.id);
       colorIndices[i] = palIdx;
     }
   }
@@ -285,11 +316,11 @@ export async function processImageToCartoonPalette(
   }
 
   // 5. Render quantized cartoon pixels to output canvas & compute ratios
-  const outputCanvas = document.createElement('canvas');
+  const outputCanvas = document.createElement("canvas");
   outputCanvas.width = width;
   outputCanvas.height = height;
-  const outputCtx = outputCanvas.getContext('2d');
-  if (!outputCtx) throw new Error('Could not create output canvas');
+  const outputCtx = outputCanvas.getContext("2d");
+  if (!outputCtx) throw new Error("Could not create output canvas");
 
   const cartoonImgData = outputCtx.createImageData(width, height);
   const cartoonPixels = cartoonImgData.data;
@@ -310,7 +341,7 @@ export async function processImageToCartoonPalette(
   }
 
   outputCtx.putImageData(cartoonImgData, 0, 0);
-  const cartoonDataUrl = outputCanvas.toDataURL('image/png');
+  const cartoonDataUrl = outputCanvas.toDataURL("image/png");
 
   // Compute color statistics with exact ratios
   const colorStats: UsedColorStat[] = PALETTE_COLORS.map((color, index) => {
@@ -320,7 +351,7 @@ export async function processImageToCartoonPalette(
     return {
       color,
       count,
-      percentage
+      percentage,
     };
   });
 
@@ -334,6 +365,6 @@ export async function processImageToCartoonPalette(
     createdAt: Date.now(),
     colorStats,
     totalPixels,
-    settingsUsed: { ...settings }
+    settingsUsed: { ...settings },
   };
 }

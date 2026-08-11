@@ -1,26 +1,38 @@
-import React, { useState, useEffect } from 'react';
-import { ProcessedArtwork, ProcessingSettings, PaletteColor } from './types';
-import { processImageToCartoonPalette, DEFAULT_SETTINGS } from './utils/imageProcessor';
-import { EaselBoard } from './components/EaselBoard';
-import { PaletteDisplay } from './components/PaletteDisplay';
-import { ArtworkGalleryModal } from './components/ArtworkGalleryModal';
-import { StyleSettingsModal } from './components/StyleSettingsModal';
-import { soundEffects } from './utils/soundEffects';
-import confetti from 'canvas-confetti';
+import React, { useState, useEffect } from "react";
+import {
+  ProcessedArtwork,
+  ProcessingSettings,
+  PALETTE_COLOR,
+  PaletteColor,
+} from "./types";
+import {
+  processImageToCartoonPalette,
+  DEFAULT_SETTINGS,
+} from "./utils/imageProcessor";
+import { EaselBoard } from "./components/EaselBoard";
+import { PaletteDisplay } from "./components/PaletteDisplay";
+import { ArtworkGalleryModal } from "./components/ArtworkGalleryModal";
+import { StyleSettingsModal } from "./components/StyleSettingsModal";
+import { soundEffects } from "./utils/soundEffects";
+import confetti from "canvas-confetti";
 
-const STORAGE_KEY = 'palette_art_studio_artworks_v1';
+const STORAGE_KEY = "paint_part_sd_artworks_v1";
 
 export default function App() {
   const [artworks, setArtworks] = useState<ProcessedArtwork[]>([]);
-  const [currentArtwork, setCurrentArtwork] = useState<ProcessedArtwork | null>(null);
+  const [currentArtwork, setCurrentArtwork] = useState<ProcessedArtwork | null>(
+    null
+  );
   const [isProcessing, setIsProcessing] = useState<boolean>(false);
   const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
-  const [activeHighlightColor, setActiveHighlightColor] = useState<PaletteColor | null>(null);
+  const [activeHighlightColor, setActiveHighlightColor] =
+    useState<PaletteColor | null>(null);
 
   // Modals state
   const [isGalleryOpen, setIsGalleryOpen] = useState<boolean>(false);
   const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
-  const [settings, setSettings] = useState<ProcessingSettings>(DEFAULT_SETTINGS);
+  const [settings, setSettings] =
+    useState<ProcessingSettings>(DEFAULT_SETTINGS);
 
   // Load saved artworks on startup
   useEffect(() => {
@@ -34,7 +46,7 @@ export default function App() {
         }
       }
     } catch (e) {
-      console.warn('Could not restore saved artworks from localStorage', e);
+      console.warn("Could not restore saved artworks from localStorage", e);
     }
   }, []);
 
@@ -44,19 +56,26 @@ export default function App() {
     try {
       localStorage.setItem(STORAGE_KEY, JSON.stringify(newList));
     } catch (e) {
-      console.warn('Could not save to localStorage', e);
+      console.warn("Could not save to localStorage", e);
     }
   };
 
   // Convert uploaded image
-  const handleImageSelected = async (imageSrc: string, name = 'Cartoon Artwork') => {
+  const handleImageSelected = async (
+    imageSrc: string,
+    name = "Cartoon Artwork"
+  ) => {
     setIsProcessing(true);
     soundEffects.playBrushSwoosh();
 
     try {
       // Process cartoon quantization
-      const newArtwork = await processImageToCartoonPalette(imageSrc, settings, name);
-      
+      const newArtwork = await processImageToCartoonPalette(
+        imageSrc,
+        settings,
+        name
+      );
+
       const updatedList = [newArtwork, ...artworks];
       saveArtworksList(updatedList);
       setCurrentArtwork(newArtwork);
@@ -68,12 +87,18 @@ export default function App() {
         particleCount: 50,
         spread: 70,
         origin: { y: 0.6 },
-        colors: ['#E63946', '#FFD166', '#06D6A0', '#4EA8DE', '#B5179E']
+        colors: [
+          PALETTE_COLOR.crimson_red.hexCode,
+          PALETTE_COLOR.bright_yellow.hexCode,
+          PALETTE_COLOR.lime_green.hexCode,
+          PALETTE_COLOR.sky_blue.hexCode,
+          PALETTE_COLOR.bright_lavender.hexCode,
+        ],
       });
     } catch (err) {
-      console.error('Image processing failed:', err);
+      console.error("Image processing failed:", err);
       setIsProcessing(false);
-      alert('Failed to process image. Please try another photo.');
+      alert("Failed to process image. Please try another photo.");
     }
   };
 
@@ -91,20 +116,22 @@ export default function App() {
         currentArtwork.name
       );
 
-      const updatedList = artworks.map(art => art.id === currentArtwork.id ? reprocessed : art);
+      const updatedList = artworks.map((art) =>
+        art.id === currentArtwork.id ? reprocessed : art
+      );
       saveArtworksList(updatedList);
       setCurrentArtwork(reprocessed);
       setIsProcessing(false);
       soundEffects.playSuccessChime();
     } catch (err) {
-      console.error('Failed to re-process style:', err);
+      console.error("Failed to re-process style:", err);
       setIsProcessing(false);
     }
   };
 
   // Delete artwork
   const handleDeleteArtwork = (id: string) => {
-    const updated = artworks.filter(art => art.id !== id);
+    const updated = artworks.filter((art) => art.id !== id);
     saveArtworksList(updated);
     if (currentArtwork?.id === id) {
       setCurrentArtwork(updated.length > 0 ? updated[0] : null);
@@ -120,20 +147,27 @@ export default function App() {
   };
 
   return (
-    <main 
-      className="min-h-screen text-[#3D2314] font-sans relative pb-12 overflow-x-hidden selection:bg-[#FFD166] selection:text-[#3D2314]"
-      style={{ background: 'radial-gradient(circle at 50% 50%, #FFE5D9 0%, #FCD5AE 100%)' }}
+    <main
+      className="min-h-screen font-sans relative pb-12 overflow-x-hidden"
+      style={{
+        background: `radial-gradient(circle at 50% 50%, ${PALETTE_COLOR.pale_ivory.hexCode} 0%, ${PALETTE_COLOR.peach_base.hexCode} 100%`,
+      }}
     >
       {/* Playful Frosted Glass Background Accents */}
       <div className="fixed inset-0 pointer-events-none z-0 opacity-50 overflow-hidden">
-        <div className="absolute top-10 -left-12 w-72 h-72 bg-[#FFA6C9]/40 rounded-full blur-3xl" />
-        <div className="absolute top-1/3 -right-16 w-96 h-96 bg-[#4EA8DE]/30 rounded-full blur-3xl" />
-        <div className="absolute bottom-10 left-1/4 w-80 h-80 bg-[#FFD166]/40 rounded-full blur-3xl" />
+        <div
+          className={`absolute top-10 -left-12 w-72 h-72 bg-[${PALETTE_COLOR.pale_ivory.hexCode}]/40 rounded-full blur-3xl`}
+        />
+        <div
+          className={`absolute top-1/3 -right-16 w-96 h-96 bg-[${PALETTE_COLOR.sky_blue.hexCode}]/30 rounded-full blur-3xl`}
+        />
+        <div
+          className={`absolute bottom-10 left-1/4 w-80 h-80 bg-[${PALETTE_COLOR.bright_yellow.hexCode}]/40 rounded-full blur-3xl`}
+        />
       </div>
 
       {/* Main Container - Desktop centered mobile layout */}
       <div className="relative z-10 w-full max-w-2xl mx-auto px-2 sm:px-4 pt-3 flex flex-col items-center">
-        
         {/* FIRST THING USER SEES: EASEL BOARD (No App Header above it) */}
         <EaselBoard
           currentArtwork={currentArtwork}
@@ -155,8 +189,10 @@ export default function App() {
         />
 
         {/* Footer info */}
-        <footer className="mt-8 text-center text-xs font-bold text-[#8C6246]">
-          <p>Palette Studio PWA • 800px Max Dimensions • Strict 24-Color Quantization</p>
+        <footer
+          className={`mt-8 text-center text-xs font-bold text-[${PALETTE_COLOR.dark_espresso.hexCode}]`}
+        >
+          <p>PAINT by Colors ©️ QBRKTS {new Date().getFullYear()}</p>
         </footer>
       </div>
 

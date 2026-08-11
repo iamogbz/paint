@@ -1,4 +1,4 @@
-import { PALETTE_COLORS, PaletteColor } from '../types';
+import { PALETTE_COLORS, PaletteColor } from "../types";
 
 /**
  * Calculates weighted perceptual color distance between two RGB triples.
@@ -16,7 +16,7 @@ export function getPerceptualColorDistance(
   const dr = r1 - r2;
   const dg = g1 - g2;
   const db = b1 - b2;
-  
+
   // Weight formula based on red mean to approximate CIE76
   const weightR = 2 + rmean / 256;
   const weightG = 4.0;
@@ -28,13 +28,24 @@ export function getPerceptualColorDistance(
 /**
  * Finds the closest palette color for any given RGB tuple.
  */
-export function findClosestPaletteColor(r: number, g: number, b: number): PaletteColor {
+export function findClosestPaletteColor(
+  r: number,
+  g: number,
+  b: number
+): PaletteColor {
   let minDistance = Infinity;
-  let closestColor = PALETTE_COLORS[0];
+  let closestColor: PaletteColor = PALETTE_COLORS[0];
 
   for (let i = 0; i < PALETTE_COLORS.length; i++) {
     const pal = PALETTE_COLORS[i];
-    const dist = getPerceptualColorDistance(r, g, b, pal.rgb[0], pal.rgb[1], pal.rgb[2]);
+    const dist = getPerceptualColorDistance(
+      r,
+      g,
+      b,
+      pal.rgb[0],
+      pal.rgb[1],
+      pal.rgb[2]
+    );
     if (dist < minDistance) {
       minDistance = dist;
       closestColor = pal;
@@ -50,7 +61,11 @@ export function findClosestPaletteColor(r: number, g: number, b: number): Palett
  */
 const lookupCache = new Map<number, PaletteColor>();
 
-export function findClosestPaletteColorFast(r: number, g: number, b: number): PaletteColor {
+export function findClosestPaletteColorFast(
+  r: number,
+  g: number,
+  b: number
+): PaletteColor {
   // Quantize RGB to 5-bit (32 values each) for cache key
   const r5 = r >> 3;
   const g5 = g >> 3;

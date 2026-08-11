@@ -1,5 +1,5 @@
 import React, { useState } from 'react';
-import { ProcessingSettings, PALETTE_COLORS } from '../types';
+import { ProcessingSettings, PALETTE_COLOR } from '../types';
 import { X, Sparkles, Sliders, Check } from 'lucide-react';
 import { soundEffects } from '../utils/soundEffects';
 
@@ -29,7 +29,7 @@ export const StyleSettingsModal: React.FC<StyleSettingsModalProps> = ({
   return (
     <div className="fixed inset-0 z-50 bg-black/60 backdrop-blur-md flex items-center justify-center p-4 animate-in fade-in duration-200">
       <div className="bg-white/70 backdrop-blur-xl border-[4px] border-[#000000] w-full max-w-md rounded-[32px] p-5 sm:p-6 shadow-[10px_10px_0px_0px_#000000] flex flex-col relative">
-        
+
         {/* Header */}
         <div className="flex items-center justify-between pb-3 border-b-2 border-[#000000]/20 mb-4">
           <div className="flex items-center gap-2.5">
@@ -134,7 +134,7 @@ export const StyleSettingsModal: React.FC<StyleSettingsModalProps> = ({
                         : 'border-[#000000]/40 bg-white hover:border-[#000000]'
                     }`}
                   >
-                    <div 
+                    <div
                       className="w-3.5 h-3.5 rounded-full border border-black/30"
                       style={{ backgroundColor: opt.hex }}
                     />
