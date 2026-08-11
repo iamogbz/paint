@@ -187,24 +187,19 @@ export type PaletteColor = (typeof PALETTE_COLORS)[number];
 export const PALETTE_COLOR = Object.freeze(
   Object.fromEntries(PALETTE_COLORS.map((color) => [color.id, color]))
 ) as Readonly<{
-    [K in PaletteColor["id"]]: Extract<PaletteColor, { id: K }>
+  [K in PaletteColor["id"]]: Extract<PaletteColor, { id: K }>;
 }>;
 
-export const PALLETTE_CATEGORIES = Object.freeze(PALETTE_COLORS.map((color) => color.category))
+export const PALLETTE_CATEGORIES = Object.freeze(
+  PALETTE_COLORS.map((color) => color.category)
+);
 
-export type PaletteCategories = typeof PALLETTE_CATEGORIES[number];
+export type PaletteCategories = (typeof PALLETTE_CATEGORIES)[number];
 
 export interface UsedColorStat {
   color: PaletteColor;
   count: number;
   percentage: number; // e.g. 21 for 21%
-}
-
-export interface ProcessingSettings {
-  smoothness: number; // 1 to 5 (radius for blur/edge smoothing)
-  outlineStrength: number; // 0 to 5 (cartoon outline emphasis)
-  outlineColorHex: string; // #000000 or #1D3557
-  cleanJaggies: boolean; // connected component/majority pass
 }
 
 export interface ProcessedArtwork {
@@ -217,5 +212,4 @@ export interface ProcessedArtwork {
   createdAt: number;
   colorStats: UsedColorStat[];
   totalPixels: number;
-  settingsUsed: ProcessingSettings;
 }

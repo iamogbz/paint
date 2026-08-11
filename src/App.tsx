@@ -1,18 +1,9 @@
 import React, { useState, useEffect } from "react";
-import {
-  ProcessedArtwork,
-  ProcessingSettings,
-  PALETTE_COLOR,
-  PaletteColor,
-} from "./types";
-import {
-  processImageToCartoonPalette,
-  DEFAULT_SETTINGS,
-} from "./utils/imageProcessor";
+import { ProcessedArtwork, PALETTE_COLOR, PaletteColor } from "./types";
+import { processImageToCartoonPalette } from "./utils/imageProcessor";
 import { EaselBoard } from "./components/EaselBoard";
 import { PaletteDisplay } from "./components/PaletteDisplay";
 import { ArtworkGalleryModal } from "./components/ArtworkGalleryModal";
-import { StyleSettingsModal } from "./components/StyleSettingsModal";
 import { soundEffects } from "./utils/soundEffects";
 import confetti from "canvas-confetti";
 
@@ -30,9 +21,6 @@ export default function App() {
 
   // Modals state
   const [isGalleryOpen, setIsGalleryOpen] = useState<boolean>(false);
-  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
-  const [settings, setSettings] =
-    useState<ProcessingSettings>(DEFAULT_SETTINGS);
 
   // Load saved artworks on startup
   useEffect(() => {
@@ -70,11 +58,7 @@ export default function App() {
 
     try {
       // Process cartoon quantization
-      const newArtwork = await processImageToCartoonPalette(
-        imageSrc,
-        settings,
-        name
-      );
+      const newArtwork = await processImageToCartoonPalette(imageSrc, name);
 
       const updatedList = [newArtwork, ...artworks];
       saveArtworksList(updatedList);
@@ -99,33 +83,6 @@ export default function App() {
       console.error("Image processing failed:", err);
       setIsProcessing(false);
       alert("Failed to process image. Please try another photo.");
-    }
-  };
-
-  // Re-process current image with modified style settings
-  const handleApplySettings = async (newSettings: ProcessingSettings) => {
-    if (!currentArtwork) return;
-    setSettings(newSettings);
-    setIsProcessing(true);
-    soundEffects.playBrushSwoosh();
-
-    try {
-      const reprocessed = await processImageToCartoonPalette(
-        currentArtwork.originalDataUrl,
-        newSettings,
-        currentArtwork.name
-      );
-
-      const updatedList = artworks.map((art) =>
-        art.id === currentArtwork.id ? reprocessed : art
-      );
-      saveArtworksList(updatedList);
-      setCurrentArtwork(reprocessed);
-      setIsProcessing(false);
-      soundEffects.playSuccessChime();
-    } catch (err) {
-      console.error("Failed to re-process style:", err);
-      setIsProcessing(false);
     }
   };
 
@@ -175,9 +132,6 @@ export default function App() {
           isProcessing={isProcessing}
           onImageSelected={handleImageSelected}
           onOpenGallery={() => setIsGalleryOpen(true)}
-          onOpenSettings={() => setIsSettingsOpen(true)}
-          soundEnabled={soundEnabled}
-          onToggleSound={handleToggleSound}
           activeHighlightHex={activeHighlightColor?.hexCode}
         />
 
@@ -207,14 +161,6 @@ export default function App() {
         onUploadNew={() => {
           setCurrentArtwork(null);
         }}
-      />
-
-      {/* Style Tuning Settings Modal */}
-      <StyleSettingsModal
-        isOpen={isSettingsOpen}
-        onClose={() => setIsSettingsOpen(false)}
-        currentSettings={settings}
-        onApplySettings={handleApplySettings}
       />
     </main>
   );

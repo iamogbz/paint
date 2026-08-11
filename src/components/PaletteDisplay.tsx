@@ -49,9 +49,6 @@ export const PaletteDisplay: React.FC<PaletteDisplayProps> = ({
   const filteredColors = Object.values(PALETTE_COLOR).filter((color) => {
     const stat = statsMap.get(color.id);
     const isUsed = stat ? stat.count > 0 : false;
-    if (isUsed) {
-      console.log(stat);
-    }
 
     if (selectedCategory === categories[1]) return isUsed;
     if (selectedCategory === categories[0]) return true;
@@ -60,12 +57,11 @@ export const PaletteDisplay: React.FC<PaletteDisplayProps> = ({
 
   const timeoutIdRef = React.useRef<NodeJS.Timeout>(null);
   const handleColorClick = (color: PaletteColor) => {
-    clearTimeout(timeoutIdRef.current);
-
     soundEffects.playPop();
     if (activeColorId === color.id) {
       if (onSelectColor) onSelectColor(null);
     } else {
+      clearTimeout(timeoutIdRef.current);
       if (onSelectColor) onSelectColor(color);
       // Copy hex to clipboard on click
       navigator.clipboard
