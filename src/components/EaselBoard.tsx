@@ -4,14 +4,15 @@ import { ImageComparisonSlider } from "./ImageComparisonSlider";
 import {
   Upload,
   Image as ImageIcon,
-  ClipboardList,
   Download,
   Sparkles,
   Loader2,
   Image,
+  PaintBucket,
+  FolderOpen,
 } from "lucide-react";
 import { soundEffects } from "../utils/soundEffects";
-import { getSampleImages } from "../data/sampleImages";
+import { getDailyChallenge } from "../data/sampleImages";
 
 interface EaselBoardProps {
   currentArtwork: ProcessedArtwork | null;
@@ -32,7 +33,7 @@ export const EaselBoard: React.FC<EaselBoardProps> = ({
 }) => {
   const fileInputRef = useRef<HTMLInputElement>(null);
   const [isDragOver, setIsDragOver] = useState(false);
-  const samples = getSampleImages();
+  const dailyChallengeImage = getDailyChallenge();
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -99,7 +100,7 @@ export const EaselBoard: React.FC<EaselBoardProps> = ({
               id="view-other-artworks-btn"
               className="bg-[#FFFFFF] text-[#000000] border-[3px] border-[#000000] rounded-[24px] px-4 py-2 sm:px-5 sm:py-2.5 flex items-center gap-2.5 shadow-[5px_5px_0px_0px_#000000] hover:translate-y-0.5 hover:shadow-[2px_2px_0px_0px_#000000] transition-all font-black text-xs sm:text-sm uppercase tracking-tight active:scale-95"
             >
-              <ClipboardList className="w-4 h-4 text-[#000000]" />
+              <FolderOpen className="w-4 h-4 text-[#000000]" />
             </button>
           ) : (
             <div className="flex items-center gap-2 bg-white/40 backdrop-blur-md px-3 py-1.5 rounded-full border-2 border-[#4A2810]">
@@ -135,7 +136,7 @@ export const EaselBoard: React.FC<EaselBoardProps> = ({
         </div>
 
         {/* EASEL BOARD CANVAS DISPLAY AREA */}
-        <div className="bg-white/60 backdrop-blur-md border-[3px] border-[#000000] rounded-[20px] p-3 sm:p-4 min-h-[360px] sm:min-h-[440px] flex flex-col items-center justify-center relative shadow-inner">
+        <div className="backdrop-blur-md min-h-[360px] sm:min-h-[440px] flex flex-col items-center justify-center relative">
           {/* STATE 1: Processing Loader */}
           {isProcessing && (
             <div className="flex flex-col items-center justify-center py-12 px-4 text-center animate-pulse">
@@ -198,24 +199,23 @@ export const EaselBoard: React.FC<EaselBoardProps> = ({
 
               {/* Sample Photo Pickers */}
               <div className="mt-8 pt-6 border-t-2 border-[#000000]/15 w-full">
-                <p className="text-xs font-black text-[#4A2810] mb-3 uppercase tracking-wider">
-                  Or try with a sample photo:
-                </p>
                 <div className="flex items-center justify-center gap-2 flex-wrap">
-                  {samples.map((sample) => (
-                    <button
-                      key={sample.id}
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        soundEffects.playPop();
-                        onImageSelected(sample.dataUrl, sample.name);
-                      }}
-                      className="bg-white hover:bg-[#FFD166] text-[#000000] border-[2.5px] border-[#000000] px-3.5 py-1.5 rounded-[16px] font-black text-xs flex items-center gap-1.5 shadow-[2px_2px_0px_0px_#000000] active:scale-95 transition-all"
-                    >
-                      <span>{sample.emoji}</span>
-                      <span>{sample.name}</span>
-                    </button>
-                  ))}
+                  <button
+                    key={dailyChallengeImage.id}
+                    onClick={(e) => {
+                      e.stopPropagation();
+                      soundEffects.playPop();
+                      onImageSelected(
+                        dailyChallengeImage.dataUrl,
+                        dailyChallengeImage.name
+                      );
+                    }}
+                    className="bg-white hover:bg-[#FFD166] text-[#000000] border-[2.5px] border-[#000000] px-3.5 py-2.5 rounded-[16px] font-black text-sm flex items-center gap-1.5 shadow-[2px_2px_0px_0px_#000000] active:scale-95 transition-all"
+                  >
+                    <PaintBucket className="h-5 w-5"/>
+                    {/* <span>{dailyChallengeImage.name}</span> */}
+                    Or Paint the Daily Challenge
+                  </button>
                 </div>
               </div>
             </div>

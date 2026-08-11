@@ -105,7 +105,7 @@ export const ImageComparisonSlider: React.FC<ImageComparisonSliderProps> = ({
   return (
     <div className="flex flex-col items-center w-full">
       {/* Quick Mode Controls */}
-      <div className="absolute top-0 -translate-y-[160%] flex items-center gap-1.5 mb-3 bg-white/40 backdrop-blur-md p-1.5 rounded-full border-[2.5px] border-[#000000] shadow-[3px_3px_0px_0px_#000000]">
+      <div className="absolute top-0 -translate-y-[150%] flex items-center gap-1.5 mb-3 bg-white/40 backdrop-blur-md p-1.5 rounded-full border-[2.5px] border-[#000000] shadow-[3px_3px_0px_0px_#000000]">
         <button
           title="Show Original"
           onClick={() => setPreset(0)}
@@ -146,7 +146,7 @@ export const ImageComparisonSlider: React.FC<ImageComparisonSliderProps> = ({
         ref={containerRef}
         onMouseDown={handleMouseDown}
         onTouchStart={handleTouchStart}
-        className="relative w-full max-w-[800px] aspect-auto max-h-[70vh] rounded-[24px] overflow-hidden cursor-ew-resize select-none border-[4px] border-[#000000] shadow-[8px_8px_0px_0px_#000000] bg-[#000]"
+        className="relative w-full max-w-[800px] aspect-auto max-h-[70vh] rounded-[2px] overflow-hidden cursor-ew-resize select-none border-[4px] border-[#000000] shadow-[8px_8px_0px_0px_#000000] bg-[#000]"
         style={{ aspectRatio: `${width} / ${height}` }}
       >
         {/* Underlayer: Original Image */}
@@ -177,7 +177,7 @@ export const ImageComparisonSlider: React.FC<ImageComparisonSliderProps> = ({
         {/* Divider Bar & Handle */}
         <div
           className="absolute top-0 bottom-0 w-1 bg-white shadow-[0_0_10px_rgba(0,0,0,0.5)] pointer-events-none z-10 flex items-center justify-center"
-          style={{ left: `${sliderPosition}%` }}
+          style={{ left: `${sliderPosition}%`, marginLeft: "-2px" }}
         >
           <div className="w-10 h-10 bg-black border-[3px] border-[#FFF] rounded-full shadow-[3px_3px_0px_0px_#FFF] flex items-center justify-center text-[#FFF] font-white text-sm hover:scale-110 active:scale-95 transition-transform pointer-events-auto">
             <Split className="p-2 w-7 h-7 text-xs tracking-tighter" />
