@@ -1,0 +1,6 @@
+{
+  "name": "Palette Art Studio",
+  "description": "A playful painterly cartoon art game and studio that converts photos into palette-quantized smoothed cartoon artworks on an easel board.",
+  "requestFramePermissions": [],
+  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
+}

@@ -1,0 +1,185 @@
+import React, { useState, useEffect } from 'react';
+import { ProcessedArtwork, ProcessingSettings, PaletteColor } from './types';
+import { processImageToCartoonPalette, DEFAULT_SETTINGS } from './utils/imageProcessor';
+import { EaselBoard } from './components/EaselBoard';
+import { PaletteDisplay } from './components/PaletteDisplay';
+import { ArtworkGalleryModal } from './components/ArtworkGalleryModal';
+import { StyleSettingsModal } from './components/StyleSettingsModal';
+import { soundEffects } from './utils/soundEffects';
+import confetti from 'canvas-confetti';
+
+const STORAGE_KEY = 'palette_art_studio_artworks_v1';
+
+export default function App() {
+  const [artworks, setArtworks] = useState<ProcessedArtwork[]>([]);
+  const [currentArtwork, setCurrentArtwork] = useState<ProcessedArtwork | null>(null);
+  const [isProcessing, setIsProcessing] = useState<boolean>(false);
+  const [soundEnabled, setSoundEnabled] = useState<boolean>(true);
+  const [activeHighlightColor, setActiveHighlightColor] = useState<PaletteColor | null>(null);
+
+  // Modals state
+  const [isGalleryOpen, setIsGalleryOpen] = useState<boolean>(false);
+  const [isSettingsOpen, setIsSettingsOpen] = useState<boolean>(false);
+  const [settings, setSettings] = useState<ProcessingSettings>(DEFAULT_SETTINGS);
+
+  // Load saved artworks on startup
+  useEffect(() => {
+    try {
+      const saved = localStorage.getItem(STORAGE_KEY);
+      if (saved) {
+        const parsed: ProcessedArtwork[] = JSON.parse(saved);
+        if (parsed && parsed.length > 0) {
+          setArtworks(parsed);
+          setCurrentArtwork(parsed[0]);
+        }
+      }
+    } catch (e) {
+      console.warn('Could not restore saved artworks from localStorage', e);
+    }
+  }, []);
+
+  // Save artworks when updated
+  const saveArtworksList = (newList: ProcessedArtwork[]) => {
+    setArtworks(newList);
+    try {
+      localStorage.setItem(STORAGE_KEY, JSON.stringify(newList));
+    } catch (e) {
+      console.warn('Could not save to localStorage', e);
+    }
+  };
+
+  // Convert uploaded image
+  const handleImageSelected = async (imageSrc: string, name = 'Cartoon Artwork') => {
+    setIsProcessing(true);
+    soundEffects.playBrushSwoosh();
+
+    try {
+      // Process cartoon quantization
+      const newArtwork = await processImageToCartoonPalette(imageSrc, settings, name);
+      
+      const updatedList = [newArtwork, ...artworks];
+      saveArtworksList(updatedList);
+      setCurrentArtwork(newArtwork);
+      setIsProcessing(false);
+
+      // Play chime & confetti burst!
+      soundEffects.playSuccessChime();
+      confetti({
+        particleCount: 50,
+        spread: 70,
+        origin: { y: 0.6 },
+        colors: ['#E63946', '#FFD166', '#06D6A0', '#4EA8DE', '#B5179E']
+      });
+    } catch (err) {
+      console.error('Image processing failed:', err);
+      setIsProcessing(false);
+      alert('Failed to process image. Please try another photo.');
+    }
+  };
+
+  // Re-process current image with modified style settings
+  const handleApplySettings = async (newSettings: ProcessingSettings) => {
+    if (!currentArtwork) return;
+    setSettings(newSettings);
+    setIsProcessing(true);
+    soundEffects.playBrushSwoosh();
+
+    try {
+      const reprocessed = await processImageToCartoonPalette(
+        currentArtwork.originalDataUrl,
+        newSettings,
+        currentArtwork.name
+      );
+
+      const updatedList = artworks.map(art => art.id === currentArtwork.id ? reprocessed : art);
+      saveArtworksList(updatedList);
+      setCurrentArtwork(reprocessed);
+      setIsProcessing(false);
+      soundEffects.playSuccessChime();
+    } catch (err) {
+      console.error('Failed to re-process style:', err);
+      setIsProcessing(false);
+    }
+  };
+
+  // Delete artwork
+  const handleDeleteArtwork = (id: string) => {
+    const updated = artworks.filter(art => art.id !== id);
+    saveArtworksList(updated);
+    if (currentArtwork?.id === id) {
+      setCurrentArtwork(updated.length > 0 ? updated[0] : null);
+    }
+  };
+
+  // Toggle sound
+  const handleToggleSound = () => {
+    const next = !soundEnabled;
+    setSoundEnabled(next);
+    soundEffects.enabled = next;
+    if (next) soundEffects.playPop();
+  };
+
+  return (
+    <main 
+      className="min-h-screen text-[#3D2314] font-sans relative pb-12 overflow-x-hidden selection:bg-[#FFD166] selection:text-[#3D2314]"
+      style={{ background: 'radial-gradient(circle at 50% 50%, #FFE5D9 0%, #FCD5AE 100%)' }}
+    >
+      {/* Playful Frosted Glass Background Accents */}
+      <div className="fixed inset-0 pointer-events-none z-0 opacity-50 overflow-hidden">
+        <div className="absolute top-10 -left-12 w-72 h-72 bg-[#FFA6C9]/40 rounded-full blur-3xl" />
+        <div className="absolute top-1/3 -right-16 w-96 h-96 bg-[#4EA8DE]/30 rounded-full blur-3xl" />
+        <div className="absolute bottom-10 left-1/4 w-80 h-80 bg-[#FFD166]/40 rounded-full blur-3xl" />
+      </div>
+
+      {/* Main Container - Desktop centered mobile layout */}
+      <div className="relative z-10 w-full max-w-2xl mx-auto px-2 sm:px-4 pt-3 flex flex-col items-center">
+        
+        {/* FIRST THING USER SEES: EASEL BOARD (No App Header above it) */}
+        <EaselBoard
+          currentArtwork={currentArtwork}
+          hasArtworks={artworks.length > 0}
+          isProcessing={isProcessing}
+          onImageSelected={handleImageSelected}
+          onOpenGallery={() => setIsGalleryOpen(true)}
+          onOpenSettings={() => setIsSettingsOpen(true)}
+          soundEnabled={soundEnabled}
+          onToggleSound={handleToggleSound}
+          activeHighlightHex={activeHighlightColor?.hexCode}
+        />
+
+        {/* UNDER THE EASEL BOARD: COLOR PALETTE COMPONENT */}
+        <PaletteDisplay
+          colorStats={currentArtwork ? currentArtwork.colorStats : []}
+          activeColorId={activeHighlightColor?.id}
+          onSelectColor={(col) => setActiveHighlightColor(col)}
+        />
+
+        {/* Footer info */}
+        <footer className="mt-8 text-center text-xs font-bold text-[#8C6246]">
+          <p>Palette Studio PWA • 800px Max Dimensions • Strict 24-Color Quantization</p>
+        </footer>
+      </div>
+
+      {/* Gallery Clipboard Modal */}
+      <ArtworkGalleryModal
+        isOpen={isGalleryOpen}
+        onClose={() => setIsGalleryOpen(false)}
+        artworks={artworks}
+        activeArtworkId={currentArtwork?.id || null}
+        onSelectArtwork={(art) => setCurrentArtwork(art)}
+        onDeleteArtwork={handleDeleteArtwork}
+        onUploadNew={() => {
+          setCurrentArtwork(null);
+        }}
+      />
+
+      {/* Style Tuning Settings Modal */}
+      <StyleSettingsModal
+        isOpen={isSettingsOpen}
+        onClose={() => setIsSettingsOpen(false)}
+        currentSettings={settings}
+        onApplySettings={handleApplySettings}
+      />
+    </main>
+  );
+}
