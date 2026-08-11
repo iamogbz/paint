@@ -146,7 +146,7 @@ export const ImageComparisonSlider: React.FC<ImageComparisonSliderProps> = ({
         ref={containerRef}
         onMouseDown={handleMouseDown}
         onTouchStart={handleTouchStart}
-        className="relative w-full max-w-[800px] aspect-auto max-h-[70vh] rounded-[2px] overflow-hidden cursor-ew-resize select-none border-[4px] border-[#000000] shadow-[8px_8px_0px_0px_#000000] bg-[#000]"
+        className="relative w-full aspect-auto rounded-[12px] overflow-hidden cursor-ew-resize select-none border-[4px] border-[#000000] shadow-[4px_4px_0px_0px_#00000044] bg-[#000]"
         style={{ aspectRatio: `${width} / ${height}` }}
       >
         {/* Underlayer: Original Image */}

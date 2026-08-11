@@ -49,7 +49,7 @@ export const EaselBoard: React.FC<EaselBoardProps> = ({
       };
       reader.readAsDataURL(file);
     }
-  }
+  };
 
   const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
     const file = e.target.files?.[0];
@@ -80,7 +80,7 @@ export const EaselBoard: React.FC<EaselBoardProps> = ({
       {/* Main Easel Canvas Frame */}
       <div className="w-full bg-[#8B5E3C] border-[4px] border-[#4A2810] rounded-[28px] p-3 sm:p-5 shadow-[12px_12px_0px_0px_rgba(0,0,0,0.15)] relative z-10 overflow-visible">
         {/* Top of Easel Header Bar */}
-        <div className="flex items-center justify-between w-full mb-3 pb-2 border-b-2 border-[#4A2810]/40 gap-2">
+        <div className="flex items-center justify-between w-full mb-2 gap-2">
           {/* Left: View Other Artworks button if user has at least one artwork uploaded */}
           {hasArtworks ? (
             <button
@@ -94,14 +94,7 @@ export const EaselBoard: React.FC<EaselBoardProps> = ({
             >
               <FolderOpen className="w-4 h-4 text-[#000000]" />
             </button>
-          ) : (
-            <div className="flex items-center gap-2 bg-white/40 backdrop-blur-md px-3 py-1.5 rounded-full border-2 border-[#4A2810]">
-              <span className="text-xl">🎨</span>
-              <span className="text-xs sm:text-sm font-black text-[#4A2810] tracking-wider uppercase">
-                Palette Studio
-              </span>
-            </div>
-          )}
+          ) : null}
 
           {/* Right Action Controls */}
           <div className="flex items-center gap-2">
@@ -146,7 +139,7 @@ export const EaselBoard: React.FC<EaselBoardProps> = ({
         </div>
 
         {/* EASEL BOARD CANVAS DISPLAY AREA */}
-        <div className="backdrop-blur-md min-h-[360px] sm:min-h-[440px] flex flex-col items-center justify-center relative">
+        <div className="flex flex-col items-center justify-center relative">
           {/* STATE 1: Processing Loader */}
           {isProcessing && (
             <div className="flex flex-col items-center justify-center py-12 px-4 text-center animate-pulse">
@@ -189,9 +182,7 @@ export const EaselBoard: React.FC<EaselBoardProps> = ({
                 Upload Your Image
               </h3>
               <p className="text-xs sm:text-sm font-bold text-[#4A2810]/80 mb-5 max-w-xs leading-relaxed">
-                Tap to select or drag & drop any photo. It will be converted
-                into a smoothed 800px cartoon artwork using the 24-color
-                palette!
+                Tap to select or drag & drop any photo.
               </p>
 
               <button className="bg-[#E63946] hover:bg-[#c92a37] text-white font-black px-6 py-3 rounded-[20px] border-[3px] border-[#000000] shadow-[4px_4px_0px_0px_#000000] text-xs sm:text-sm flex items-center gap-2 active:scale-95 transition-all uppercase tracking-wide">

@@ -64,6 +64,15 @@ export const ArtworkGalleryModal: React.FC<ArtworkGalleryModalProps> = ({
 
         {/* Gallery Grid */}
         <div className="flex-1 overflow-y-auto py-4 space-y-3 pr-1 scrollbar-thin">
+          {artworks.length === 0 && (
+            <div className="text-center text-[#4A2810] font-bold text-sm">
+              <i>
+                An empty canvas is an invitation
+                <br />
+                to start your journey with a painting
+              </i>
+            </div>
+          )}
           {artworks.map((art) => {
             const isActive = art.id === activeArtworkId;
             const dateStr = new Date(art.createdAt).toLocaleDateString(
