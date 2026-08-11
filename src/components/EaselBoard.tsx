@@ -35,27 +35,7 @@ export const EaselBoard: React.FC<EaselBoardProps> = ({
   const [isDragOver, setIsDragOver] = useState(false);
   const dailyChallengeImage = getDailyChallenge();
 
-  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const file = e.target.files?.[0];
-    if (file) {
-      soundEffects.playPop();
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          onImageSelected(
-            event.target.result as string,
-            file.name.replace(/\.[^/.]+$/, "")
-          );
-        }
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  const handleDrop = (e: React.DragEvent) => {
-    e.preventDefault();
-    setIsDragOver(false);
-    const file = e.dataTransfer.files?.[0];
+  const handleFileInput = (file: File) => {
     if (file && file.type.startsWith("image/")) {
       soundEffects.playPop();
       const reader = new FileReader();
@@ -69,6 +49,18 @@ export const EaselBoard: React.FC<EaselBoardProps> = ({
       };
       reader.readAsDataURL(file);
     }
+  }
+
+  const handleFileChange = (e: React.ChangeEvent<HTMLInputElement>) => {
+    const file = e.target.files?.[0];
+    handleFileInput(file);
+  };
+
+  const handleDrop = (e: React.DragEvent) => {
+    e.preventDefault();
+    setIsDragOver(false);
+    const file = e.dataTransfer.files?.[0];
+    handleFileInput(file);
   };
 
   const handleDownload = () => {

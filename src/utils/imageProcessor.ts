@@ -216,7 +216,7 @@ function applyMajorityCurveSmoothing(
  */
 export async function processImageToCartoonPalette(
   imageSrc: string,
-  artworkName = "Cartoon Artwork"
+  artworkName: string,
 ): Promise<ProcessedArtwork> {
   const img = await loadImage(imageSrc);
   const { width, height } = calculateTargetDimensions(

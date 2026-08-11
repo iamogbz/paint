@@ -49,16 +49,19 @@ export default function App() {
   };
 
   // Convert uploaded image
-  const handleImageSelected = async (
-    imageSrc: string,
-    name = "Cartoon Artwork"
-  ) => {
+  const handleImageSelected = async (imageSrc: string, name: string) => {
     setIsProcessing(true);
     soundEffects.playBrushSwoosh();
 
     try {
       // Process cartoon quantization
-      const newArtwork = await processImageToCartoonPalette(imageSrc, name);
+      const artworkName = name.substring(0, 32); // Limit name length
+      const newArtwork = await processImageToCartoonPalette(
+        imageSrc,
+        artworkName
+      );
+
+      console.log("Processed new artwork:", newArtwork);
 
       const updatedList = [newArtwork, ...artworks];
       saveArtworksList(updatedList);
