@@ -81,12 +81,12 @@ export const EaselBoard: React.FC<EaselBoardProps> = ({
   };
 
   return (
-    <div className="w-full max-w-2xl mx-auto pt-2 pb-4 px-2 sm:px-4 relative flex flex-col items-center overflow-scroll">
+    <div className="w-full max-w-2xl mx-auto pt-2 pb-4 px-2 sm:px-4 relative flex flex-col items-center">
       {/* Wooden Easel Top Wooden Clamp */}
       <div className="w-48 sm:w-64 h-6 bg-[#8B5E3C] border-3 border-[#3D2314] rounded-t-xl shadow-md z-20 flex items-center justify-center relative"></div>
 
       {/* Main Easel Canvas Frame */}
-      <div className="w-full bg-[#8B5E3C] border-[4px] border-[#4A2810] rounded-[28px] p-3 sm:p-5 shadow-[12px_12px_0px_0px_rgba(0,0,0,0.15)] relative z-10 overflow-hidden">
+      <div className="w-full bg-[#8B5E3C] border-[4px] border-[#4A2810] rounded-[28px] p-3 sm:p-5 shadow-[12px_12px_0px_0px_rgba(0,0,0,0.15)] relative z-10 overflow-visible">
         {/* Top of Easel Header Bar */}
         <div className="flex items-center justify-between w-full mb-3 pb-2 border-b-2 border-[#4A2810]/40 gap-2">
           {/* Left: View Other Artworks button if user has at least one artwork uploaded */}
@@ -124,13 +124,31 @@ export const EaselBoard: React.FC<EaselBoardProps> = ({
 
             {/* New Upload Button if artwork is displayed */}
             {currentArtwork && !isProcessing && (
-              <button
-                title="Change Image"
-                onClick={() => fileInputRef.current?.click()}
-                className="bg-[#2A9D8F] text-white border-[3px] border-[#000000] rounded-[20px] px-3.5 py-2 font-black text-xs flex items-center gap-1.5 shadow-[3px_3px_0px_0px_#000000] hover:translate-y-0.5 hover:shadow-[1px_1px_0px_0px_#000000] transition-all active:scale-95"
-              >
-                <Image className="w-4 h-4" />
-              </button>
+              <>
+                {/* Download Button */}
+                <button
+                  title="Save Painting to Device"
+                  onClick={handleDownload}
+                  className="bg-[#2A9D8F] hover:bg-[#1d7369] text-white text-[#000000] border-[3px] border-[#000000] rounded-[24px] px-4 py-2 sm:px-5 sm:py-2.5 flex items-center gap-2.5 shadow-[5px_5px_0px_0px_#000000] hover:translate-y-0.5 hover:shadow-[2px_2px_0px_0px_#000000] transition-all font-black text-xs sm:text-sm uppercase tracking-tight active:scale-95"
+                >
+                  <Download className="w-4 h-4" />
+                </button>
+                <button
+                  title="Change Image"
+                  onClick={() => fileInputRef.current?.click()}
+                  className="bg-white hover:bg-[#FFD166] text-[#000000] border-[3px] border-[#000000] rounded-[24px] px-4 py-2 sm:px-5 sm:py-2.5 flex items-center gap-2.5 shadow-[5px_5px_0px_0px_#000000] hover:translate-y-0.5 hover:shadow-[2px_2px_0px_0px_#000000] transition-all font-black text-xs sm:text-sm uppercase tracking-tight active:scale-95"
+                >
+                  <Image className="w-4 h-4" />
+                </button>
+                {/* Hidden File Input for re-upload */}
+                <input
+                  ref={fileInputRef}
+                  type="file"
+                  accept="image/*"
+                  className="hidden"
+                  onChange={handleFileChange}
+                />
+              </>
             )}
           </div>
         </div>
@@ -212,7 +230,7 @@ export const EaselBoard: React.FC<EaselBoardProps> = ({
                     }}
                     className="bg-white hover:bg-[#FFD166] text-[#000000] border-[2.5px] border-[#000000] px-3.5 py-2.5 rounded-[16px] font-black text-sm flex items-center gap-1.5 shadow-[2px_2px_0px_0px_#000000] active:scale-95 transition-all"
                   >
-                    <PaintBucket className="h-5 w-5"/>
+                    <PaintBucket className="h-5 w-5" />
                     {/* <span>{dailyChallengeImage.name}</span> */}
                     Or Paint the Daily Challenge
                   </button>
@@ -233,27 +251,6 @@ export const EaselBoard: React.FC<EaselBoardProps> = ({
                 altText={currentArtwork.name}
                 activeHighlightHex={activeHighlightHex}
               />
-
-              {/* Toolbar under artwork on easel */}
-              <div className="flex items-center justify-center gap-2.5 mt-4 flex-wrap w-full">
-                {/* Download Button */}
-                <button
-                  onClick={handleDownload}
-                  className="bg-[#2A9D8F] hover:bg-[#1d7369] text-white font-black px-4 py-2.5 rounded-[20px] border-[3px] border-[#000000] shadow-[4px_4px_0px_0px_#000000] text-xs sm:text-sm flex items-center gap-2 active:scale-95 transition-all uppercase tracking-wider"
-                >
-                  <Download className="w-4 h-4" />
-                  <span>Download Artwork</span>
-                </button>
-
-                {/* Hidden File Input for re-upload */}
-                <input
-                  ref={fileInputRef}
-                  type="file"
-                  accept="image/*"
-                  className="hidden"
-                  onChange={handleFileChange}
-                />
-              </div>
             </div>
           )}
         </div>

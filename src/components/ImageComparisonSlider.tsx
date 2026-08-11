@@ -105,7 +105,7 @@ export const ImageComparisonSlider: React.FC<ImageComparisonSliderProps> = ({
   return (
     <div className="flex flex-col items-center w-full">
       {/* Quick Mode Controls */}
-      <div className="absolute top-0 -translate-y-[150%] flex items-center gap-1.5 mb-3 bg-white/40 backdrop-blur-md p-1.5 rounded-full border-[2.5px] border-[#000000] shadow-[3px_3px_0px_0px_#000000]">
+      <div className="hidden sm:flex absolute top-0 hidden -translate-y-[150%] items-center gap-1.5 mb-3 bg-white/40 backdrop-blur-md p-1.5 rounded-full border-[2.5px] border-[#000000] shadow-[3px_3px_0px_0px_#000000]">
         <button
           title="Show Original"
           onClick={() => setPreset(0)}
