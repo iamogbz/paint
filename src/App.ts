@@ -64,7 +64,7 @@ export class PaintApp extends SignalElement {
 
           <!-- Footer -->
           <footer style=${this.renderStyleObject(footerStyle)}>
-            <p style="margin: 0;">PAINT by COLORS ©️ QBRKTS (${new Date().getFullYear()})</p>
+            <p style="margin: 0;">PAINT by COLOURS ©️ QBRKTS (${new Date().getFullYear()})</p>
           </footer>
         </div>
 
