@@ -354,7 +354,9 @@ export class EaselBoard extends SignalElement {
     return [255, 255, 255, 255];
   }
 
-  private handleCanvasClick = (e: MouseEvent) => {
+  private handleCanvasPointerUp = (e: PointerEvent) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    
     if (this.hasDragged) {
       this.hasDragged = false;
       return;
@@ -554,10 +556,6 @@ export class EaselBoard extends SignalElement {
       } else {
         this.lastTapTime = now;
       }
-
-      if (this.scale > 1) {
-        e.preventDefault();
-      }
     }
   };
 
@@ -584,7 +582,7 @@ export class EaselBoard extends SignalElement {
     } else if (e.touches.length === 1) {
       const dx = e.touches[0].clientX - this.pointerDownX;
       const dy = e.touches[0].clientY - this.pointerDownY;
-      if (Math.hypot(dx, dy) > 5) {
+      if (Math.hypot(dx, dy) > 10) {
         this.hasDragged = true;
       }
       if (this.scale > 1) {
@@ -624,7 +622,7 @@ export class EaselBoard extends SignalElement {
 
   private handlePointerMove = (e: PointerEvent) => {
     const dist = Math.hypot(e.clientX - this.pointerDownX, e.clientY - this.pointerDownY);
-    if (dist > 5) {
+    if (dist > 10) {
       this.hasDragged = true;
     }
     if (this.isDragging && this.scale > 1) {
@@ -854,7 +852,7 @@ export class EaselBoard extends SignalElement {
                         >
                           <canvas
                             id="artboard-canvas"
-                            @click=${this.handleCanvasClick}
+                            @pointerup=${this.handleCanvasPointerUp}
                             @mousemove=${this.handleCanvasMouseMove}
                             @mouseleave=${this.handleCanvasMouseLeave}
                             style="width: 100%; height: 100%; object-fit: contain; display: block; cursor: crosshair;"
