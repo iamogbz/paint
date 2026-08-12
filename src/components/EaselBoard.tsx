@@ -148,11 +148,10 @@ export const EaselBoard: React.FC<EaselBoardProps> = ({
                 <Sparkles className="w-8 h-8 text-[#FFD166] absolute" />
               </div>
               <h3 className="text-xl font-black text-[#3D2314] mb-1 italic">
-                Painting Cartoon Version...
+                Preparing Canvas..
               </h3>
               <p className="text-xs font-bold text-[#4A2810] max-w-xs uppercase">
-                Applying smooth curves & quantizing colors to strict 24-color
-                artist palette
+                collecting paints and colouring palettes
               </p>
             </div>
           )}

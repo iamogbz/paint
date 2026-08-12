@@ -113,7 +113,9 @@ export default function App() {
     const updated = artworks.filter((art) => art.id !== id);
     if (currentArtwork?.id === id) {
       const nextFirstArtwork = updated.length > 0 ? updated[0] : null;
-      nextFirstArtwork.modifiedAt = Date.now(); // Update modified timestamp
+      if (nextFirstArtwork) {
+        nextFirstArtwork.modifiedAt = Date.now(); // Update modified timestamp
+      }
       setCurrentArtwork(nextFirstArtwork);
     }
     saveArtworksList(updated);

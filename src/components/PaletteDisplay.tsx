@@ -150,9 +150,11 @@ export const PaletteDisplay: React.FC<PaletteDisplayProps> = ({
                 )}
 
                 <div
-                  className={`absolute inset-0 bg-white transition w-1/2 h-1/2 opacity-${
-                    copiedHex === color.hexCode ? 100 : 0
-                  } rounded-full flex items-center justify-center left-1/4 top-1/4`}
+                  className={`absolute inset-0 bg-white transition w-1/2 h-1/2 rounded-full flex items-center justify-center left-1/4 top-1/4`}
+                  style={{
+                    opacity: copiedHex === color.hexCode ? 1 : 0,
+                    transition: "opacity 0.3s",
+                  }}
                 >
                   <Paintbrush className={`w-4 h-4 stroke-[3] text-black`} />
                 </div>
