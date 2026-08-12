@@ -1,9 +1,13 @@
 import {
+  PALETTE_COLOR,
   PALETTE_COLORS,
   ProcessedArtwork,
   UsedColorStat,
 } from "../types";
-import { findClosestPaletteColorFast } from "./colorUtils";
+import {
+  findClosestPaletteColorFast,
+  getPerceptualColorDistance,
+} from "./colorUtils";
 
 /**
  * Loads an image from File or URL into an HTMLImageElement
@@ -80,6 +84,121 @@ function applyMajorityCurveSmoothing(
 }
 
 /**
+ * Iteratively removes any color constituting less than 4% of total composition.
+ * Starts with the lowest count color and maps its pixels to the perceptually closest
+ * remaining color, repeating until no non-transparent color is below 4%.
+ */
+function removeSubFourPercentColors(
+  colorIndices: Int16Array,
+  totalPixels: number
+) {
+  const threshold = 0.04 * totalPixels;
+  const removedSet = new Set<number>();
+
+  const transparentIdx = PALETTE_COLORS.findIndex(
+    (c) => c.id === PALETTE_COLOR.transparent.id
+  );
+
+  while (true) {
+    // 1. Calculate current counts
+    const counts = new Array(PALETTE_COLORS.length).fill(0);
+    for (let i = 0; i < colorIndices.length; i++) {
+      const idx = colorIndices[i];
+      if (idx >= 0 && idx < PALETTE_COLORS.length) {
+        counts[idx]++;
+      }
+    }
+
+    // 2. Find the lowest count color that is < 4% (threshold)
+    let minIdx = -1;
+    let minCount = Infinity;
+
+    for (let i = 0; i < PALETTE_COLORS.length; i++) {
+      if (i === transparentIdx || removedSet.has(i)) continue;
+      const count = counts[i];
+      if (count > 0 && count < threshold) {
+        if (count < minCount) {
+          minCount = count;
+          minIdx = i;
+        }
+      }
+    }
+
+    // If no color is below 4%, we are finished
+    if (minIdx === -1) {
+      break;
+    }
+
+    // 3. Find closest target color excluding minIdx, transparent, and removed colors
+    const sourceColor = PALETTE_COLORS[minIdx];
+    let targetIdx = -1;
+    let minDistance = Infinity;
+
+    // First try active colors (count > 0)
+    for (let i = 0; i < PALETTE_COLORS.length; i++) {
+      if (i === minIdx || i === transparentIdx || removedSet.has(i)) continue;
+      if (counts[i] === 0) continue;
+
+      const candidateColor = PALETTE_COLORS[i];
+      const dist = getPerceptualColorDistance(
+        sourceColor.rgba[0],
+        sourceColor.rgba[1],
+        sourceColor.rgba[2],
+        sourceColor.rgba[3] ?? 255,
+        candidateColor.rgba[0],
+        candidateColor.rgba[1],
+        candidateColor.rgba[2],
+        candidateColor.rgba[3] ?? 255
+      );
+
+      if (dist < minDistance) {
+        minDistance = dist;
+        targetIdx = i;
+      }
+    }
+
+    // Fallback to any non-removed palette color if no active color was found
+    if (targetIdx === -1) {
+      for (let i = 0; i < PALETTE_COLORS.length; i++) {
+        if (i === minIdx || i === transparentIdx || removedSet.has(i)) continue;
+
+        const candidateColor = PALETTE_COLORS[i];
+        const dist = getPerceptualColorDistance(
+          sourceColor.rgba[0],
+          sourceColor.rgba[1],
+          sourceColor.rgba[2],
+          sourceColor.rgba[3] ?? 255,
+          candidateColor.rgba[0],
+          candidateColor.rgba[1],
+          candidateColor.rgba[2],
+          candidateColor.rgba[3] ?? 255
+        );
+
+        if (dist < minDistance) {
+          minDistance = dist;
+          targetIdx = i;
+        }
+      }
+    }
+
+    // If still no valid target found, stop
+    if (targetIdx === -1) {
+      break;
+    }
+
+    // 4. Remap all pixels of minIdx to targetIdx
+    for (let i = 0; i < colorIndices.length; i++) {
+      if (colorIndices[i] === minIdx) {
+        colorIndices[i] = targetIdx;
+      }
+    }
+
+    // Mark minIdx as removed so it cannot be selected or remapped to again
+    removedSet.add(minIdx);
+  }
+}
+
+/**
  * Main Image Processing Pipeline:
  * Takes original image source, scales to max 800px, applies painterly smoothing,
  * edge outline detection, palette quantization, curve smoothing, and color ratio computation.
@@ -144,10 +263,13 @@ export async function processImageToCartoonPalette(
   }
 
   // Jaggie Curve Smoothing (Majority neighborhood filter)
-  const smoothingPasses = 2; // More passes for ultra smooth curves
+  const smoothingPasses = 0; // More passes for ultra smooth curves
   for (let pass = 0; pass < smoothingPasses; pass++) {
     applyMajorityCurveSmoothing(colorIndices, width, height);
   }
+
+  // Remove colors constituting < 4% of total composition iteratively
+  removeSubFourPercentColors(colorIndices, width * height);
 
   // Render quantized cartoon pixels to count and output canvas
   const outputCanvas = document.createElement("canvas");
@@ -188,7 +310,7 @@ export async function processImageToCartoonPalette(
   const colorStats: UsedColorStat[] = PALETTE_COLORS.map((color, index) => {
     const count = colorCounts[index];
     // Exact percentage rounded to 1 decimal place or whole number
-    const percentage = Math.ceil((count / totalPixels) * 100);
+    const percentage = Math.round((count / totalPixels) * 100);
     return {
       color,
       count,
