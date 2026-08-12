@@ -400,7 +400,7 @@ export class EaselBoard extends SignalElement {
     if (this.hoveredRegionId !== null && this.regionBorderPixels) {
       const borderIndices = this.regionBorderPixels.get(this.hoveredRegionId);
       if (borderIndices && borderIndices.length > 0) {
-        destCtx.fillStyle = "rgba(0, 0, 0, 0.45)";
+        destCtx.fillStyle = "rgba(0, 0, 0, 1.0)";
         for (let k = 0; k < borderIndices.length; k++) {
           const pIdx = borderIndices[k];
           const bx = pIdx % w;
@@ -797,6 +797,9 @@ export class EaselBoard extends SignalElement {
 
   private handlePointerUp = () => {
     this.isDragging = false;
+    setTimeout(() => {
+      this.hasDragged = false;
+    }, 0);
   };
 
   private handleFileInput = (file: File) => {
