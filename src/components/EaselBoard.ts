@@ -194,20 +194,15 @@ export class EaselBoard extends SignalElement {
       regionBorderSets.set(r, new Set<number>());
     }
 
-    // Radius 10px for internal boundaries (making total boundary thickness = 20px)
-    const radius = 10;
-    const radiusSq = radius * radius;
-    const offsets10: [number, number][] = [];
-    for (let dy = -radius; dy <= radius; dy++) {
-      for (let dx = -radius; dx <= radius; dx++) {
-        if (dx * dx + dy * dy <= radiusSq) {
-          offsets10.push([dx, dy]);
-        }
-      }
-    }
+    const offsets: [number, number][] = [
+      [0, 0],
+      [1, 0],
+      [-1, 0],
+      [0, 1],
+      [0, -1],
+    ];
 
-    // Outer edge border width = 20px (16-24px range)
-    const edgeWidth = 20;
+    const edgeWidth = 1;
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         if (x < edgeWidth || x >= w - edgeWidth || y < edgeWidth || y >= h - edgeWidth) {
@@ -228,24 +223,20 @@ export class EaselBoard extends SignalElement {
         const r1 = this.regionMapData[idx];
         if (r1 < 0) continue;
 
-        const neighbors: number[] = [];
-        if (x + 1 < w) neighbors.push(this.regionMapData[idx + 1]);
-        if (y + 1 < h) neighbors.push(this.regionMapData[idx + w]);
+        const rRight = x + 1 < w ? this.regionMapData[idx + 1] : -1;
+        const rDown = y + 1 < h ? this.regionMapData[idx + w] : -1;
 
-        for (const r2 of neighbors) {
-          if (r2 >= 0 && r2 !== r1) {
-            const set1 = regionBorderSets.get(r1);
-            const set2 = regionBorderSets.get(r2);
-
-            for (let i = 0; i < offsets10.length; i++) {
-              const [dx, dy] = offsets10[i];
-              const nx = x + dx;
-              const ny = y + dy;
-              if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
-                const nIdx = ny * w + nx;
-                isBorder[nIdx] = 1;
-                if (set1) set1.add(nIdx);
-                if (set2) set2.add(nIdx);
+        if ((rRight >= 0 && rRight !== r1) || (rDown >= 0 && rDown !== r1)) {
+          for (let i = 0; i < offsets.length; i++) {
+            const [dx, dy] = offsets[i];
+            const nx = x + dx;
+            const ny = y + dy;
+            if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+              const nIdx = ny * w + nx;
+              isBorder[nIdx] = 1;
+              const nRegion = this.regionMapData[nIdx];
+              if (nRegion >= 0) {
+                regionBorderSets.get(nRegion)?.add(nIdx);
               }
             }
           }
@@ -297,19 +288,47 @@ export class EaselBoard extends SignalElement {
       const regionId = this.regionMapData[i];
       const paintedColor = paintedState[regionId];
 
+      let r: number, g: number, b: number, a: number;
+
       if (paintedColor) {
         // Filled island: render selected color
         const rgba = this.parseColorToRGBA(paintedColor);
-        pixels[pxIdx] = rgba[0];
-        pixels[pxIdx + 1] = rgba[1];
-        pixels[pxIdx + 2] = rgba[2];
-        pixels[pxIdx + 3] = rgba[3];
+        r = rgba[0];
+        g = rgba[1];
+        b = rgba[2];
+        a = rgba[3];
       } else {
         // Unpainted island: clean white canvas
-        pixels[pxIdx] = 255;
-        pixels[pxIdx + 1] = 255;
-        pixels[pxIdx + 2] = 255;
-        pixels[pxIdx + 3] = 255;
+        r = 255;
+        g = 255;
+        b = 255;
+        a = 255;
+      }
+
+      // Mostly transparent thin outline overlay (25% darkening on border pixels)
+      if (this.isBorderPixel && this.isBorderPixel[i] === 1) {
+        r = Math.round(r * 0.75);
+        g = Math.round(g * 0.75);
+        b = Math.round(b * 0.75);
+      }
+
+      pixels[pxIdx] = r;
+      pixels[pxIdx + 1] = g;
+      pixels[pxIdx + 2] = b;
+      pixels[pxIdx + 3] = a;
+    }
+
+    // Hover highlight: darken hovered region's border pixels for active visual feedback
+    if (this.hoveredRegionId !== null && this.regionBorderPixels) {
+      const borderIndices = this.regionBorderPixels.get(this.hoveredRegionId);
+      if (borderIndices) {
+        for (let k = 0; k < borderIndices.length; k++) {
+          const pIdx = borderIndices[k];
+          const pxIdx = pIdx * 4;
+          pixels[pxIdx] = Math.round(pixels[pxIdx] * 0.3);
+          pixels[pxIdx + 1] = Math.round(pixels[pxIdx + 1] * 0.3);
+          pixels[pxIdx + 2] = Math.round(pixels[pxIdx + 2] * 0.3);
+        }
       }
     }
 
