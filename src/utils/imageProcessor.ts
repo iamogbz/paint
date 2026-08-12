@@ -325,6 +325,7 @@ export async function processImageToCartoonPalette(
 
   // 8. Build connected component region map (islands)
   const regionMap = new Int32Array(totalPixels).fill(-1);
+  const regionExpectedColors: Record<number, string> = {};
   const visited = new Uint8Array(totalPixels);
   let nextRegionId = 0;
 
@@ -335,6 +336,7 @@ export async function processImageToCartoonPalette(
 
       const colorIdx = colorIndices[idx];
       const regionId = nextRegionId++;
+      regionExpectedColors[regionId] = PALETTE_COLORS[colorIdx].hexCode;
       const queue = [x, y];
       visited[idx] = 1;
 
@@ -388,5 +390,6 @@ export async function processImageToCartoonPalette(
     colorStats,
     totalPixels,
     regionMapData: Array.from(regionMap),
+    regionExpectedColors,
   };
 }

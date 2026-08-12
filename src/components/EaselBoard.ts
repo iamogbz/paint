@@ -10,6 +10,7 @@ import {
   zoomScaleSignal,
   handleImageSelected,
   handleSelectArtwork,
+  draggedColorSignal,
 } from "../state/store";
 import { ProcessedArtwork, PALETTE_COLOR } from "../types";
 import { getDailyChallenge } from "../data/sampleImages";
@@ -48,6 +49,7 @@ export class EaselBoard extends SignalElement {
   private regionMapData: Int32Array | null = null;
   private isBorderPixel: Uint8Array | null = null;
   private regionBorderPixels: Map<number, Int32Array> | null = null;
+  private regionExpectedColors = new Map<number, string>();
   private hoveredRegionId: number | null = null;
   private artworkWidth = 0;
   private artworkHeight = 0;
@@ -105,11 +107,24 @@ export class EaselBoard extends SignalElement {
   private prepareArtworkCanvas(artwork: ProcessedArtwork) {
     this.artworkWidth = artwork.width;
     this.artworkHeight = artwork.height;
+    this.regionExpectedColors.clear();
+
+    if (artwork.regionExpectedColors) {
+      for (const [regionId, hex] of Object.entries(artwork.regionExpectedColors)) {
+        this.regionExpectedColors.set(Number(regionId), hex);
+      }
+    }
 
     if (artwork.regionMapData && artwork.regionMapData.length === artwork.width * artwork.height) {
       this.regionMapData = new Int32Array(artwork.regionMapData);
       this.computeBorderMap(artwork.width, artwork.height);
-      this.drawArtboardCanvas();
+      
+      // If we didn't have regionExpectedColors but we had regionMapData, we must extract colors from image
+      if (!artwork.regionExpectedColors) {
+        this.extractColorsFromImage(artwork);
+      } else {
+        this.drawArtboardCanvas();
+      }
     } else {
       const img = new Image();
       img.crossOrigin = "anonymous";
@@ -129,6 +144,41 @@ export class EaselBoard extends SignalElement {
       };
       img.src = artwork.cartoonDataUrl;
     }
+  }
+
+  private extractColorsFromImage(artwork: ProcessedArtwork) {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      const tempCanvas = document.createElement("canvas");
+      tempCanvas.width = artwork.width;
+      tempCanvas.height = artwork.height;
+      const ctx = tempCanvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) return;
+      ctx.drawImage(img, 0, 0);
+      const srcData = ctx.getImageData(0, 0, artwork.width, artwork.height);
+      
+      // Just extract colors using existing map
+      if (this.regionMapData) {
+        const w = artwork.width;
+        const h = artwork.height;
+        const data = srcData.data;
+        const seenRegions = new Set<number>();
+        for (let i = 0; i < w * h; i++) {
+          const regionId = this.regionMapData[i];
+          if (regionId >= 0 && !seenRegions.has(regionId)) {
+             seenRegions.add(regionId);
+             const r = data[i * 4];
+             const g = data[i * 4 + 1];
+             const b = data[i * 4 + 2];
+             const hex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}FF`.toUpperCase();
+             this.regionExpectedColors.set(regionId, hex);
+          }
+        }
+      }
+      this.drawArtboardCanvas();
+    };
+    img.src = artwork.cartoonDataUrl;
   }
 
   private buildRegionMapFromImageData(imageData: ImageData): number {
@@ -153,6 +203,10 @@ export class EaselBoard extends SignalElement {
         const a = data[pxIdx + 3];
 
         const regionId = nextRegionId++;
+        
+        const hex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}FF`.toUpperCase();
+        this.regionExpectedColors.set(regionId, hex);
+
         const queue = [x, y];
         visited[idx] = 1;
 
@@ -304,27 +358,41 @@ export class EaselBoard extends SignalElement {
     destCtx.drawImage(this.offscreenCanvas, 0, 0);
 
     // 3. SEPARATE DISPLAY OVERLAY PASS: Render translucent island guide borders on screen context
-    if (this.isBorderPixel) {
+    const activeColor = activeHighlightColorSignal.get();
+    const draggedColorHex = draggedColorSignal.get();
+    const targetHex = draggedColorHex || activeColor?.hexCode;
+
+    if (this.isBorderPixel && targetHex) {
+      const targetHexUpper = targetHex.toUpperCase();
       const overlayImgData = destCtx.createImageData(w, h);
       const overlayPixels = overlayImgData.data;
 
+      let hasVisibleBorders = false;
       for (let i = 0; i < w * h; i++) {
         if (this.isBorderPixel[i] === 1) {
-          const pxIdx = i * 4;
-          overlayPixels[pxIdx] = 0;
-          overlayPixels[pxIdx + 1] = 0;
-          overlayPixels[pxIdx + 2] = 0;
-          overlayPixels[pxIdx + 3] = 60; // 23% translucent dark guide border overlay
+          const regionId = this.regionMapData[i];
+          const expectedColor = this.regionExpectedColors.get(regionId) || currentArtwork.regionExpectedColors?.[regionId];
+          
+          if (expectedColor && expectedColor.startsWith(targetHexUpper.substring(0, 7))) { 
+            const pxIdx = i * 4;
+            overlayPixels[pxIdx] = 0;
+            overlayPixels[pxIdx + 1] = 0;
+            overlayPixels[pxIdx + 2] = 0;
+            overlayPixels[pxIdx + 3] = 60; // 23% translucent dark guide border overlay
+            hasVisibleBorders = true;
+          }
         }
       }
 
-      const tempOverlayCanvas = document.createElement("canvas");
-      tempOverlayCanvas.width = w;
-      tempOverlayCanvas.height = h;
-      const tempCtx = tempOverlayCanvas.getContext("2d");
-      if (tempCtx) {
-        tempCtx.putImageData(overlayImgData, 0, 0);
-        destCtx.drawImage(tempOverlayCanvas, 0, 0);
+      if (hasVisibleBorders) {
+        const tempOverlayCanvas = document.createElement("canvas");
+        tempOverlayCanvas.width = w;
+        tempOverlayCanvas.height = h;
+        const tempCtx = tempOverlayCanvas.getContext("2d");
+        if (tempCtx) {
+          tempCtx.putImageData(overlayImgData, 0, 0);
+          destCtx.drawImage(tempOverlayCanvas, 0, 0);
+        }
       }
     }
 
@@ -763,6 +831,8 @@ export class EaselBoard extends SignalElement {
   render() {
     const currentArtwork = currentArtworkSignal.get();
     const currentArtworkId = currentArtwork?.id || null;
+    activeHighlightColorSignal.get(); // Track active color to trigger updates
+    draggedColorSignal.get(); // Track dragged color to trigger updates
     if (currentArtworkId !== this.lastArtworkId) {
       this.lastArtworkId = currentArtworkId;
       this.scale = 1;
