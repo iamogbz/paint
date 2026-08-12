@@ -455,7 +455,7 @@ export class EaselBoard extends SignalElement {
     const { x: clientX, y: clientY } = customEvent.detail;
     if (!this.regionMapData) return;
 
-    const canvas = this.shadowRoot?.querySelector("#artboard-canvas") as HTMLCanvasElement;
+    const canvas = this.querySelector("#artboard-canvas") as HTMLCanvasElement;
     if (!canvas) return;
 
     const rect = canvas.getBoundingClientRect();
@@ -499,7 +499,7 @@ export class EaselBoard extends SignalElement {
     const currentArtwork = currentArtworkSignal.get();
     if (!currentArtwork) return;
 
-    const canvas = this.shadowRoot?.querySelector("#artboard-canvas") as HTMLCanvasElement;
+    const canvas = this.querySelector("#artboard-canvas") as HTMLCanvasElement;
     if (!canvas) return;
 
     const rect = canvas.getBoundingClientRect();
