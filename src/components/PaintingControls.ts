@@ -87,6 +87,7 @@ export class PaintingControls extends SignalElement {
     const activeColor = activeHighlightColorSignal.get();
     const copiedHex = copiedHexSignal.get();
     const currentArtwork = currentArtworkSignal.get();
+    console.log(currentArtwork);
     const hasArtworks = artworksSignal.get().length > 0;
     const isProcessing = isProcessingSignal.get();
     const zoomScale = zoomScaleSignal.get();
@@ -98,7 +99,7 @@ export class PaintingControls extends SignalElement {
     const allColors = Object.values(PALETTE_COLOR);
     const filteredColors = allColors.filter((color) => {
       const stat = statsMap.get(color.id);
-      const isUsed = stat ? stat.count > 0 : false;
+      const isUsed = stat?.count > 0;
 
       if (selectedCat === PALETTE_CATEGORIES_USED) return isUsed;
       return true;
@@ -308,7 +309,7 @@ export class PaintingControls extends SignalElement {
         <div style=${this.renderStyleObject(scrollRowStyle)}>
           ${filteredColors.map((color) => {
             const stat = statsMap.get(color.id);
-            const isUsed = stat.count > 0;
+            const isUsed = stat?.count > 0;
             const isSelected = activeColor?.id === color.id;
             const isCopied = copiedHex === color.hexCode;
 
@@ -379,7 +380,7 @@ export class PaintingControls extends SignalElement {
                 <span
                   style="font-size: 0.75rem; font-weight: ${isUsed ? "900" : "700"}; color: ${isUsed ? "#000000" : "#6B7280"};"
                 >
-                  ${stat.percentage}%
+                  ${stat?.percentage ?? 0}%
                 </span>
               </button>
             `;
