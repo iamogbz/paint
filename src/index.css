@@ -18,6 +18,7 @@ body {
 }
 
 * {
+  corner-shape: superellipse(2) !important;
   box-sizing: border-box;
 }
 

@@ -32,35 +32,35 @@ export const PALETTE_COLORS = [
   // Skin Tones & Earth
   {
     id: "pale_ivory",
-    name: "Pale Ivory",
+    name: "Ivory",
     hexCode: "#FFE5D9",
     rgb: [255, 229, 217],
     category: "Skin Tones & Earth",
   },
   {
     id: "peach_base",
-    name: "Peach Base",
+    name: "Peach",
     hexCode: "#FCD5AE",
     rgb: [252, 213, 174],
     category: "Skin Tones & Earth",
   },
   {
     id: "warm_beige",
-    name: "Warm Beige",
+    name: "Beige",
     hexCode: "#D4A373",
     rgb: [212, 163, 115],
     category: "Skin Tones & Earth",
   },
   {
     id: "almond_brown",
-    name: "Almond Brown",
+    name: "Brown",
     hexCode: "#8B5E3C",
     rgb: [139, 94, 60],
     category: "Skin Tones & Earth",
   },
   {
     id: "dark_espresso",
-    name: "Dark Espresso",
+    name: "Espresso",
     hexCode: "#4A2810",
     rgb: [74, 40, 16],
     category: "Skin Tones & Earth",
@@ -76,21 +76,21 @@ export const PALETTE_COLORS = [
   // Reds & Pinks
   {
     id: "blush_pink",
-    name: "Blush Pink",
+    name: "Pink",
     hexCode: "#FFA6C9",
     rgb: [255, 166, 201],
     category: "Reds & Pinks",
   },
   {
     id: "crimson_red",
-    name: "Crimson Red",
+    name: "Crimson",
     hexCode: "#E63946",
     rgb: [230, 57, 70],
     category: "Reds & Pinks",
   },
   {
     id: "deep_burgundy",
-    name: "Deep Burgundy",
+    name: "Burgundy",
     hexCode: "#800020",
     rgb: [128, 0, 32],
     category: "Reds & Pinks",
@@ -99,14 +99,14 @@ export const PALETTE_COLORS = [
   // Yellows & Oranges
   {
     id: "bright_yellow",
-    name: "Bright Yellow",
+    name: "Yellow",
     hexCode: "#FFD166",
     rgb: [255, 209, 102],
     category: "Yellows & Oranges",
   },
   {
     id: "vibrant_orange",
-    name: "Vibrant Orange",
+    name: "Orange",
     hexCode: "#F4A261",
     rgb: [244, 162, 97],
     category: "Yellows & Oranges",
@@ -115,21 +115,21 @@ export const PALETTE_COLORS = [
   // Greens
   {
     id: "lime_green",
-    name: "Lime Green",
+    name: "Lime",
     hexCode: "#06D6A0",
     rgb: [6, 214, 160],
     category: "Greens",
   },
   {
     id: "forest_green",
-    name: "Forest Green",
+    name: "Forest",
     hexCode: "#2A9D8F",
     rgb: [42, 157, 143],
     category: "Greens",
   },
   {
     id: "olive_green",
-    name: "Olive Green",
+    name: "Olive",
     hexCode: "#556B2F",
     rgb: [85, 107, 47],
     category: "Greens",
@@ -138,28 +138,28 @@ export const PALETTE_COLORS = [
   // Blues & Cyans
   {
     id: "electric_cyan",
-    name: "Electric Cyan",
+    name: "Cyan",
     hexCode: "#00F5D4",
     rgb: [0, 245, 212],
     category: "Blues & Cyans",
   },
   {
     id: "sky_blue",
-    name: "Sky Blue",
+    name: "Sky",
     hexCode: "#4EA8DE",
     rgb: [78, 168, 222],
     category: "Blues & Cyans",
   },
   {
     id: "royal_blue",
-    name: "Royal Blue",
+    name: "Royal",
     hexCode: "#0077B6",
     rgb: [0, 119, 182],
     category: "Blues & Cyans",
   },
   {
     id: "midnight_blue",
-    name: "Midnight Blue",
+    name: "Midnight",
     hexCode: "#1D3557",
     rgb: [29, 53, 87],
     category: "Blues & Cyans",
@@ -168,14 +168,14 @@ export const PALETTE_COLORS = [
   // Purples
   {
     id: "bright_lavender",
-    name: "Bright Lavender",
+    name: "Lavender",
     hexCode: "#B5179E",
     rgb: [181, 23, 158],
     category: "Purples",
   },
   {
     id: "deep_purple",
-    name: "Deep Purple",
+    name: "Purple",
     hexCode: "#7209B7",
     rgb: [114, 9, 183],
     category: "Purples",

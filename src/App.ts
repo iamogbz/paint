@@ -8,7 +8,7 @@ import {
   loadSavedArtworks,
 } from "./state/store";
 import "./components/EaselBoard";
-import "./components/PaletteDisplay";
+import "./components/PaintingControls";
 import "./components/ArtworkGalleryModal";
 
 @customElement("paint-app")
@@ -26,10 +26,10 @@ export class PaintApp extends SignalElement {
     const mainContainerStyle = {
       position: "relative" as const,
       zIndex: 10,
-      width: "100%",
-      maxWidth: "42rem",
+      width: "95vmin",
+      maxWidth: "95vmin",
       margin: "0 auto",
-      padding: "0 0.5rem",
+      padding: "0 0 250px 0",
       display: "flex",
       flexDirection: "column" as const,
       alignItems: "center",
@@ -56,10 +56,10 @@ export class PaintApp extends SignalElement {
           <!-- Easel Board -->
           <easel-board></easel-board>
 
-          <!-- Palette Display -->
-          <palette-display
+          <!-- Painting Controls -->
+          <painting-controls
             .colorStats=${currentArtwork ? currentArtwork.colorStats : []}
-          ></palette-display>
+          ></painting-controls>
 
           <!-- Footer -->
           <footer style=${this.renderStyleObject(footerStyle)}>

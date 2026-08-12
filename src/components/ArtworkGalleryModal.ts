@@ -45,7 +45,7 @@ export class ArtworkGalleryModal extends SignalElement {
       backdropFilter: "blur(16px)",
       border: "4px solid #000000",
       width: "100%",
-      maxWidth: "42rem",
+      maxWidth: "95vmin",
       maxHeight: "85vh",
       borderRadius: "32px",
       padding: "1rem 1.25rem",

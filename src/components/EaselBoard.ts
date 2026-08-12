@@ -21,7 +21,6 @@ import {
   iconUpload,
   iconPaintBucket,
 } from "./icons";
-import "./ImageComparisonSlider";
 
 @customElement("easel-board")
 export class EaselBoard extends SignalElement {
@@ -81,13 +80,13 @@ export class EaselBoard extends SignalElement {
     const dailyChallengeImage = getDailyChallenge();
 
     const outerContainerStyle = {
-      width: "100%",
-      maxWidth: "42rem",
+      width: "95vmin",
+      maxWidth: "95vmin",
       margin: "0 auto",
       paddingTop: "0.5rem",
       paddingBottom: "1rem",
-      paddingLeft: "0.5rem",
-      paddingRight: "0.5rem",
+      paddingLeft: "0",
+      paddingRight: "0",
       position: "relative" as const,
       display: "flex",
       flexDirection: "column" as const,
@@ -200,50 +199,6 @@ export class EaselBoard extends SignalElement {
 
         <!-- Main Frame -->
         <div style=${this.renderStyleObject(mainFrameStyle)}>
-          <!-- Header Bar -->
-          <div style=${this.renderStyleObject(headerBarStyle)}>
-            <div>
-              ${hasArtworks
-                ? html`
-                    <button
-                      title="Open Gallery"
-                      @click=${() => {
-                        soundEffects.playPop();
-                        isGalleryOpenSignal.set(true);
-                      }}
-                      id="view-other-artworks-btn"
-                      style=${this.renderStyleObject(galleryBtnStyle)}
-                    >
-                      ${iconFolderOpen(16, "#000000")}
-                    </button>
-                  `
-                : ""}
-            </div>
-
-            <!-- Action Controls -->
-            <div style="display: flex; align-items: center; gap: 0.5rem;">
-              ${currentArtwork && !isProcessing
-                ? html`
-                    <button
-                      title="Save Painting to Device"
-                      @click=${this.handleDownload}
-                      style=${this.renderStyleObject(actionBtnStyle("#2A9D8F"))}
-                    >
-                      ${iconDownload(16, "#FFFFFF")}
-                    </button>
-
-                    <button
-                      title="Change Image"
-                      @click=${this.triggerFilePicker}
-                      style=${this.renderStyleObject(actionBtnStyle("#FFFFFF"))}
-                    >
-                      ${iconImage(16, "#000000")}
-                    </button>
-                  `
-                : ""}
-            </div>
-          </div>
-
           <!-- Easel Canvas Display Area -->
           <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative;">
             <!-- STATE 1: Processing Loader -->
@@ -323,17 +278,19 @@ export class EaselBoard extends SignalElement {
                 `
               : ""}
 
-            <!-- STATE 3: Cartoon Image & Slider Displayed on Easel -->
+            <!-- STATE 3: Cartoon Image Canvas Displayed on Easel -->
             ${currentArtwork && !isProcessing
               ? html`
                   <div style="width: 100%; display: flex; flex-direction: column; align-items: center;">
-                    <image-comparison-slider
-                      .originalUrl=${currentArtwork.originalDataUrl}
-                      .cartoonUrl=${currentArtwork.cartoonDataUrl}
-                      .width=${currentArtwork.width}
-                      .height=${currentArtwork.height}
-                      .altText=${currentArtwork.name}
-                    ></image-comparison-slider>
+                    <div
+                      style="position: relative; width: 100%; aspect-ratio: ${currentArtwork.width} / ${currentArtwork.height}; border-radius: 12px; overflow: hidden; border: 4px solid #000000; box-shadow: 4px 4px 0px 0px rgba(0,0,0,0.25); background-color: #FFFFFF; display: flex; align-items: center; justify-content: center;"
+                    >
+                      <img
+                        src="${currentArtwork.cartoonDataUrl}"
+                        alt="${currentArtwork.name}"
+                        style="width: 100%; height: 100%; object-fit: contain; display: block;"
+                      />
+                    </div>
                   </div>
                 `
               : ""}

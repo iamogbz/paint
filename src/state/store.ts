@@ -16,8 +16,6 @@ export const isGalleryOpenSignal = signal<boolean>(false);
 export const selectedCategorySignal = signal<string>("All");
 export const copiedHexSignal = signal<string | null>(null);
 export const isDragOverSignal = signal<boolean>(false);
-export const isDraggingSignal = signal<boolean>(false);
-export const sliderPositionSignal = signal<number>(50); // 0 to 100
 
 // Dynamic Style Signals
 export const appBackgroundStyleSignal = computed(() => ({
@@ -27,6 +25,7 @@ export const appBackgroundStyleSignal = computed(() => ({
   position: "relative" as const,
   paddingBottom: "3rem",
   overflowX: "hidden" as const,
+  overflowY: "visible",
 }));
 
 export const footerStyleSignal = computed(() => ({
