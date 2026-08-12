@@ -1,6 +1,13 @@
 export const PALETTE_COLORS = [
   // Neutrals & Outlines
   {
+    id: "transparent",
+    name: "Eraser",
+    hexCode: "#00000000",
+    rgba: [255, 255, 255, 0],
+    category: "Neutrals & Outlines",
+  },
+  {
     id: "pure_white",
     name: "Pure White",
     hexCode: "#FFFFFFFF",

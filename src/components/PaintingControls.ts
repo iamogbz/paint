@@ -350,6 +350,11 @@ export class PaintingControls extends SignalElement {
                     justifyContent: "center",
                     position: "relative" as const,
                     backgroundColor: color.hexCode,
+                    backgroundSize: '1.5rem 1.5rem',
+                    backgroundRepeat: 'repeat',
+                    backgroundImage: color.id === PALETTE_COLOR.transparent.id
+                      ? `conic-gradient(${PALETTE_COLOR.pale_ivory.hexCode} 25%, ${PALETTE_COLOR.pure_white.hexCode} 25%, ${PALETTE_COLOR.pure_white.hexCode} 50%, ${PALETTE_COLOR.pale_ivory.hexCode} 50%, ${PALETTE_COLOR.pale_ivory.hexCode} 75%, ${PALETTE_COLOR.pure_white.hexCode} 75%)`
+                      : color.hexCode,
                     transition: "transform 0.15s ease",
                   };
 
