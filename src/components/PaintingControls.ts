@@ -66,7 +66,14 @@ export class PaintingControls extends SignalElement {
   private handleDownload = () => {
     const artwork = currentArtworkSignal.get();
     if (!artwork) return;
-    downloadImage(artwork.cartoonDataUrl, `${artwork.name}-palette-cartoon.png`);
+
+    const canvas = document.querySelector<HTMLCanvasElement>("#artboard-canvas");
+    if (canvas) {
+      const dataUrl = canvas.toDataURL("image/png");
+      downloadImage(dataUrl, `${artwork.name}-painting.png`);
+    } else {
+      downloadImage(artwork.cartoonDataUrl, `${artwork.name}-palette-cartoon.png`);
+    }
   };
 
   private triggerFilePicker = () => {

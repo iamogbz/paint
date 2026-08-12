@@ -220,4 +220,5 @@ export interface ProcessedArtwork {
   modifiedAt: number;
   colorStats: UsedColorStat[];
   totalPixels: number;
+  paintedRegionsState?: Record<number, string>;
 }

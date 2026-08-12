@@ -6,14 +6,14 @@ import {
   artworksSignal,
   isProcessingSignal,
   activeHighlightColorSignal,
-  isGalleryOpenSignal,
   isDragOverSignal,
   zoomScaleSignal,
   handleImageSelected,
+  handleSelectArtwork,
 } from "../state/store";
+import { ProcessedArtwork, PALETTE_COLOR } from "../types";
 import { getDailyChallenge } from "../data/sampleImages";
 import { soundEffects } from "../utils/soundEffects";
-import { downloadImage } from "../utils/download";
 import {
   iconImage,
   iconLoader2,
@@ -40,6 +40,17 @@ export class EaselBoard extends SignalElement {
   private lastArtworkId: string | null = null;
   private containerElement: HTMLElement | null = null;
 
+  // Interactive Canvas State
+  private activeArtworkId: string | null = null;
+  private regionMapData: Int32Array | null = null;
+  private isBorderPixel: Uint8Array | null = null;
+  private regionBorderPixels: Map<number, Int32Array> | null = null;
+  private hoveredRegionId: number | null = null;
+  private artworkWidth = 0;
+  private artworkHeight = 0;
+  private offscreenCanvas: HTMLCanvasElement | null = null;
+  private offscreenCtx: CanvasRenderingContext2D | null = null;
+
   public triggerFilePicker = () => {
     const input = document.getElementById("easel-file-input") as HTMLInputElement;
     if (input) {
@@ -50,10 +61,12 @@ export class EaselBoard extends SignalElement {
 
   firstUpdated() {
     this.setupZoomListeners();
+    this.checkArtworkAndRender();
   }
 
   updated() {
     this.setupZoomListeners();
+    this.checkArtworkAndRender();
   }
 
   connectedCallback() {
@@ -71,6 +84,335 @@ export class EaselBoard extends SignalElement {
     window.removeEventListener("easel-zoom-out", this.zoomOut);
     window.removeEventListener("easel-zoom-reset", this.resetZoom);
   }
+
+  private checkArtworkAndRender() {
+    const currentArtwork = currentArtworkSignal.get();
+    if (currentArtwork && currentArtwork.id !== this.activeArtworkId) {
+      this.activeArtworkId = currentArtwork.id;
+      this.prepareArtworkCanvas(currentArtwork);
+    } else if (currentArtwork) {
+      this.drawArtboardCanvas();
+    }
+  }
+
+  private prepareArtworkCanvas(artwork: ProcessedArtwork) {
+    const img = new Image();
+    img.crossOrigin = "anonymous";
+    img.onload = () => {
+      this.artworkWidth = artwork.width;
+      this.artworkHeight = artwork.height;
+
+      const tempCanvas = document.createElement("canvas");
+      tempCanvas.width = artwork.width;
+      tempCanvas.height = artwork.height;
+      const ctx = tempCanvas.getContext("2d", { willReadFrequently: true });
+      if (!ctx) return;
+
+      ctx.drawImage(img, 0, 0);
+      const srcData = ctx.getImageData(0, 0, artwork.width, artwork.height);
+
+      const numRegions = this.buildRegionMapFromImageData(srcData);
+      this.computeBorderMap(artwork.width, artwork.height, numRegions);
+      this.drawArtboardCanvas();
+    };
+    img.src = artwork.cartoonDataUrl;
+  }
+
+  private buildRegionMapFromImageData(imageData: ImageData): number {
+    const w = imageData.width;
+    const h = imageData.height;
+    const data = imageData.data;
+    const regionMap = new Int32Array(w * h);
+    regionMap.fill(-1);
+
+    const visited = new Uint8Array(w * h);
+    let nextRegionId = 0;
+
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const idx = y * w + x;
+        if (visited[idx]) continue;
+
+        const pxIdx = idx * 4;
+        const r = data[pxIdx];
+        const g = data[pxIdx + 1];
+        const b = data[pxIdx + 2];
+        const a = data[pxIdx + 3];
+
+        const regionId = nextRegionId++;
+        const queue = [x, y];
+        visited[idx] = 1;
+
+        let head = 0;
+        while (head < queue.length) {
+          const qx = queue[head++];
+          const qy = queue[head++];
+          const qIdx = qy * w + qx;
+
+          regionMap[qIdx] = regionId;
+
+          const neighbors = [
+            [qx + 1, qy],
+            [qx - 1, qy],
+            [qx, qy + 1],
+            [qx, qy - 1],
+          ];
+
+          for (const [nx, ny] of neighbors) {
+            if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+              const nIdx = ny * w + nx;
+              if (!visited[nIdx]) {
+                const nPxIdx = nIdx * 4;
+                const nr = data[nPxIdx];
+                const ng = data[nPxIdx + 1];
+                const nb = data[nPxIdx + 2];
+                const na = data[nPxIdx + 3];
+
+                if (r === nr && g === ng && b === nb && a === na) {
+                  visited[nIdx] = 1;
+                  queue.push(nx, ny);
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+
+    this.regionMapData = regionMap;
+    return nextRegionId;
+  }
+
+  private computeBorderMap(w: number, h: number, numRegions: number) {
+    if (!this.regionMapData) return;
+
+    const totalPixels = w * h;
+    const isBorder = new Uint8Array(totalPixels);
+    const regionBorderSets = new Map<number, Set<number>>();
+
+    for (let r = 0; r < numRegions; r++) {
+      regionBorderSets.set(r, new Set<number>());
+    }
+
+    // Radius 10px for internal boundaries (making total boundary thickness = 20px)
+    const radius = 10;
+    const radiusSq = radius * radius;
+    const offsets10: [number, number][] = [];
+    for (let dy = -radius; dy <= radius; dy++) {
+      for (let dx = -radius; dx <= radius; dx++) {
+        if (dx * dx + dy * dy <= radiusSq) {
+          offsets10.push([dx, dy]);
+        }
+      }
+    }
+
+    // Outer edge border width = 20px (16-24px range)
+    const edgeWidth = 20;
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        if (x < edgeWidth || x >= w - edgeWidth || y < edgeWidth || y >= h - edgeWidth) {
+          const idx = y * w + x;
+          isBorder[idx] = 1;
+          const regId = this.regionMapData[idx];
+          if (regId >= 0) {
+            regionBorderSets.get(regId)?.add(idx);
+          }
+        }
+      }
+    }
+
+    // Internal boundaries between different color islands / region IDs
+    for (let y = 0; y < h; y++) {
+      for (let x = 0; x < w; x++) {
+        const idx = y * w + x;
+        const r1 = this.regionMapData[idx];
+        if (r1 < 0) continue;
+
+        const neighbors: number[] = [];
+        if (x + 1 < w) neighbors.push(this.regionMapData[idx + 1]);
+        if (y + 1 < h) neighbors.push(this.regionMapData[idx + w]);
+
+        for (const r2 of neighbors) {
+          if (r2 >= 0 && r2 !== r1) {
+            const set1 = regionBorderSets.get(r1);
+            const set2 = regionBorderSets.get(r2);
+
+            for (let i = 0; i < offsets10.length; i++) {
+              const [dx, dy] = offsets10[i];
+              const nx = x + dx;
+              const ny = y + dy;
+              if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+                const nIdx = ny * w + nx;
+                isBorder[nIdx] = 1;
+                if (set1) set1.add(nIdx);
+                if (set2) set2.add(nIdx);
+              }
+            }
+          }
+        }
+      }
+    }
+
+    const regionBorderPixels = new Map<number, Int32Array>();
+    for (const [regId, set] of regionBorderSets.entries()) {
+      regionBorderPixels.set(regId, Int32Array.from(set));
+    }
+
+    this.isBorderPixel = isBorder;
+    this.regionBorderPixels = regionBorderPixels;
+  }
+
+  private drawArtboardCanvas() {
+    const canvas = this.querySelector<HTMLCanvasElement>("#artboard-canvas");
+    const currentArtwork = currentArtworkSignal.get();
+    if (!canvas || !currentArtwork || !this.regionMapData) return;
+
+    const w = this.artworkWidth;
+    const h = this.artworkHeight;
+    if (w <= 0 || h <= 0) return;
+
+    if (canvas.width !== w || canvas.height !== h) {
+      canvas.width = w;
+      canvas.height = h;
+    }
+
+    const destCtx = canvas.getContext("2d");
+    if (!destCtx) return;
+
+    if (!this.offscreenCanvas || this.offscreenCanvas.width !== w || this.offscreenCanvas.height !== h) {
+      this.offscreenCanvas = document.createElement("canvas");
+      this.offscreenCanvas.width = w;
+      this.offscreenCanvas.height = h;
+      this.offscreenCtx = this.offscreenCanvas.getContext("2d", { willReadFrequently: true });
+    }
+
+    if (!this.offscreenCtx) return;
+
+    const imgData = this.offscreenCtx.createImageData(w, h);
+    const pixels = imgData.data;
+    const paintedState = currentArtwork.paintedRegionsState || {};
+
+    for (let i = 0; i < w * h; i++) {
+      const pxIdx = i * 4;
+      const regionId = this.regionMapData[i];
+      const paintedColor = paintedState[regionId];
+
+      if (paintedColor) {
+        // Filled island: render selected color
+        const rgba = this.parseColorToRGBA(paintedColor);
+        pixels[pxIdx] = rgba[0];
+        pixels[pxIdx + 1] = rgba[1];
+        pixels[pxIdx + 2] = rgba[2];
+        pixels[pxIdx + 3] = rgba[3];
+      } else {
+        // Unpainted island: clean white canvas
+        pixels[pxIdx] = 255;
+        pixels[pxIdx + 1] = 255;
+        pixels[pxIdx + 2] = 255;
+        pixels[pxIdx + 3] = 255;
+      }
+    }
+
+    this.offscreenCtx.putImageData(imgData, 0, 0);
+
+    destCtx.fillStyle = "#ffffff";
+    destCtx.fillRect(0, 0, w, h);
+    destCtx.drawImage(this.offscreenCanvas, 0, 0);
+  }
+
+  private parseColorToRGBA(colorStr: string): [number, number, number, number] {
+    if (colorStr.startsWith("#")) {
+      let hex = colorStr.slice(1);
+      if (hex.length === 3 || hex.length === 4) {
+        hex = hex.split("").map((c) => c + c).join("");
+      }
+      const r = parseInt(hex.slice(0, 2), 16) || 0;
+      const g = parseInt(hex.slice(2, 4), 16) || 0;
+      const b = parseInt(hex.slice(4, 6), 16) || 0;
+      const a = hex.length === 8 ? parseInt(hex.slice(6, 8), 16) : 255;
+      return [r, g, b, a];
+    }
+    return [255, 255, 255, 255];
+  }
+
+  private handleCanvasClick = (e: MouseEvent) => {
+    if (!this.regionMapData) return;
+    const currentArtwork = currentArtworkSignal.get();
+    if (!currentArtwork) return;
+
+    const canvas = e.currentTarget as HTMLCanvasElement;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const clickX = Math.floor((e.clientX - rect.left) * scaleX);
+    const clickY = Math.floor((e.clientY - rect.top) * scaleY);
+
+    if (clickX >= 0 && clickX < canvas.width && clickY >= 0 && clickY < canvas.height) {
+      const pixelIdx = clickY * canvas.width + clickX;
+      const regionId = this.regionMapData[pixelIdx];
+      if (regionId !== undefined && regionId >= 0) {
+        let activeColor = activeHighlightColorSignal.get();
+        if (!activeColor) {
+          // If no color selected yet, default to first palette color
+          const defaultColor = Object.values(PALETTE_COLOR)[0];
+          if (defaultColor) {
+            activeHighlightColorSignal.set(defaultColor);
+            activeColor = defaultColor;
+          }
+        }
+
+        if (activeColor) {
+          const currentPainted = { ...(currentArtwork.paintedRegionsState || {}) };
+
+          if (activeColor.id === "transparent") {
+            // Eraser mode
+            delete currentPainted[regionId];
+            soundEffects.playPop();
+          } else {
+            // Paint or replace existing region color
+            currentPainted[regionId] = activeColor.hexCode;
+            soundEffects.playPop();
+          }
+
+          const updatedArtwork: ProcessedArtwork = {
+            ...currentArtwork,
+            paintedRegionsState: currentPainted,
+            modifiedAt: Date.now(),
+          };
+          handleSelectArtwork(updatedArtwork);
+          this.drawArtboardCanvas();
+        }
+      }
+    }
+  };
+
+  private handleCanvasMouseMove = (e: MouseEvent) => {
+    if (!this.regionMapData) return;
+    const canvas = e.currentTarget as HTMLCanvasElement;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const x = Math.floor((e.clientX - rect.left) * scaleX);
+    const y = Math.floor((e.clientY - rect.top) * scaleY);
+
+    if (x >= 0 && x < canvas.width && y >= 0 && y < canvas.height) {
+      const regionId = this.regionMapData[y * canvas.width + x];
+      if (this.hoveredRegionId !== regionId) {
+        this.hoveredRegionId = regionId;
+        this.drawArtboardCanvas();
+      }
+    } else if (this.hoveredRegionId !== null) {
+      this.hoveredRegionId = null;
+      this.drawArtboardCanvas();
+    }
+  };
+
+  private handleCanvasMouseLeave = () => {
+    if (this.hoveredRegionId !== null) {
+      this.hoveredRegionId = null;
+      this.drawArtboardCanvas();
+    }
+  };
 
   private setupZoomListeners() {
     const container = this.querySelector<HTMLElement>("#easel-zoom-container");
@@ -254,7 +596,6 @@ export class EaselBoard extends SignalElement {
     this.isDragging = false;
   };
 
-
   private handleFileInput = (file: File) => {
     if (file && file.type.startsWith("image/")) {
       soundEffects.playPop();
@@ -294,9 +635,7 @@ export class EaselBoard extends SignalElement {
       this.panY = 0;
       zoomScaleSignal.set(1);
     }
-    const hasArtworks = artworksSignal.get().length > 0;
     const isProcessing = isProcessingSignal.get();
-    const activeHighlightHex = activeHighlightColorSignal.get()?.hexCode;
     const isDragOver = isDragOverSignal.get();
     const dailyChallengeImage = getDailyChallenge();
 
@@ -420,7 +759,6 @@ export class EaselBoard extends SignalElement {
                         @click=${this.triggerFilePicker}
                         style=${this.renderStyleObject(dropAreaStyle)}
                       >
-                        <!-- Upload Icon Circle -->
                         <div style="width: 5rem; height: 5rem; border-radius: 24px; background-color: #FFD166; border: 3px solid #000000; display: flex; align-items: center; justify-content: center; box-shadow: 4px 4px 0px 0px #000000; margin-bottom: 1rem; color: #000000;">
                           ${iconUpload(40, "#000000")}
                         </div>
@@ -442,7 +780,6 @@ export class EaselBoard extends SignalElement {
                           ${iconImage(20, "#FFFFFF")} Choose Photo
                         </button>
 
-                        <!-- Sample Daily Challenge Button -->
                         <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 2px solid rgba(0, 0, 0, 0.15); width: 100%;">
                           <div style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; flex-wrap: wrap;">
                             <button
@@ -464,18 +801,20 @@ export class EaselBoard extends SignalElement {
                     `
                   : ""}
 
-                <!-- STATE 3: Cartoon Image Canvas Displayed on Easel -->
+                <!-- STATE 3: Interactive Line-Art Painting Canvas -->
                 ${currentArtwork && !isProcessing
                   ? html`
                       <div style="width: 100%; display: flex; flex-direction: column; align-items: center;">
                         <div
-                          style="position: relative; width: 100%; aspect-ratio: ${currentArtwork.width} / ${currentArtwork.height}; border-radius: 12px; overflow: hidden; display: flex; align-items: center; justify-content: center;"
+                          style="position: relative; width: 100%; aspect-ratio: ${currentArtwork.width} / ${currentArtwork.height}; border-radius: 12px; overflow: hidden; display: flex; align-items: center; justify-content: center; background-color: #ffffff; border: 2px solid #000000;"
                         >
-                          <div
-                            alt="${currentArtwork.name}"
-                            title="${currentArtwork.name}"
-                            style="width: 100%; height: 100%; object-fit: contain; display: block; background: url('${currentArtwork.cartoonDataUrl}') center no-repeat; background-size: contain;"
-                          />
+                          <canvas
+                            id="artboard-canvas"
+                            @click=${this.handleCanvasClick}
+                            @mousemove=${this.handleCanvasMouseMove}
+                            @mouseleave=${this.handleCanvasMouseLeave}
+                            style="width: 100%; height: 100%; object-fit: contain; display: block; cursor: crosshair;"
+                          ></canvas>
                         </div>
                       </div>
                     `
