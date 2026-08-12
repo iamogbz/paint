@@ -132,20 +132,15 @@ export async function processImageToCartoonPalette(
 
   for (let i = 0; i < width * height; i++) {
     const pxIdx = i * 4;
+    const r = smoothedPixels[pxIdx];
+    const g = smoothedPixels[pxIdx + 1];
+    const b = smoothedPixels[pxIdx + 2];
     const a = smoothedPixels[pxIdx + 3];
 
-    // Preserve transparent pixels
-    if (a < 128) {
-      colorIndices[i] = -1;
-    } else {
-      const r = smoothedPixels[pxIdx];
-      const g = smoothedPixels[pxIdx + 1];
-      const b = smoothedPixels[pxIdx + 2];
-
-      const closest = findClosestPaletteColorFast(r, g, b);
-      const palIdx = PALETTE_COLORS.findIndex((c) => c.id === closest.id);
-      colorIndices[i] = palIdx;
-    }
+    // Match closest palette color including alpha channel
+    const closest = findClosestPaletteColorFast(r, g, b, a);
+    const palIdx = PALETTE_COLORS.findIndex((c) => c.id === closest.id);
+    colorIndices[i] = palIdx;
   }
 
   // Jaggie Curve Smoothing (Majority neighborhood filter)
@@ -171,7 +166,7 @@ export async function processImageToCartoonPalette(
     const pxIdx = i * 4;
     const origAlpha = smoothedPixels[pxIdx + 3];
 
-    if (palIdx === -1 || origAlpha < 128) {
+    if (palIdx === -1) {
       cartoonPixels[pxIdx] = 0;
       cartoonPixels[pxIdx + 1] = 0;
       cartoonPixels[pxIdx + 2] = 0;
