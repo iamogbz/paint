@@ -15,6 +15,8 @@ import {
   isProcessingSignal,
   isGalleryOpenSignal,
   zoomScaleSignal,
+  draggedColorSignal,
+  draggedPositionSignal,
 } from "../state/store";
 import {
   iconPalette,
@@ -61,6 +63,57 @@ export class PaintingControls extends SignalElement {
         })
         .catch(() => {});
     }
+  };
+
+  private handleSwatchPointerDown = (e: PointerEvent, color: PaletteColor) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let isDragging = false;
+
+    const onPointerMove = (moveEvent: PointerEvent) => {
+      const dx = moveEvent.clientX - startX;
+      const dy = moveEvent.clientY - startY;
+
+      if (!isDragging && Math.hypot(dx, dy) > 10) {
+        isDragging = true;
+        draggedColorSignal.set(color.hexCode);
+        activeHighlightColorSignal.set(color);
+      }
+
+      if (isDragging) {
+        draggedPositionSignal.set({ x: moveEvent.clientX, y: moveEvent.clientY });
+        const moveEvt = new CustomEvent("color-drag-move", {
+          detail: { x: moveEvent.clientX, y: moveEvent.clientY }
+        });
+        window.dispatchEvent(moveEvt);
+      }
+    };
+
+    const onPointerUp = (upEvent: PointerEvent) => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+
+      if (isDragging) {
+        const dropEvent = new CustomEvent("color-drop", {
+          detail: {
+            x: upEvent.clientX,
+            y: upEvent.clientY,
+            color: color.hexCode,
+          },
+        });
+        window.dispatchEvent(dropEvent);
+
+        draggedColorSignal.set(null);
+        draggedPositionSignal.set(null);
+      } else {
+        this.handleColorClick(color);
+      }
+    };
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
   };
 
   private handleDownload = () => {
@@ -339,6 +392,7 @@ export class PaintingControls extends SignalElement {
                     boxShadow: isSelected ? "3px 3px 0px 0px #E63946" : "0px 0px 0px 0px rgba(0,0,0,0.08)",
                     transform: isSelected ? "scale(1.05)" : "scale(1)",
                     opacity: isSelected ? "1" : "0.85",
+                    touchAction: "none" as const,
                   };
 
                   const circleStyle = {
@@ -362,7 +416,7 @@ export class PaintingControls extends SignalElement {
 
                   return html`
                     <button
-                      @click=${() => this.handleColorClick(color)}
+                      @pointerdown=${(e: PointerEvent) => this.handleSwatchPointerDown(e, color)}
                       style=${this.renderStyleObject(colorCardStyle)}
                     >
                       <!-- Color Circle -->

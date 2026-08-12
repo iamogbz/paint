@@ -77,6 +77,8 @@ export class EaselBoard extends SignalElement {
     window.addEventListener("easel-zoom-in", this.zoomIn);
     window.addEventListener("easel-zoom-out", this.zoomOut);
     window.addEventListener("easel-zoom-reset", this.resetZoom);
+    window.addEventListener("color-drag-move", this.handleColorDragMove as EventListener);
+    window.addEventListener("color-drop", this.handleColorDrop as EventListener);
   }
 
   disconnectedCallback() {
@@ -86,6 +88,8 @@ export class EaselBoard extends SignalElement {
     window.removeEventListener("easel-zoom-in", this.zoomIn);
     window.removeEventListener("easel-zoom-out", this.zoomOut);
     window.removeEventListener("easel-zoom-reset", this.resetZoom);
+    window.removeEventListener("color-drag-move", this.handleColorDragMove as EventListener);
+    window.removeEventListener("color-drop", this.handleColorDrop as EventListener);
   }
 
   private checkArtworkAndRender() {
@@ -443,6 +447,95 @@ export class EaselBoard extends SignalElement {
     if (this.hoveredRegionId !== null) {
       this.hoveredRegionId = null;
       this.drawArtboardCanvas();
+    }
+  };
+
+  private handleColorDragMove = (e: Event) => {
+    const customEvent = e as CustomEvent;
+    const { x: clientX, y: clientY } = customEvent.detail;
+    if (!this.regionMapData) return;
+
+    const canvas = this.shadowRoot?.querySelector("#artboard-canvas") as HTMLCanvasElement;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    if (
+      clientX >= rect.left &&
+      clientX <= rect.right &&
+      clientY >= rect.top &&
+      clientY <= rect.bottom
+    ) {
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const x = Math.floor((clientX - rect.left) * scaleX);
+      const y = Math.floor((clientY - rect.top) * scaleY);
+
+      if (x >= 0 && x < canvas.width && y >= 0 && y < canvas.height) {
+        const regionId = this.regionMapData[y * canvas.width + x];
+        if (this.hoveredRegionId !== regionId) {
+          this.hoveredRegionId = regionId;
+          this.drawArtboardCanvas();
+        }
+      }
+    } else {
+      if (this.hoveredRegionId !== null) {
+        this.hoveredRegionId = null;
+        this.drawArtboardCanvas();
+      }
+    }
+  };
+
+  private handleColorDrop = (e: Event) => {
+    const customEvent = e as CustomEvent;
+    const { x: clientX, y: clientY, color } = customEvent.detail;
+    
+    // Clear hover effect
+    if (this.hoveredRegionId !== null) {
+      this.hoveredRegionId = null;
+      this.drawArtboardCanvas();
+    }
+
+    if (!this.regionMapData) return;
+    const currentArtwork = currentArtworkSignal.get();
+    if (!currentArtwork) return;
+
+    const canvas = this.shadowRoot?.querySelector("#artboard-canvas") as HTMLCanvasElement;
+    if (!canvas) return;
+
+    const rect = canvas.getBoundingClientRect();
+    if (
+      clientX >= rect.left &&
+      clientX <= rect.right &&
+      clientY >= rect.top &&
+      clientY <= rect.bottom
+    ) {
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const x = Math.floor((clientX - rect.left) * scaleX);
+      const y = Math.floor((clientY - rect.top) * scaleY);
+
+      if (x >= 0 && x < canvas.width && y >= 0 && y < canvas.height) {
+        const regionId = this.regionMapData[y * canvas.width + x];
+        if (regionId !== undefined && regionId >= 0) {
+          const currentPainted = { ...(currentArtwork.paintedRegionsState || {}) };
+          
+          if (color === PALETTE_COLOR.transparent.hexCode) {
+            delete currentPainted[regionId];
+            soundEffects.playPop();
+          } else {
+            currentPainted[regionId] = color;
+            soundEffects.playPop();
+          }
+
+          const updatedArtwork: ProcessedArtwork = {
+            ...currentArtwork,
+            paintedRegionsState: currentPainted,
+            modifiedAt: Date.now(),
+          };
+          handleSelectArtwork(updatedArtwork);
+          this.drawArtboardCanvas();
+        }
+      }
     }
   };
 

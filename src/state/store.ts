@@ -18,6 +18,10 @@ export const copiedHexSignal = signal<string | null>(null);
 export const isDragOverSignal = signal<boolean>(false);
 export const zoomScaleSignal = signal<number>(1);
 
+// Drag and drop colors
+export const draggedColorSignal = signal<string | null>(null);
+export const draggedPositionSignal = signal<{x: number, y: number} | null>(null);
+
 // Dynamic Style Signals
 export const appBackgroundStyleSignal = computed(() => ({
   background: `radial-gradient(circle at 50% 50%, ${PALETTE_COLOR.pale_ivory.hexCode} 0%, ${PALETTE_COLOR.peach_base.hexCode} 100%)`,
