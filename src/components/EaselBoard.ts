@@ -362,7 +362,7 @@ export class EaselBoard extends SignalElement {
     const draggedColorHex = draggedColorSignal.get();
     const targetHex = draggedColorHex || activeColor?.hexCode;
 
-    if (this.isBorderPixel && targetHex) {
+    if (this.isBorderPixel && targetHex && targetHex !== PALETTE_COLOR.transparent.hexCode) {
       const targetHexUpper = targetHex.toUpperCase();
       const overlayImgData = destCtx.createImageData(w, h);
       const overlayPixels = overlayImgData.data;
