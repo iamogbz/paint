@@ -254,9 +254,8 @@ export async function processImageToCartoonPalette(
   // Copy raw as fallback base
   smoothedPixels.set(rawPixels);
 
-  // TODO: skip for now maybe add later
   const radius = 8;
-  // applyKuwaharaFilter(rawPixels, smoothedPixels, width, height, radius);
+  applyKuwaharaFilter(rawPixels, smoothedPixels, width, height, radius);
 
   // Palette Quantization
   const colorIndices = new Int16Array(width * height);
@@ -264,9 +263,9 @@ export async function processImageToCartoonPalette(
 
   for (let i = 0; i < width * height; i++) {
     const pxIdx = i * 4;
-    const r = rawPixels[pxIdx];
-    const g = rawPixels[pxIdx + 1];
-    const b = rawPixels[pxIdx + 2];
+    const r = smoothedPixels[pxIdx];
+    const g = smoothedPixels[pxIdx + 1];
+    const b = smoothedPixels[pxIdx + 2];
 
     const closest = findClosestPaletteColorFast(r, g, b);
     const palIdx = PALETTE_COLORS.findIndex((c) => c.id === closest.id);
