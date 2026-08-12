@@ -87,10 +87,16 @@ export class PaintingControls extends SignalElement {
     const activeColor = activeHighlightColorSignal.get();
     const copiedHex = copiedHexSignal.get();
     const currentArtwork = currentArtworkSignal.get();
-    console.log(currentArtwork);
     const hasArtworks = artworksSignal.get().length > 0;
     const isProcessing = isProcessingSignal.get();
     const zoomScale = zoomScaleSignal.get();
+
+    const showPhotoControls = Boolean(currentArtwork && !isProcessing);
+
+    // If there is no active photo and no gallery artworks, hide the entire controls bar
+    if (!showPhotoControls && !hasArtworks) {
+      return html``;
+    }
 
     // Map stats by color ID
     const statsMap = new Map<string, UsedColorStat>();
@@ -113,7 +119,6 @@ export class PaintingControls extends SignalElement {
       left: "0",
       right: "0",
       width: "100%",
-      height: "calc(200px-1.25rem)",
       backgroundColor: "rgba(255, 255, 255, 0.92)",
       backdropFilter: "blur(16px)",
       borderTop: "4px solid #000000",
@@ -133,9 +138,7 @@ export class PaintingControls extends SignalElement {
       justifyContent: "space-between",
       gap: "0.5rem",
       padding: "0.75rem 1.25rem",
-      marginBottom: "0.5rem",
-      paddingBottom: "0.5rem",
-      borderBottom: "2px solid rgba(0, 0, 0, 0.15)",
+      borderBottom: showPhotoControls ? "2px solid rgba(0, 0, 0, 0.15)" : "none",
       flexShrink: 0,
     };
 
@@ -185,7 +188,7 @@ export class PaintingControls extends SignalElement {
 
     return html`
       <div id="color-palette-section" style=${this.renderStyleObject(containerStyle)}>
-        <!-- Header Controls: Action Buttons (Left) & Category Toggles (Right) -->
+        <!-- Header Controls: Action Buttons (Left), Zoom (Middle) & Category Toggles (Right) -->
         <div style=${this.renderStyleObject(headerStyle)}>
           <!-- Left Group: Action Buttons -->
           <div style="display: flex; align-items: center; gap: 0.5rem;">
@@ -204,7 +207,7 @@ export class PaintingControls extends SignalElement {
                   </button>
                 `
               : ""}
-            ${currentArtwork && !isProcessing
+            ${showPhotoControls
               ? html`
                   <button
                     title="Save Painting to Device"
@@ -226,7 +229,7 @@ export class PaintingControls extends SignalElement {
           </div>
 
           <!-- Middle Group: Canvas Zoom Controls (Only when image is loaded) -->
-          ${currentArtwork && !isProcessing
+          ${showPhotoControls
             ? html`
                 <div
                   style="display: flex; align-items: center; gap: 0.25rem; background: rgba(255, 255, 255, 0.95); border: 2.5px solid #000000; border-radius: 9999px; padding: 0.25rem 0.5rem; box-shadow: 2px 2px 0px 0px #000000;"
@@ -266,126 +269,134 @@ export class PaintingControls extends SignalElement {
               `
             : ""}
 
-          <!-- Right Group: Color Category Buttons -->
-          <div style="display: flex; align-items: center; gap: 0.5rem;">
-            ${categories.map((cat) => {
-              const isSel = selectedCat === cat;
-              const btnStyle = {
-                fontSize: "0.75rem",
-                padding: "0.375rem 0.875rem",
-                borderRadius: "9999px",
-                fontWeight: "900",
-                textTransform: "uppercase" as const,
-                letterSpacing: "0.05em",
-                transition: "all 0.15s ease",
-                border: "2.5px solid #000000",
-                cursor: "pointer",
-                backgroundColor: isSel ? "#000000" : "rgba(255, 255, 255, 0.8)",
-                color: isSel ? "#FFFFFF" : "#000000",
-                boxShadow: isSel ? "2px 2px 0px 0px rgba(0, 0, 0, 0.3)" : "none",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.25rem",
-              };
+          <!-- Right Group: Color Category Buttons (Only when image is loaded) -->
+          ${showPhotoControls
+            ? html`
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                  ${categories.map((cat) => {
+                    const isSel = selectedCat === cat;
+                    const btnStyle = {
+                      fontSize: "0.75rem",
+                      padding: "0.375rem 0.875rem",
+                      borderRadius: "9999px",
+                      fontWeight: "900",
+                      textTransform: "uppercase" as const,
+                      letterSpacing: "0.05em",
+                      transition: "all 0.15s ease",
+                      border: "2.5px solid #000000",
+                      cursor: "pointer",
+                      backgroundColor: isSel ? "#000000" : "rgba(255, 255, 255, 0.8)",
+                      color: isSel ? "#FFFFFF" : "#000000",
+                      boxShadow: isSel ? "2px 2px 0px 0px rgba(0, 0, 0, 0.3)" : "none",
+                      display: "flex",
+                      alignItems: "center",
+                      gap: "0.25rem",
+                    };
 
-              return html`
-                <button
-                  @click=${() => {
-                    soundEffects.playPop();
-                    selectedCategorySignal.set(cat);
-                  }}
-                  style=${this.renderStyleObject(btnStyle)}
-                >
-                  ${cat === PALETTE_CATEGORIES_ALL
-                    ? iconPaintBucket(18, isSel ? "#FFFFFF" : "#000000")
-                    : iconPalette(18, isSel ? "#FFFFFF" : "#000000")}
-                </button>
-              `;
-            })}
-          </div>
-        </div>
-
-        <!-- Color Swatches Single Row -->
-        <div style=${this.renderStyleObject(scrollRowStyle)}>
-          ${filteredColors.map((color) => {
-            const stat = statsMap.get(color.id);
-            const isUsed = stat?.count > 0;
-            const isSelected = activeColor?.id === color.id;
-            const isCopied = copiedHex === color.hexCode;
-
-            const colorCardStyle = {
-              flex: "0 0 auto",
-              width: "82px",
-              display: "flex",
-              flexDirection: "column" as const,
-              alignItems: "center",
-              padding: "0.375rem",
-              borderRadius: "1rem",
-              transition: "all 0.15s ease",
-              cursor: "pointer",
-              border: isSelected ? "3px solid #E63946" : "2.5px solid transparent",
-              backgroundColor: isSelected ? "rgba(254, 243, 199, 0.95)" : "rgba(255, 255, 255, 0.5)",
-              boxShadow: isSelected ? "3px 3px 0px 0px #E63946" : "0px 0px 0px 0px rgba(0,0,0,0.08)",
-              transform: isSelected ? "scale(1.05)" : "scale(1)",
-              opacity: isSelected ? "1" : "0.85",
-            };
-
-            const circleStyle = {
-              width: "3.25rem",
-              height: "3.25rem",
-              borderRadius: "9999px",
-              border: "3px solid #000000",
-              boxShadow: "0 2px 4px rgba(0, 0, 0, 0.15)",
-              display: "flex",
-              alignItems: "center",
-              justifyContent: "center",
-              position: "relative" as const,
-              backgroundColor: color.hexCode,
-              transition: "transform 0.15s ease",
-            };
-
-            return html`
-              <button
-                @click=${() => this.handleColorClick(color)}
-                style=${this.renderStyleObject(colorCardStyle)}
-              >
-                <!-- Color Circle -->
-                <div style=${this.renderStyleObject(circleStyle)}>
-                  ${isUsed
-                    ? html`
-                        <div
-                          style="position: absolute; top: -4px; right: -4px; width: 20px; height: 20px; background-color: #000000; border-radius: 9999px; border: 2px solid #FFFFFF; display: flex; align-items: center; justify-content: center; color: #FFFFFF;"
-                        >
-                          ${iconCheck(12, "#FFFFFF")}
-                        </div>
-                      `
-                    : ""}
-
-                  <!-- Copied Feedback -->
-                  <div
-                    style="position: absolute; inset: 0; width: 50%; height: 50%; margin: auto; background-color: #FFFFFF; border-radius: 9999px; display: flex; align-items: center; justify-content: center; opacity: ${isCopied ? 1 : 0}; transition: opacity 0.3s;"
-                  >
-                    ${iconPaintbrush(14, "#000000")}
-                  </div>
+                    return html`
+                      <button
+                        @click=${() => {
+                          soundEffects.playPop();
+                          selectedCategorySignal.set(cat);
+                        }}
+                        style=${this.renderStyleObject(btnStyle)}
+                      >
+                        ${cat === PALETTE_CATEGORIES_ALL
+                          ? iconPaintBucket(18, isSel ? "#FFFFFF" : "#000000")
+                          : iconPalette(18, isSel ? "#FFFFFF" : "#000000")}
+                      </button>
+                    `;
+                  })}
                 </div>
-
-                <!-- Color Label -->
-                <span
-                  style="font-size: 0.6875rem; font-weight: 900; color: #3D2314; margin-top: 0.375rem; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; line-height: 1.2;"
-                >
-                  ${color.name}
-                </span>
-
-                <!-- Percentage -->
-                <span
-                  style="font-size: 0.75rem; font-weight: ${isUsed ? "900" : "700"}; color: ${isUsed ? "#000000" : "#6B7280"};"
-                >
-                  ${stat?.percentage ?? 0}%
-                </span>
-              </button>
-            `;
-          })}
+              `
+            : ""}
         </div>
+
+        <!-- Color Swatches Single Row (Only when image is loaded) -->
+        ${showPhotoControls
+          ? html`
+              <div style=${this.renderStyleObject(scrollRowStyle)}>
+                ${filteredColors.map((color) => {
+                  const stat = statsMap.get(color.id);
+                  const isUsed = stat?.count > 0;
+                  const isSelected = activeColor?.id === color.id;
+                  const isCopied = copiedHex === color.hexCode;
+
+                  const colorCardStyle = {
+                    flex: "0 0 auto",
+                    width: "82px",
+                    display: "flex",
+                    flexDirection: "column" as const,
+                    alignItems: "center",
+                    padding: "0.375rem",
+                    borderRadius: "1rem",
+                    transition: "all 0.15s ease",
+                    cursor: "pointer",
+                    border: isSelected ? "3px solid #E63946" : "2.5px solid transparent",
+                    backgroundColor: isSelected ? "rgba(254, 243, 199, 0.95)" : "rgba(255, 255, 255, 0.5)",
+                    boxShadow: isSelected ? "3px 3px 0px 0px #E63946" : "0px 0px 0px 0px rgba(0,0,0,0.08)",
+                    transform: isSelected ? "scale(1.05)" : "scale(1)",
+                    opacity: isSelected ? "1" : "0.85",
+                  };
+
+                  const circleStyle = {
+                    width: "3.25rem",
+                    height: "3.25rem",
+                    borderRadius: "9999px",
+                    border: "3px solid #000000",
+                    boxShadow: "0 2px 4px rgba(0, 0, 0, 0.15)",
+                    display: "flex",
+                    alignItems: "center",
+                    justifyContent: "center",
+                    position: "relative" as const,
+                    backgroundColor: color.hexCode,
+                    transition: "transform 0.15s ease",
+                  };
+
+                  return html`
+                    <button
+                      @click=${() => this.handleColorClick(color)}
+                      style=${this.renderStyleObject(colorCardStyle)}
+                    >
+                      <!-- Color Circle -->
+                      <div style=${this.renderStyleObject(circleStyle)}>
+                        ${isUsed
+                          ? html`
+                              <div
+                                style="position: absolute; top: -4px; right: -4px; width: 20px; height: 20px; background-color: #000000; border-radius: 9999px; border: 2px solid #FFFFFF; display: flex; align-items: center; justify-content: center; color: #FFFFFF;"
+                              >
+                                ${iconCheck(12, "#FFFFFF")}
+                              </div>
+                            `
+                          : ""}
+
+                        <!-- Copied Feedback -->
+                        <div
+                          style="position: absolute; inset: 0; width: 50%; height: 50%; margin: auto; background-color: #FFFFFF; border-radius: 9999px; display: flex; align-items: center; justify-content: center; opacity: ${isCopied ? 1 : 0}; transition: opacity 0.3s;"
+                        >
+                          ${iconPaintbrush(14, "#000000")}
+                        </div>
+                      </div>
+
+                      <!-- Color Label -->
+                      <span
+                        style="font-size: 0.6875rem; font-weight: 900; color: #3D2314; margin-top: 0.375rem; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; line-height: 1.2;"
+                      >
+                        ${color.name}
+                      </span>
+
+                      <!-- Percentage -->
+                      <span
+                        style="font-size: 0.75rem; font-weight: ${isUsed ? "900" : "700"}; color: ${isUsed ? "#000000" : "#6B7280"};"
+                      >
+                        ${stat?.percentage ?? 0}%
+                      </span>
+                    </button>
+                  `;
+                })}
+              </div>
+            `
+          : ""}
       </div>
     `;
   }
