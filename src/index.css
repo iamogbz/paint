@@ -17,3 +17,11 @@
   scrollbar-width: none;
 }
 
+/* Cause squircles styles */
+* {
+  corner-shape: superellipse(2) !important;
+}
+
+button {
+  cursor: pointer;
+}
