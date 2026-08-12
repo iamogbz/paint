@@ -9,7 +9,7 @@ export interface SampleImage {
 export function getDailyChallenge(): SampleImage {
   return {
     id: "daily-challenge",
-    name: "Daily Challenge",
+    name:  `Daily Challenge - ${new Date().toString().substring(0,10)}`,
     dataUrl: challengeImgUrl,
   };
 }

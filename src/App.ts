@@ -34,7 +34,7 @@ export class PaintApp extends SignalElement {
       flexDirection: "column" as const,
       alignItems: "center",
       boxSizing: "border-box" as const,
-      marginBottom: "25vh",
+      marginBottom: "10vh",
     };
 
     return html`

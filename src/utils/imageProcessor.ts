@@ -288,8 +288,10 @@ export async function processImageToCartoonPalette(
   }
 
   // 5. Apply Majority Smoothing passes to round staircases and clean noise
-  applyMajoritySmoothing(colorIndices, width, height);
-  applyMajoritySmoothing(colorIndices, width, height);
+  const smoothingPasses = 0;
+  for (let i = 0; i < smoothingPasses; i++) {
+    applyMajoritySmoothing(colorIndices, width, height);
+  }
 
   // 6. Clean up rare isolated micro-colors
   removeRareColors(colorIndices, totalPixels, 0.0025);
@@ -321,7 +323,49 @@ export async function processImageToCartoonPalette(
   outputCtx.putImageData(cartoonImgData, 0, 0);
   const cartoonDataUrl = outputCanvas.toDataURL("image/png");
 
-  // 8. Calculate color statistics for used colors
+  // 8. Build connected component region map (islands)
+  const regionMap = new Int32Array(totalPixels).fill(-1);
+  const visited = new Uint8Array(totalPixels);
+  let nextRegionId = 0;
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = y * width + x;
+      if (visited[idx]) continue;
+
+      const colorIdx = colorIndices[idx];
+      const regionId = nextRegionId++;
+      const queue = [x, y];
+      visited[idx] = 1;
+
+      let head = 0;
+      while (head < queue.length) {
+        const qx = queue[head++];
+        const qy = queue[head++];
+        const qIdx = qy * width + qx;
+        regionMap[qIdx] = regionId;
+
+        const neighbors = [
+          [qx + 1, qy],
+          [qx - 1, qy],
+          [qx, qy + 1],
+          [qx, qy - 1],
+        ];
+
+        for (const [nx, ny] of neighbors) {
+          if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+            const nIdx = ny * width + nx;
+            if (!visited[nIdx] && colorIndices[nIdx] === colorIdx) {
+              visited[nIdx] = 1;
+              queue.push(nx, ny);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 9. Calculate color statistics for used colors
   const colorStats: UsedColorStat[] = PALETTE_COLORS.map((color, index) => {
     const count = colorCounts[index];
     const percentage = Math.round((count / totalPixels) * 100);
@@ -343,5 +387,6 @@ export async function processImageToCartoonPalette(
     modifiedAt: Date.now(),
     colorStats,
     totalPixels,
+    regionMapData: Array.from(regionMap),
   };
 }

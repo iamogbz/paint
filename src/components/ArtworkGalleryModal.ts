@@ -17,6 +17,7 @@ import {
   iconImage,
 } from "./icons";
 import { soundEffects } from "../utils/soundEffects";
+import { downloadImage, exportArtworkCleanDataUrl } from "../utils/download";
 
 @customElement("artwork-gallery-modal")
 export class ArtworkGalleryModal extends SignalElement {
@@ -183,10 +184,10 @@ export class ArtworkGalleryModal extends SignalElement {
                       handleSelectArtwork(art);
                       isGalleryOpenSignal.set(false);
                     }}
-                    style="width: 7rem; height: 7rem; border-radius: 18px; overflow: hidden; border: 2.5px solid #000000; position: relative; cursor: pointer; flex-shrink: 0; background-color: rgba(0,0,0,0.05);"
+                    style="width: 7rem; height: 7rem; border-radius: 18px; overflow: hidden; border: 2.5px solid rgba(0, 0, 0, 0.25); position: relative; cursor: pointer; flex-shrink: 0; background-color: rgba(0,0,0,0.05);"
                   >
                     <img
-                      src="${art.cartoonDataUrl}"
+                      src="${exportArtworkCleanDataUrl(art)}"
                       alt="${art.name}"
                       style="width: 100%; height: 100%; object-fit: cover;"
                     />
@@ -243,10 +244,8 @@ export class ArtworkGalleryModal extends SignalElement {
                         <button
                           @click=${() => {
                             soundEffects.playPop();
-                            const link = document.createElement("a");
-                            link.download = `${art.name}-palette-cartoon.png`;
-                            link.href = art.cartoonDataUrl;
-                            link.click();
+                            const cleanDataUrl = exportArtworkCleanDataUrl(art);
+                            downloadImage(cleanDataUrl, `${art.name}-painting.png`);
                           }}
                           style="padding: 0.5rem; border-radius: 14px; background-color: #FFFFFF; border: 2px solid #000000; color: #000000; boxShadow: 2px 2px 0px 0px #000000; cursor: pointer;"
                           title="Download Artwork"

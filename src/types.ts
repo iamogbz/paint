@@ -221,4 +221,5 @@ export interface ProcessedArtwork {
   colorStats: UsedColorStat[];
   totalPixels: number;
   paintedRegionsState?: Record<number, string>;
+  regionMapData?: number[];
 }

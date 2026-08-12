@@ -30,7 +30,7 @@ import {
 } from "./icons";
 import { transparentImgCss } from "./constants";
 import { soundEffects } from "../utils/soundEffects";
-import { downloadImage } from "../utils/download";
+import { downloadImage, exportArtworkCleanDataUrl } from "../utils/download";
 
 const PALETTE_CATEGORIES_ALL = "All";
 const PALETTE_CATEGORIES_USED = "Used Only";
@@ -66,14 +66,8 @@ export class PaintingControls extends SignalElement {
   private handleDownload = () => {
     const artwork = currentArtworkSignal.get();
     if (!artwork) return;
-
-    const canvas = document.querySelector<HTMLCanvasElement>("#artboard-canvas");
-    if (canvas) {
-      const dataUrl = canvas.toDataURL("image/png");
-      downloadImage(dataUrl, `${artwork.name}-painting.png`);
-    } else {
-      downloadImage(artwork.cartoonDataUrl, `${artwork.name}-palette-cartoon.png`);
-    }
+    const cleanDataUrl = exportArtworkCleanDataUrl(artwork);
+    downloadImage(cleanDataUrl, `${artwork.name}-painting.png`);
   };
 
   private triggerFilePicker = () => {

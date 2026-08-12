@@ -37,6 +37,9 @@ export class EaselBoard extends SignalElement {
   private startPanX = 0;
   private startPanY = 0;
   private lastTapTime = 0;
+  private pointerDownX = 0;
+  private pointerDownY = 0;
+  private hasDragged = false;
   private lastArtworkId: string | null = null;
   private containerElement: HTMLElement | null = null;
 
@@ -96,26 +99,32 @@ export class EaselBoard extends SignalElement {
   }
 
   private prepareArtworkCanvas(artwork: ProcessedArtwork) {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => {
-      this.artworkWidth = artwork.width;
-      this.artworkHeight = artwork.height;
+    this.artworkWidth = artwork.width;
+    this.artworkHeight = artwork.height;
 
-      const tempCanvas = document.createElement("canvas");
-      tempCanvas.width = artwork.width;
-      tempCanvas.height = artwork.height;
-      const ctx = tempCanvas.getContext("2d", { willReadFrequently: true });
-      if (!ctx) return;
-
-      ctx.drawImage(img, 0, 0);
-      const srcData = ctx.getImageData(0, 0, artwork.width, artwork.height);
-
-      const numRegions = this.buildRegionMapFromImageData(srcData);
-      this.computeBorderMap(artwork.width, artwork.height, numRegions);
+    if (artwork.regionMapData && artwork.regionMapData.length === artwork.width * artwork.height) {
+      this.regionMapData = new Int32Array(artwork.regionMapData);
+      this.computeBorderMap(artwork.width, artwork.height);
       this.drawArtboardCanvas();
-    };
-    img.src = artwork.cartoonDataUrl;
+    } else {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      img.onload = () => {
+        const tempCanvas = document.createElement("canvas");
+        tempCanvas.width = artwork.width;
+        tempCanvas.height = artwork.height;
+        const ctx = tempCanvas.getContext("2d", { willReadFrequently: true });
+        if (!ctx) return;
+
+        ctx.drawImage(img, 0, 0);
+        const srcData = ctx.getImageData(0, 0, artwork.width, artwork.height);
+
+        this.buildRegionMapFromImageData(srcData);
+        this.computeBorderMap(artwork.width, artwork.height);
+        this.drawArtboardCanvas();
+      };
+      img.src = artwork.cartoonDataUrl;
+    }
   }
 
   private buildRegionMapFromImageData(imageData: ImageData): number {
@@ -183,62 +192,41 @@ export class EaselBoard extends SignalElement {
     return nextRegionId;
   }
 
-  private computeBorderMap(w: number, h: number, numRegions: number) {
+  private computeBorderMap(w: number, h: number) {
     if (!this.regionMapData) return;
 
     const totalPixels = w * h;
     const isBorder = new Uint8Array(totalPixels);
     const regionBorderSets = new Map<number, Set<number>>();
 
-    for (let r = 0; r < numRegions; r++) {
-      regionBorderSets.set(r, new Set<number>());
-    }
-
-    const offsets: [number, number][] = [
-      [0, 0],
-      [1, 0],
-      [-1, 0],
-      [0, 1],
-      [0, -1],
-    ];
-
-    const edgeWidth = 1;
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        if (x < edgeWidth || x >= w - edgeWidth || y < edgeWidth || y >= h - edgeWidth) {
-          const idx = y * w + x;
-          isBorder[idx] = 1;
-          const regId = this.regionMapData[idx];
-          if (regId >= 0) {
-            regionBorderSets.get(regId)?.add(idx);
-          }
-        }
-      }
-    }
-
-    // Internal boundaries between different color islands / region IDs
     for (let y = 0; y < h; y++) {
       for (let x = 0; x < w; x++) {
         const idx = y * w + x;
         const r1 = this.regionMapData[idx];
         if (r1 < 0) continue;
 
+        if (!regionBorderSets.has(r1)) {
+          regionBorderSets.set(r1, new Set<number>());
+        }
+
         const rRight = x + 1 < w ? this.regionMapData[idx + 1] : -1;
         const rDown = y + 1 < h ? this.regionMapData[idx + w] : -1;
 
         if ((rRight >= 0 && rRight !== r1) || (rDown >= 0 && rDown !== r1)) {
-          for (let i = 0; i < offsets.length; i++) {
-            const [dx, dy] = offsets[i];
-            const nx = x + dx;
-            const ny = y + dy;
-            if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
-              const nIdx = ny * w + nx;
-              isBorder[nIdx] = 1;
-              const nRegion = this.regionMapData[nIdx];
-              if (nRegion >= 0) {
-                regionBorderSets.get(nRegion)?.add(nIdx);
-              }
-            }
+          isBorder[idx] = 1;
+          regionBorderSets.get(r1)?.add(idx);
+
+          if (rRight >= 0 && rRight !== r1) {
+            const idxRight = idx + 1;
+            isBorder[idxRight] = 1;
+            if (!regionBorderSets.has(rRight)) regionBorderSets.set(rRight, new Set<number>());
+            regionBorderSets.get(rRight)?.add(idxRight);
+          }
+          if (rDown >= 0 && rDown !== r1) {
+            const idxDown = idx + w;
+            isBorder[idxDown] = 1;
+            if (!regionBorderSets.has(rDown)) regionBorderSets.set(rDown, new Set<number>());
+            regionBorderSets.get(rDown)?.add(idxDown);
           }
         }
       }
@@ -279,6 +267,7 @@ export class EaselBoard extends SignalElement {
 
     if (!this.offscreenCtx) return;
 
+    // 1. Render PURE PAINT CANVAS PIXELS (no borders or darkening embedded in image data!)
     const imgData = this.offscreenCtx.createImageData(w, h);
     const pixels = imgData.data;
     const paintedState = currentArtwork.paintedRegionsState || {};
@@ -288,55 +277,66 @@ export class EaselBoard extends SignalElement {
       const regionId = this.regionMapData[i];
       const paintedColor = paintedState[regionId];
 
-      let r: number, g: number, b: number, a: number;
-
       if (paintedColor) {
-        // Filled island: render selected color
         const rgba = this.parseColorToRGBA(paintedColor);
-        r = rgba[0];
-        g = rgba[1];
-        b = rgba[2];
-        a = rgba[3];
+        pixels[pxIdx] = rgba[0];
+        pixels[pxIdx + 1] = rgba[1];
+        pixels[pxIdx + 2] = rgba[2];
+        pixels[pxIdx + 3] = rgba[3];
       } else {
-        // Unpainted island: clean white canvas
-        r = 255;
-        g = 255;
-        b = 255;
-        a = 255;
-      }
-
-      // Mostly transparent thin outline overlay (25% darkening on border pixels)
-      if (this.isBorderPixel && this.isBorderPixel[i] === 1) {
-        r = Math.round(r * 0.75);
-        g = Math.round(g * 0.75);
-        b = Math.round(b * 0.75);
-      }
-
-      pixels[pxIdx] = r;
-      pixels[pxIdx + 1] = g;
-      pixels[pxIdx + 2] = b;
-      pixels[pxIdx + 3] = a;
-    }
-
-    // Hover highlight: darken hovered region's border pixels for active visual feedback
-    if (this.hoveredRegionId !== null && this.regionBorderPixels) {
-      const borderIndices = this.regionBorderPixels.get(this.hoveredRegionId);
-      if (borderIndices) {
-        for (let k = 0; k < borderIndices.length; k++) {
-          const pIdx = borderIndices[k];
-          const pxIdx = pIdx * 4;
-          pixels[pxIdx] = Math.round(pixels[pxIdx] * 0.3);
-          pixels[pxIdx + 1] = Math.round(pixels[pxIdx + 1] * 0.3);
-          pixels[pxIdx + 2] = Math.round(pixels[pxIdx + 2] * 0.3);
-        }
+        // Unpainted island starts as clean white
+        pixels[pxIdx] = 255;
+        pixels[pxIdx + 1] = 255;
+        pixels[pxIdx + 2] = 255;
+        pixels[pxIdx + 3] = 255;
       }
     }
 
     this.offscreenCtx.putImageData(imgData, 0, 0);
 
+    // 2. Draw base paint canvas onto screen context
     destCtx.fillStyle = "#ffffff";
     destCtx.fillRect(0, 0, w, h);
     destCtx.drawImage(this.offscreenCanvas, 0, 0);
+
+    // 3. SEPARATE DISPLAY OVERLAY PASS: Render translucent island guide borders on screen context
+    if (this.isBorderPixel) {
+      const overlayImgData = destCtx.createImageData(w, h);
+      const overlayPixels = overlayImgData.data;
+
+      for (let i = 0; i < w * h; i++) {
+        if (this.isBorderPixel[i] === 1) {
+          const pxIdx = i * 4;
+          overlayPixels[pxIdx] = 0;
+          overlayPixels[pxIdx + 1] = 0;
+          overlayPixels[pxIdx + 2] = 0;
+          overlayPixels[pxIdx + 3] = 60; // 23% translucent dark guide border overlay
+        }
+      }
+
+      const tempOverlayCanvas = document.createElement("canvas");
+      tempOverlayCanvas.width = w;
+      tempOverlayCanvas.height = h;
+      const tempCtx = tempOverlayCanvas.getContext("2d");
+      if (tempCtx) {
+        tempCtx.putImageData(overlayImgData, 0, 0);
+        destCtx.drawImage(tempOverlayCanvas, 0, 0);
+      }
+    }
+
+    // 4. Hover Highlight Pass: draw active hover region outline overlay
+    if (this.hoveredRegionId !== null && this.regionBorderPixels) {
+      const borderIndices = this.regionBorderPixels.get(this.hoveredRegionId);
+      if (borderIndices && borderIndices.length > 0) {
+        destCtx.fillStyle = "rgba(0, 0, 0, 0.45)";
+        for (let k = 0; k < borderIndices.length; k++) {
+          const pIdx = borderIndices[k];
+          const bx = pIdx % w;
+          const by = Math.floor(pIdx / w);
+          destCtx.fillRect(bx, by, 1, 1);
+        }
+      }
+    }
   }
 
   private parseColorToRGBA(colorStr: string): [number, number, number, number] {
@@ -355,6 +355,10 @@ export class EaselBoard extends SignalElement {
   }
 
   private handleCanvasClick = (e: MouseEvent) => {
+    if (this.hasDragged) {
+      this.hasDragged = false;
+      return;
+    }
     if (!this.regionMapData) return;
     const currentArtwork = currentArtworkSignal.get();
     if (!currentArtwork) return;
@@ -406,6 +410,13 @@ export class EaselBoard extends SignalElement {
   };
 
   private handleCanvasMouseMove = (e: MouseEvent) => {
+    if (this.isDragging || this.hasDragged) {
+      if (this.hoveredRegionId !== null) {
+        this.hoveredRegionId = null;
+        this.drawArtboardCanvas();
+      }
+      return;
+    }
     if (!this.regionMapData) return;
     const canvas = e.currentTarget as HTMLCanvasElement;
     const rect = canvas.getBoundingClientRect();
@@ -511,6 +522,7 @@ export class EaselBoard extends SignalElement {
     if (e.touches.length === 2) {
       e.preventDefault();
       this.isPinching = true;
+      this.hasDragged = true;
       const t1 = e.touches[0];
       const t2 = e.touches[1];
       this.initialPinchDist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
@@ -521,6 +533,9 @@ export class EaselBoard extends SignalElement {
       this.startPanY = this.panY;
     } else if (e.touches.length === 1) {
       this.isPinching = false;
+      this.hasDragged = false;
+      this.pointerDownX = e.touches[0].clientX;
+      this.pointerDownY = e.touches[0].clientY;
       this.startTouchX = e.touches[0].clientX;
       this.startTouchY = e.touches[0].clientY;
       this.startPanX = this.panX;
@@ -529,6 +544,7 @@ export class EaselBoard extends SignalElement {
       const now = Date.now();
       if (now - this.lastTapTime < 300) {
         soundEffects.playPop();
+        this.hasDragged = true;
         if (this.scale > 1.2) {
           this.resetZoom();
         } else {
@@ -548,6 +564,7 @@ export class EaselBoard extends SignalElement {
   private handleTouchMove = (e: TouchEvent) => {
     if (e.touches.length === 2 && this.initialPinchDist > 0) {
       e.preventDefault();
+      this.hasDragged = true;
       const t1 = e.touches[0];
       const t2 = e.touches[1];
       const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
@@ -564,9 +581,12 @@ export class EaselBoard extends SignalElement {
       this.panY = this.clampPanY(this.startPanY + dy, targetScale);
       zoomScaleSignal.set(this.scale);
       this.requestUpdate();
-    } else if (e.touches.length === 1 && (this.scale > 1 || this.isDragging)) {
-      const dx = e.touches[0].clientX - this.startTouchX;
-      const dy = e.touches[0].clientY - this.startTouchY;
+    } else if (e.touches.length === 1) {
+      const dx = e.touches[0].clientX - this.pointerDownX;
+      const dy = e.touches[0].clientY - this.pointerDownY;
+      if (Math.hypot(dx, dy) > 5) {
+        this.hasDragged = true;
+      }
       if (this.scale > 1) {
         e.preventDefault();
         this.panX = this.clampPanX(this.startPanX + dx, this.scale);
@@ -592,16 +612,21 @@ export class EaselBoard extends SignalElement {
 
   private handlePointerDown = (e: PointerEvent) => {
     if (e.button !== 0) return;
-    if (this.scale > 1) {
-      this.isDragging = true;
-      this.startTouchX = e.clientX;
-      this.startTouchY = e.clientY;
-      this.startPanX = this.panX;
-      this.startPanY = this.panY;
-    }
+    this.pointerDownX = e.clientX;
+    this.pointerDownY = e.clientY;
+    this.hasDragged = false;
+    this.isDragging = true;
+    this.startTouchX = e.clientX;
+    this.startTouchY = e.clientY;
+    this.startPanX = this.panX;
+    this.startPanY = this.panY;
   };
 
   private handlePointerMove = (e: PointerEvent) => {
+    const dist = Math.hypot(e.clientX - this.pointerDownX, e.clientY - this.pointerDownY);
+    if (dist > 5) {
+      this.hasDragged = true;
+    }
     if (this.isDragging && this.scale > 1) {
       const dx = e.clientX - this.startTouchX;
       const dy = e.clientY - this.startTouchY;
@@ -825,7 +850,7 @@ export class EaselBoard extends SignalElement {
                   ? html`
                       <div style="width: 100%; display: flex; flex-direction: column; align-items: center;">
                         <div
-                          style="position: relative; width: 100%; aspect-ratio: ${currentArtwork.width} / ${currentArtwork.height}; border-radius: 12px; overflow: hidden; display: flex; align-items: center; justify-content: center; background-color: #ffffff; border: 2px solid #000000;"
+                          style="position: relative; width: 100%; aspect-ratio: ${currentArtwork.width} / ${currentArtwork.height}; border-radius: 12px; overflow: hidden; display: flex; align-items: center; justify-content: center; background-color: #ffffff; border: 2px solid rgba(0, 0, 0, 0.25);"
                         >
                           <canvas
                             id="artboard-canvas"
