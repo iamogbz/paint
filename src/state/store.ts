@@ -16,6 +16,7 @@ export const isGalleryOpenSignal = signal<boolean>(false);
 export const selectedCategorySignal = signal<string>("All");
 export const copiedHexSignal = signal<string | null>(null);
 export const isDragOverSignal = signal<boolean>(false);
+export const zoomScaleSignal = signal<number>(1);
 
 // Dynamic Style Signals
 export const appBackgroundStyleSignal = computed(() => ({

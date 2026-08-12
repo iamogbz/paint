@@ -34,6 +34,7 @@ export class PaintApp extends SignalElement {
       flexDirection: "column" as const,
       alignItems: "center",
       boxSizing: "border-box" as const,
+      marginBottom: "25vh",
     };
 
     return html`
@@ -63,7 +64,7 @@ export class PaintApp extends SignalElement {
 
           <!-- Footer -->
           <footer style=${this.renderStyleObject(footerStyle)}>
-            <p style="margin: 0;">PAINT by Colors ©️ QBRKTS ${new Date().getFullYear()}</p>
+            <p style="margin: 0;">PAINT by COLORS ©️ QBRKTS (${new Date().getFullYear()})</p>
           </footer>
         </div>
 

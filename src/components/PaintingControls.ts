@@ -14,6 +14,7 @@ import {
   currentArtworkSignal,
   isProcessingSignal,
   isGalleryOpenSignal,
+  zoomScaleSignal,
 } from "../state/store";
 import {
   iconPalette,
@@ -23,8 +24,12 @@ import {
   iconFolderOpen,
   iconDownload,
   iconImage,
+  iconZoomIn,
+  iconZoomOut,
+  iconRotateCcw,
 } from "./icons";
 import { soundEffects } from "../utils/soundEffects";
+import { downloadImage } from "../utils/download";
 
 const PALETTE_CATEGORIES_ALL = "All";
 const PALETTE_CATEGORIES_USED = "Used Only";
@@ -60,23 +65,19 @@ export class PaintingControls extends SignalElement {
   private handleDownload = () => {
     const artwork = currentArtworkSignal.get();
     if (!artwork) return;
-    soundEffects.playPop();
-    const link = document.createElement("a");
-    link.download = `${artwork.name}-palette-cartoon.png`;
-    link.href = artwork.cartoonDataUrl;
-    link.click();
+    downloadImage(artwork.cartoonDataUrl, `${artwork.name}-palette-cartoon.png`);
   };
 
   private triggerFilePicker = () => {
     soundEffects.playPop();
-    const easel = document.querySelector("easel-board") as any;
-    if (easel?.triggerFilePicker) {
-      easel.triggerFilePicker();
+    const input = document.getElementById("easel-file-input") as HTMLInputElement;
+    if (input) {
+      input.value = "";
+      input.click();
     } else {
-      const input = document.querySelector<HTMLInputElement>("#easel-file-input");
-      if (input) {
-        input.value = "";
-        input.click();
+      const easel = document.querySelector("easel-board") as any;
+      if (easel?.triggerFilePicker) {
+        easel.triggerFilePicker();
       }
     }
   };
@@ -88,6 +89,7 @@ export class PaintingControls extends SignalElement {
     const currentArtwork = currentArtworkSignal.get();
     const hasArtworks = artworksSignal.get().length > 0;
     const isProcessing = isProcessingSignal.get();
+    const zoomScale = zoomScaleSignal.get();
 
     // Map stats by color ID
     const statsMap = new Map<string, UsedColorStat>();
@@ -222,6 +224,47 @@ export class PaintingControls extends SignalElement {
               : ""}
           </div>
 
+          <!-- Middle Group: Canvas Zoom Controls (Only when image is loaded) -->
+          ${currentArtwork && !isProcessing
+            ? html`
+                <div
+                  style="display: flex; align-items: center; gap: 0.25rem; background: rgba(255, 255, 255, 0.95); border: 2.5px solid #000000; border-radius: 9999px; padding: 0.25rem 0.5rem; box-shadow: 2px 2px 0px 0px #000000;"
+                >
+                  <button
+                    title="Zoom Out"
+                    @click=${() => {
+                      soundEffects.playPop();
+                      window.dispatchEvent(new CustomEvent("easel-zoom-out"));
+                    }}
+                    style="display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: none; background: transparent; cursor: pointer; color: #000000; padding: 0;"
+                  >
+                    ${iconZoomOut(16, "#000000")}
+                  </button>
+                  <button
+                    title="Reset Zoom"
+                    @click=${() => {
+                      soundEffects.playPop();
+                      window.dispatchEvent(new CustomEvent("easel-zoom-reset"));
+                    }}
+                    style="font-size: 0.75rem; font-weight: 900; color: #000000; padding: 0 4px; display: flex; align-items: center; gap: 2px; border: none; background: transparent; cursor: pointer;"
+                  >
+                    ${Math.round(zoomScale * 100)}%
+                    ${zoomScale > 1.05 ? iconRotateCcw(12, "#E63946") : ""}
+                  </button>
+                  <button
+                    title="Zoom In"
+                    @click=${() => {
+                      soundEffects.playPop();
+                      window.dispatchEvent(new CustomEvent("easel-zoom-in"));
+                    }}
+                    style="display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: none; background: transparent; cursor: pointer; color: #000000; padding: 0;"
+                  >
+                    ${iconZoomIn(16, "#000000")}
+                  </button>
+                </div>
+              `
+            : ""}
+
           <!-- Right Group: Color Category Buttons -->
           <div style="display: flex; align-items: center; gap: 0.5rem;">
             ${categories.map((cat) => {
@@ -265,8 +308,7 @@ export class PaintingControls extends SignalElement {
         <div style=${this.renderStyleObject(scrollRowStyle)}>
           ${filteredColors.map((color) => {
             const stat = statsMap.get(color.id);
-            const ratio = stat ? stat.percentage : 0;
-            const isUsed = ratio > 0;
+            const isUsed = stat.count > 0;
             const isSelected = activeColor?.id === color.id;
             const isCopied = copiedHex === color.hexCode;
 
@@ -284,7 +326,7 @@ export class PaintingControls extends SignalElement {
               backgroundColor: isSelected ? "rgba(254, 243, 199, 0.95)" : "rgba(255, 255, 255, 0.5)",
               boxShadow: isSelected ? "3px 3px 0px 0px #E63946" : "0px 0px 0px 0px rgba(0,0,0,0.08)",
               transform: isSelected ? "scale(1.05)" : "scale(1)",
-              opacity: isUsed || isSelected ? "1" : "0.85",
+              opacity: isSelected ? "1" : "0.85",
             };
 
             const circleStyle = {
@@ -337,7 +379,7 @@ export class PaintingControls extends SignalElement {
                 <span
                   style="font-size: 0.75rem; font-weight: ${isUsed ? "900" : "700"}; color: ${isUsed ? "#000000" : "#6B7280"};"
                 >
-                  ${ratio}%
+                  ${stat.percentage}%
                 </span>
               </button>
             `;

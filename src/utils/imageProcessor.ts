@@ -311,7 +311,7 @@ export async function processImageToCartoonPalette(
   const colorStats: UsedColorStat[] = PALETTE_COLORS.map((color, index) => {
     const count = colorCounts[index];
     // Exact percentage rounded to 1 decimal place or whole number
-    const percentage = Math.round((count / totalPixels) * 100);
+    const percentage = Math.ceil((count / totalPixels) * 100);
     return {
       color,
       count,
