@@ -1,5 +1,5 @@
 import { html } from "lit";
-import { customElement, property } from "lit/decorators.js";
+import { customElement } from "lit/decorators.js";
 import { SignalElement } from "../utils/SignalElement";
 import {
   currentArtworkSignal,
@@ -15,17 +15,13 @@ import { getDailyChallenge } from "../data/sampleImages";
 import { soundEffects } from "../utils/soundEffects";
 import { downloadImage } from "../utils/download";
 import {
-  iconFolderOpen,
-  iconDownload,
   iconImage,
   iconLoader2,
   iconSparkles,
   iconUpload,
   iconPaintBucket,
-  iconZoomIn,
-  iconZoomOut,
-  iconRotateCcw,
 } from "./icons";
+import { transparentImgCss } from "./constants";
 
 @customElement("easel-board")
 export class EaselBoard extends SignalElement {
@@ -288,12 +284,6 @@ export class EaselBoard extends SignalElement {
     if (file) this.handleFileInput(file);
   };
 
-  private handleDownload = () => {
-    const artwork = currentArtworkSignal.get();
-    if (!artwork) return;
-    downloadImage(artwork.cartoonDataUrl, `${artwork.name}-palette-cartoon.png`);
-  };
-
   render() {
     const currentArtwork = currentArtworkSignal.get();
     const currentArtworkId = currentArtwork?.id || null;
@@ -328,8 +318,8 @@ export class EaselBoard extends SignalElement {
     const easelTopClampStyle = {
       width: "14rem",
       height: "1.5rem",
-      backgroundColor: "#8B5E3C",
-      border: "3px solid #3D2314",
+      backgroundColor: "#845442",
+      border: "3px solid #845442",
       borderTopLeftRadius: "0.75rem",
       borderTopRightRadius: "0.75rem",
       boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
@@ -342,58 +332,14 @@ export class EaselBoard extends SignalElement {
 
     const mainFrameStyle = {
       width: "100%",
-      backgroundColor: "#8B5E3C",
-      border: "4px solid #4A2810",
+      backgroundColor: "#C4A482",
+      border: "4px solid #845442",
       borderRadius: "28px",
-      padding: "1rem",
       boxShadow: "12px 12px 0px 0px rgba(0,0,0,0.15)",
       position: "relative" as const,
       zIndex: 10,
       boxSizing: "border-box" as const,
     };
-
-    const headerBarStyle = {
-      display: "flex",
-      alignItems: "center",
-      justifyContent: "space-between",
-      width: "100%",
-      marginBottom: "0.5rem",
-      gap: "0.5rem",
-    };
-
-    const galleryBtnStyle = {
-      backgroundColor: "#FFFFFF",
-      color: "#000000",
-      border: "3px solid #000000",
-      borderRadius: "24px",
-      padding: "0.5rem 1rem",
-      display: "flex",
-      alignItems: "center",
-      gap: "0.625rem",
-      boxShadow: "5px 5px 0px 0px #000000",
-      transition: "all 0.15s ease",
-      fontWeight: "900",
-      fontSize: "0.75rem",
-      textTransform: "uppercase" as const,
-      cursor: "pointer",
-    };
-
-    const actionBtnStyle = (bg = "#2A9D8F") => ({
-      backgroundColor: bg,
-      color: bg === "#FFFFFF" ? "#000000" : "#FFFFFF",
-      border: "3px solid #000000",
-      borderRadius: "24px",
-      padding: "0.5rem 1rem",
-      display: "flex",
-      alignItems: "center",
-      gap: "0.625rem",
-      boxShadow: "5px 5px 0px 0px #000000",
-      transition: "all 0.15s ease",
-      fontWeight: "900",
-      fontSize: "0.75rem",
-      textTransform: "uppercase" as const,
-      cursor: "pointer",
-    });
 
     const dropAreaStyle = {
       width: "100%",
@@ -440,7 +386,7 @@ export class EaselBoard extends SignalElement {
             <!-- Main Frame -->
             <div style=${this.renderStyleObject(mainFrameStyle)}>
               <!-- Easel Canvas Display Area -->
-              <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative;">
+              <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; padding: 1rem; background-size: 0.5rem 0.5rem; background-image: ${transparentImgCss};">
                 <!-- STATE 1: Processing Loader -->
                 ${isProcessing
                   ? html`
@@ -523,7 +469,7 @@ export class EaselBoard extends SignalElement {
                   ? html`
                       <div style="width: 100%; display: flex; flex-direction: column; align-items: center;">
                         <div
-                          style="position: relative; width: 100%; aspect-ratio: ${currentArtwork.width} / ${currentArtwork.height}; border-radius: 12px; overflow: hidden; border: 0px solid #000000; box-shadow: 4px 4px 0px 0px rgba(0,0,0,0.25); background-color: #FFFFFF00; display: flex; align-items: center; justify-content: center;"
+                          style="position: relative; width: 100%; aspect-ratio: ${currentArtwork.width} / ${currentArtwork.height}; border-radius: 12px; overflow: hidden; display: flex; align-items: center; justify-content: center;"
                         >
                           <div
                             alt="${currentArtwork.name}"
@@ -539,9 +485,9 @@ export class EaselBoard extends SignalElement {
 
             <!-- Wooden Easel Legs -->
             <div style="width: 100%; max-width: 28rem; display: flex; justify-content: space-between; padding: 0 2rem; margin-top: -0.5rem; z-index: 0;">
-              <div style="width: 1.5rem; height: 4rem; background-color: #8B5E3C; border: 2px solid #3D2314; border-bottom-left-radius: 0.5rem; border-bottom-right-radius: 0.5rem; transform: rotate(12deg); box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
-              <div style="width: 1.5rem; height: 5rem; background-color: #5C3D2E; border: 2px solid #3D2314; border-bottom-left-radius: 0.5rem; border-bottom-right-radius: 0.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
-              <div style="width: 1.5rem; height: 4rem; background-color: #8B5E3C; border: 2px solid #3D2314; border-bottom-left-radius: 0.5rem; border-bottom-right-radius: 0.5rem; transform: rotate(-12deg); box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
+              <div style="width: 1.5rem; height: 4rem; background-color: #845442; border: 2px solid #845442; border-bottom-left-radius: 0.5rem; border-bottom-right-radius: 0.5rem; transform: rotate(12deg); box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
+              <div style="width: 1.5rem; height: 5rem; background-color: #845442; border: 2px solid #845442; border-bottom-left-radius: 0.5rem; border-bottom-right-radius: 0.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
+              <div style="width: 1.5rem; height: 4rem; background-color: #845442; border: 2px solid #845442; border-bottom-left-radius: 0.5rem; border-bottom-right-radius: 0.5rem; transform: rotate(-12deg); box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
             </div>
           </div>
         </div>

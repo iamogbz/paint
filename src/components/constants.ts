@@ -1,0 +1,1 @@
+export const transparentImgCss = `conic-gradient(#00000011 25%, #FFFFFF11 25%, #FFFFFF11 50%, #00000011 50%, #00000011 75%, #FFFFFF11 75%)`

@@ -1,4 +1,4 @@
-import { PALETTE_COLORS, PaletteColor } from "../types";
+import { PALETTE_COLOR, PALETTE_COLORS, PaletteColor } from "../types";
 
 /**
  * Calculates weighted perceptual color distance between two RGBA tuples.
@@ -43,11 +43,16 @@ export function findClosestPaletteColor(
   b: number,
   a: number = 255
 ): PaletteColor {
-  let minDistance = Infinity;
-  let closestColor: PaletteColor = PALETTE_COLORS[0];
+  if (a === 0) {
+    return PALETTE_COLOR.transparent;
+  }
 
-  for (let i = 0; i < PALETTE_COLORS.length; i++) {
-    const pal = PALETTE_COLORS[i];
+  const availableColors = PALETTE_COLORS.filter(c => c.id !== PALETTE_COLOR.transparent.id);
+  let minDistance = Infinity;
+  let closestColor: PaletteColor = availableColors[0];
+
+  for (let i = 0; i < availableColors.length; i++) {
+    const pal = availableColors[i];
     const dist = getPerceptualColorDistance(
       r,
       g,
