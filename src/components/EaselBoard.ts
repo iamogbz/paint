@@ -782,11 +782,12 @@ export class EaselBoard extends SignalElement {
   };
 
   private handlePointerMove = (e: PointerEvent) => {
+    if (!this.isDragging) return;
     const dist = Math.hypot(e.clientX - this.pointerDownX, e.clientY - this.pointerDownY);
     if (dist > 10) {
       this.hasDragged = true;
     }
-    if (this.isDragging && this.scale > 1) {
+    if (this.scale > 1) {
       const dx = e.clientX - this.startTouchX;
       const dy = e.clientY - this.startTouchY;
       this.panX = this.clampPanX(this.startPanX + dx, this.scale);
