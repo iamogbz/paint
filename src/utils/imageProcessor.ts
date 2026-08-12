@@ -103,6 +103,7 @@ export async function processImageToCartoonPalette(
   if (!origCtx) throw new Error("Could not create canvas context");
 
   // Draw scaled original
+  origCtx.clearRect(0, 0, width, height);
   origCtx.imageSmoothingEnabled = true;
   origCtx.imageSmoothingQuality = "high";
   origCtx.drawImage(img, 0, 0, width, height);
@@ -131,15 +132,21 @@ export async function processImageToCartoonPalette(
 
   for (let i = 0; i < width * height; i++) {
     const pxIdx = i * 4;
-    const r = smoothedPixels[pxIdx];
-    const g = smoothedPixels[pxIdx + 1];
-    const b = smoothedPixels[pxIdx + 2];
+    const a = smoothedPixels[pxIdx + 3];
 
-    const closest = findClosestPaletteColorFast(r, g, b);
-    const palIdx = PALETTE_COLORS.findIndex((c) => c.id === closest.id);
-    colorIndices[i] = palIdx;
+    // Preserve transparent pixels
+    if (a < 128) {
+      colorIndices[i] = -1;
+    } else {
+      const r = smoothedPixels[pxIdx];
+      const g = smoothedPixels[pxIdx + 1];
+      const b = smoothedPixels[pxIdx + 2];
+
+      const closest = findClosestPaletteColorFast(r, g, b);
+      const palIdx = PALETTE_COLORS.findIndex((c) => c.id === closest.id);
+      colorIndices[i] = palIdx;
+    }
   }
-
 
   // Jaggie Curve Smoothing (Majority neighborhood filter)
   const smoothingPasses = 2; // More passes for ultra smooth curves
@@ -161,15 +168,22 @@ export async function processImageToCartoonPalette(
 
   for (let i = 0; i < totalPixels; i++) {
     const palIdx = colorIndices[i];
-    colorCounts[palIdx]++;
-
-    const palColor = PALETTE_COLORS[palIdx];
     const pxIdx = i * 4;
+    const origAlpha = smoothedPixels[pxIdx + 3];
 
-    cartoonPixels[pxIdx] = palColor.rgb[0];
-    cartoonPixels[pxIdx + 1] = palColor.rgb[1];
-    cartoonPixels[pxIdx + 2] = palColor.rgb[2];
-    cartoonPixels[pxIdx + 3] = 255; // Fully opaque
+    if (palIdx === -1 || origAlpha < 128) {
+      cartoonPixels[pxIdx] = 0;
+      cartoonPixels[pxIdx + 1] = 0;
+      cartoonPixels[pxIdx + 2] = 0;
+      cartoonPixels[pxIdx + 3] = 0; // Fully transparent
+    } else {
+      colorCounts[palIdx]++;
+      const palColor = PALETTE_COLORS[palIdx];
+      cartoonPixels[pxIdx] = palColor.rgb[0];
+      cartoonPixels[pxIdx + 1] = palColor.rgb[1];
+      cartoonPixels[pxIdx + 2] = palColor.rgb[2];
+      cartoonPixels[pxIdx + 3] = origAlpha; // Preserve alpha transparency
+    }
   }
 
   outputCtx.putImageData(cartoonImgData, 0, 0);
