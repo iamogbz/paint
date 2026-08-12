@@ -523,12 +523,12 @@ export class EaselBoard extends SignalElement {
                   ? html`
                       <div style="width: 100%; display: flex; flex-direction: column; align-items: center;">
                         <div
-                          style="position: relative; width: 100%; aspect-ratio: ${currentArtwork.width} / ${currentArtwork.height}; border-radius: 12px; overflow: hidden; border: 4px solid #000000; box-shadow: 4px 4px 0px 0px rgba(0,0,0,0.25); background-color: #FFFFFF; display: flex; align-items: center; justify-content: center;"
+                          style="position: relative; width: 100%; aspect-ratio: ${currentArtwork.width} / ${currentArtwork.height}; border-radius: 12px; overflow: hidden; border: 0px solid #000000; box-shadow: 4px 4px 0px 0px rgba(0,0,0,0.25); background-color: #FFFFFF00; display: flex; align-items: center; justify-content: center;"
                         >
-                          <img
-                            src="${currentArtwork.cartoonDataUrl}"
+                          <div
                             alt="${currentArtwork.name}"
-                            style="width: 100%; height: 100%; object-fit: contain; display: block;"
+                            title="${currentArtwork.name}"
+                            style="width: 100%; height: 100%; object-fit: contain; display: block; background: url('${currentArtwork.cartoonDataUrl}') center no-repeat; background-size: contain;"
                           />
                         </div>
                       </div>

@@ -1,5 +1,4 @@
 import {
-  PALETTE_COLOR,
   PALETTE_COLORS,
   ProcessedArtwork,
   UsedColorStat,
@@ -256,30 +255,32 @@ export async function processImageToCartoonPalette(
   smoothedPixels.set(rawPixels);
 
   // TODO: skip for now maybe add later
-  //   const radius = 4;
-  //   applyKuwaharaFilter(rawPixels, smoothedPixels, width, height, radius);
+  const radius = 8;
+  // applyKuwaharaFilter(rawPixels, smoothedPixels, width, height, radius);
 
-  // 3. Palette Quantization
+  // Palette Quantization
   const colorIndices = new Int16Array(width * height);
   const colorCounts = new Array(PALETTE_COLORS.length).fill(0);
 
   for (let i = 0; i < width * height; i++) {
     const pxIdx = i * 4;
-    const r = smoothedPixels[pxIdx];
-    const g = smoothedPixels[pxIdx + 1];
-    const b = smoothedPixels[pxIdx + 2];
+    const r = rawPixels[pxIdx];
+    const g = rawPixels[pxIdx + 1];
+    const b = rawPixels[pxIdx + 2];
 
     const closest = findClosestPaletteColorFast(r, g, b);
     const palIdx = PALETTE_COLORS.findIndex((c) => c.id === closest.id);
     colorIndices[i] = palIdx;
   }
 
-  // 4. Jaggie Curve Smoothing (Majority neighborhood filter)
-  applyMajorityCurveSmoothing(colorIndices, width, height);
-  // Second pass for ultra smooth curves
-  applyMajorityCurveSmoothing(colorIndices, width, height);
 
-  // 5. Render quantized cartoon pixels to output canvas & compute ratios
+  // Jaggie Curve Smoothing (Majority neighborhood filter)
+  const smoothingPasses = 2; // More passes for ultra smooth curves
+  for (let pass = 0; pass < smoothingPasses; pass++) {
+    applyMajorityCurveSmoothing(colorIndices, width, height);
+  }
+
+  // Render quantized cartoon pixels to count and output canvas
   const outputCanvas = document.createElement("canvas");
   outputCanvas.width = width;
   outputCanvas.height = height;
@@ -307,7 +308,7 @@ export async function processImageToCartoonPalette(
   outputCtx.putImageData(cartoonImgData, 0, 0);
   const cartoonDataUrl = outputCanvas.toDataURL("image/png");
 
-  // Compute color statistics with exact ratios
+  // Compute color statistics with exact ratios based on previous counts
   const colorStats: UsedColorStat[] = PALETTE_COLORS.map((color, index) => {
     const count = colorCounts[index];
     // Exact percentage rounded to 1 decimal place or whole number
