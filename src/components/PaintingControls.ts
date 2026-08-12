@@ -68,11 +68,23 @@ export class PaintingControls extends SignalElement {
   private handleSwatchPointerDown = (e: PointerEvent, color: PaletteColor) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
 
+    const activeColor = activeHighlightColorSignal.get();
+    const isActive = activeColor?.id === color.id;
+
     const startX = e.clientX;
     const startY = e.clientY;
     let isDragging = false;
 
+    const cleanup = () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerCancel);
+    };
+
     const onPointerMove = (moveEvent: PointerEvent) => {
+      // Only allow drag initiation if it's the active color
+      if (!isActive) return;
+
       const dx = moveEvent.clientX - startX;
       const dy = moveEvent.clientY - startY;
 
@@ -92,8 +104,7 @@ export class PaintingControls extends SignalElement {
     };
 
     const onPointerUp = (upEvent: PointerEvent) => {
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", onPointerUp);
+      cleanup();
 
       if (isDragging) {
         const dropEvent = new CustomEvent("color-drop", {
@@ -112,8 +123,17 @@ export class PaintingControls extends SignalElement {
       }
     };
 
+    const onPointerCancel = () => {
+      cleanup();
+      if (isDragging) {
+        draggedColorSignal.set(null);
+        draggedPositionSignal.set(null);
+      }
+    };
+
     window.addEventListener("pointermove", onPointerMove);
     window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerCancel);
   };
 
   private handleDownload = () => {
@@ -392,7 +412,7 @@ export class PaintingControls extends SignalElement {
                     boxShadow: isSelected ? "3px 3px 0px 0px #E63946" : "0px 0px 0px 0px rgba(0,0,0,0.08)",
                     transform: isSelected ? "scale(1.05)" : "scale(1)",
                     opacity: isSelected ? "1" : "0.85",
-                    touchAction: "none" as const,
+                    touchAction: isSelected ? "none" : "auto",
                   };
 
                   const circleStyle = {
