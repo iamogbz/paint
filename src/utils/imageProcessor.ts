@@ -179,10 +179,10 @@ export async function processImageToCartoonPalette(
     } else {
       colorCounts[palIdx]++;
       const palColor = PALETTE_COLORS[palIdx];
-      cartoonPixels[pxIdx] = palColor.rgb[0];
-      cartoonPixels[pxIdx + 1] = palColor.rgb[1];
-      cartoonPixels[pxIdx + 2] = palColor.rgb[2];
-      cartoonPixels[pxIdx + 3] = origAlpha; // Preserve alpha transparency
+      cartoonPixels[pxIdx] = palColor.rgba[0];
+      cartoonPixels[pxIdx + 1] = palColor.rgba[1];
+      cartoonPixels[pxIdx + 2] = palColor.rgba[2];
+      cartoonPixels[pxIdx + 3] = Math.min(palColor.rgba[3] ?? 255, origAlpha); // Respect palette color alpha and image transparency
     }
   }
 

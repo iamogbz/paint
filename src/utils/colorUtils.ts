@@ -42,9 +42,9 @@ export function findClosestPaletteColor(
       r,
       g,
       b,
-      pal.rgb[0],
-      pal.rgb[1],
-      pal.rgb[2]
+      pal.rgba[0],
+      pal.rgba[1],
+      pal.rgba[2]
     );
     if (dist < minDistance) {
       minDistance = dist;
