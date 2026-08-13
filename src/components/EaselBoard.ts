@@ -12,6 +12,7 @@ import {
   handleSelectArtwork,
   draggedColorSignal,
   pushUndoState,
+footerStyleSignal,
 } from "../state/store";
 import { ProcessedArtwork, PALETTE_COLOR } from "../types";
 import { getDailyChallenge } from "../data/dailyChallenge";
@@ -716,16 +717,16 @@ export class EaselBoard extends SignalElement {
   }
 
   private clampPanX(x: number, s: number): number {
-    if (s <= 1) return 0;
     const w = this.containerElement?.clientWidth || 350;
-    const maxPan = ((s - 1) * w) / 2 + w * 0.25;
+    const limit = (window.innerHeight || 800) * 0.1;
+    const maxPan = window.innerWidth / 2 + (w * s) / 2 - limit;
     return Math.max(-maxPan, Math.min(maxPan, x));
   }
 
   private clampPanY(y: number, s: number): number {
-    if (s <= 1) return 0;
     const h = this.containerElement?.clientHeight || 350;
-    const maxPan = ((s - 1) * h) / 2 + h * 0.25;
+    const limit = (window.innerHeight || 800) * 0.1;
+    const maxPan = window.innerHeight / 2 + (h * s) / 2 - limit;
     return Math.max(-maxPan, Math.min(maxPan, y));
   }
   private handleZoomSet = (e: Event) => {
@@ -737,7 +738,7 @@ export class EaselBoard extends SignalElement {
 
   private handlePanDelta = (e: Event) => {
     const { dx, dy } = (e as CustomEvent).detail;
-    if (this.scale > 1) {
+    if (true) { // always allow pan delta
       this.panX = this.clampPanX(this.panX + dx, this.scale);
       this.panY = this.clampPanY(this.panY + dy, this.scale);
       this.updateTransformStyle();
@@ -819,7 +820,7 @@ export class EaselBoard extends SignalElement {
       if (Math.hypot(dx, dy) > 10) {
         this.hasDragged = true;
       }
-      if (this.scale > 1) {
+      if (true) { // always allow pan on touch
         e.preventDefault();
         this.panX = this.clampPanX(this.startPanX + dx, this.scale);
         this.panY = this.clampPanY(this.startPanY + dy, this.scale);
@@ -864,7 +865,7 @@ export class EaselBoard extends SignalElement {
     if (dist > 10) {
       this.hasDragged = true;
     }
-    if (this.scale > 1) {
+    if (true) { // always allow pan
       const dx = e.clientX - this.startTouchX;
       const dy = e.clientY - this.startTouchY;
       this.panX = this.clampPanX(this.startPanX + dx, this.scale);
@@ -954,7 +955,7 @@ export class EaselBoard extends SignalElement {
 
     const mainFrameStyle = {
       width: "100%",
-      backgroundColor: "#C4A482",
+      backgroundColor: "#FFFFFF",
       border: "4px solid #845442",
       borderRadius: "28px",
       boxShadow: "12px 12px 0px 0px rgba(0,0,0,0.15)",
@@ -1081,6 +1082,11 @@ export class EaselBoard extends SignalElement {
                           </div>
                         </div>
                       </div>
+
+                      <footer style=${this.renderStyleObject(footerStyleSignal.get())}>
+                        <p style="margin: 0;">PAINT by COLOURS ❤️ QBRKTS ©️ ${new Date().getFullYear()}</p>
+                      </footer>
+                    </div>
                     `
                   : ""}
 

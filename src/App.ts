@@ -4,7 +4,6 @@ import { SignalElement } from "./utils/SignalElement";
 import {
   currentArtworkSignal,
   appBackgroundStyleSignal,
-  footerStyleSignal,
   loadSavedArtworks,
   draggedColorSignal,
   draggedPositionSignal,
@@ -25,7 +24,6 @@ export class PaintApp extends SignalElement {
   render() {
     const currentArtwork = currentArtworkSignal.get();
     const bgStyle = appBackgroundStyleSignal.get();
-    const footerStyle = footerStyleSignal.get();
     const draggedColor = draggedColorSignal.get();
     const draggedPos = draggedPositionSignal.get();
 
@@ -40,7 +38,6 @@ export class PaintApp extends SignalElement {
       flexDirection: "column" as const,
       alignItems: "center",
       boxSizing: "border-box" as const,
-      marginBottom: "10vh",
     };
 
     return html`
@@ -67,12 +64,6 @@ export class PaintApp extends SignalElement {
           <painting-controls
             .colorStats=${currentArtwork ? currentArtwork.colorStats : []}
           ></painting-controls>
-
-          <!-- Footer -->
-          <footer style=${this.renderStyleObject(footerStyle)}>
-            <p style="margin: 0;">PAINT by COLOURS ❤️ QBRKTS ©️ ${new Date().getFullYear()}</p>
-          </footer>
-        </div>
 
         <!-- Gallery Clipboard Modal -->
         <artwork-gallery-modal></artwork-gallery-modal>
