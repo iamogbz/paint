@@ -46,7 +46,7 @@ export class PaintingControls extends SignalElement {
   private handlePanPointerDown = (e: PointerEvent) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
     e.preventDefault();
-    
+
     const target = e.currentTarget as HTMLElement;
     target.setPointerCapture(e.pointerId);
 
@@ -228,7 +228,7 @@ export class PaintingControls extends SignalElement {
     // Map stats by color ID
     const statsMap = new Map<string, UsedColorStat>();
     (this.colorStats || []).forEach((stat) => statsMap.set(stat.color.hexCode, stat));
-    
+
     // Check which colors are fully painted
     const paintedRegionsState = currentArtwork?.paintedRegionsState || {};
     const expectedColorStatus = new Map<string, { total: number; painted: number }>();
@@ -240,7 +240,7 @@ export class PaintingControls extends SignalElement {
         }
         const status = expectedColorStatus.get(expectedHex)!;
         status.total += 1;
-        
+
         const regionId = parseInt(regionIdStr, 10);
         if (paintedRegionsState[regionId] === expectedHex) {
           status.painted += 1;
@@ -276,6 +276,9 @@ export class PaintingControls extends SignalElement {
       display: "flex",
       flexDirection: "column" as const,
       justifyContent: "flex-start",
+      // this is to provide a buffer for end of page rendering scroll up
+      paddingBottom: "10vh",
+      marginBottom: "-10vh",
     };
 
     const headerStyle = {
@@ -521,7 +524,7 @@ export class PaintingControls extends SignalElement {
                   const isUsed = stat?.count > 0;
                   const colorStatus = expectedColorStatus.get(color.hexCode);
                   const isFullyPainted = colorStatus ? colorStatus.total > 0 && colorStatus.total === colorStatus.painted : false;
-                  
+
                   let progressLabel = "♾️";
                   if (colorStatus && colorStatus.total > 0) {
                     progressLabel = `${colorStatus.painted}/${colorStatus.total}`;
