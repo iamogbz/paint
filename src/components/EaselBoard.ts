@@ -663,11 +663,9 @@ export class EaselBoard extends SignalElement {
       container.addEventListener("wheel", this.handleWheel, { passive: false });
       container.addEventListener("pointerdown", this.handlePointerDown);
 
-      window.removeEventListener("pointerdown", this.detectDragStartOutsideBoard);
-      window.removeEventListener("pointermove", this.handlePointerMove);
+            window.removeEventListener("pointermove", this.handlePointerMove);
       window.removeEventListener("pointerup", this.handlePointerUp);
-      window.addEventListener("pointerdown", this.detectDragStartOutsideBoard);
-      window.addEventListener("pointermove", this.handlePointerMove);
+            window.addEventListener("pointermove", this.handlePointerMove);
       window.addEventListener("pointerup", this.handlePointerUp);
     }
   }
@@ -820,9 +818,6 @@ export class EaselBoard extends SignalElement {
     this.updateTransformStyle();
   };
 
-  private detectDragStartOutsideBoard = (e: PointerEvent) => {
-    this.isDragging = true;
-  }
 
   private handlePointerMove = (e: PointerEvent) => {
     if (!this.isDragging) return;
