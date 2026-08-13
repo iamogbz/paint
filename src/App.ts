@@ -38,11 +38,9 @@ export class PaintApp extends SignalElement {
           el.tagName === "APP-TOUR"
       );
       
-      // If clicking outside the modals (e.g. on the canvas or controls), 
-      // consume the event so it ONLY dismisses the overlay and doesn't paint.
+      // We no longer stop propagation here so that EaselBoard's window listener
+      // can run and correctly see that the click target was the overlay (not the canvas).
       if (!isModal) {
-        e.stopPropagation();
-        e.stopImmediatePropagation();
         e.preventDefault();
       }
     }

@@ -2,6 +2,7 @@ import { html } from "lit";
 import { customElement } from "lit/decorators.js";
 import { SignalElement } from "../utils/SignalElement";
 import {
+  isWindowFocusedSignal,
   currentArtworkSignal,
   artworksSignal,
   isProcessingSignal,
@@ -555,6 +556,10 @@ export class EaselBoard extends SignalElement {
   private pointerDownOnCanvas = false;
 
   private handleGlobalPointerDown = (e: PointerEvent) => {
+    if (!isWindowFocusedSignal.get()) {
+      this.pointerDownOnCanvas = false;
+      return;
+    }
     const canvas = this.querySelector("#artboard-canvas");
     if (canvas) {
       const path = e.composedPath();
@@ -1028,6 +1033,7 @@ export class EaselBoard extends SignalElement {
   };
 
   private handlePointerUp = () => {
+    this.pointerDownOnCanvas = false;
     this.isDragging = false;
     this.updateTransformStyle();
   };
