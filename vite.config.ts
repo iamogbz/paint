@@ -2,9 +2,18 @@ import path from 'path';
 import fs from 'fs';
 import {defineConfig} from 'vite';
 
+const fileToLink = (f) => `<li><a href="/daily-challenge/${f}" style="color: blue; text-decoration: underline;">${f}</a></li>`;
+const getHtml = () => {
+  const dirPath = path.resolve(__dirname, 'public/daily-challenge');
+  if (fs.existsSync(dirPath)) {
+    const files = fs.readdirSync(dirPath);
+    const fileLinks = files.filter(f => f !== 'index.html').map(fileToLink).join('');
+    return `<!DOCTYPE html><html><head><title>Daily Challenge Index</title><style>body { font-family: system-ui, sans-serif; padding: 2rem; background: #fff; color: #000; }</style></head><body><h1>Daily Challenges</h1><ul>${fileLinks}</ul></body></html>`;
+  }
+}
+  
 function directoryListingPlugin() {
   const targetPath = '/daily-challenge';
-  
   return {
     name: 'directory-listing',
     configureServer(server) {
@@ -14,11 +23,8 @@ function directoryListingPlugin() {
         // match exact or with trailing slash
         const rawUrl = req.url.split('?')[0];
         if (rawUrl === targetPath || rawUrl === targetPath + '/') {
-          const dirPath = path.resolve(__dirname, 'public/daily-challenge');
-          if (fs.existsSync(dirPath)) {
-            const files = fs.readdirSync(dirPath);
-            const fileLinks = files.filter(f => f !== 'index.html').map(f => `<li><a href="/daily-challenge/${f}" style="color: blue; text-decoration: underline;">${f}</a></li>`).join('');
-            const html = `<!DOCTYPE html><html><head><title>Index of /daily-challenge</title><style>body { font-family: system-ui, sans-serif; padding: 2rem; background: #fff; color: #000; }</style></head><body><h1>Index of /daily-challenge</h1><ul>${fileLinks}</ul></body></html>`;
+          const html = getHtml()
+          if (html) {
             res.setHeader('Content-Type', 'text/html');
             res.end(html);
             return;
@@ -28,12 +34,8 @@ function directoryListingPlugin() {
       });
     },
     generateBundle() {
-      const dirPath = path.resolve(__dirname, 'public/daily-challenge');
-      if (fs.existsSync(dirPath)) {
-        const files = fs.readdirSync(dirPath);
-        const fileLinks = files.filter(f => f !== 'index.html').map(f => `<li><a href="/daily-challenge/${f}" style="color: blue; text-decoration: underline;">${f}</a></li>`).join('\n          ');
-        const html = `<!DOCTYPE html><html><head><title>Index of /daily-challenge</title><style>body { font-family: system-ui, sans-serif; padding: 2rem; background: #fff; color: #000; }</style></head><body><h1>Index of /daily-challenge</h1><ul>\n          ${fileLinks}\n        </ul></body></html>`;
-        
+      const html = getHtml();
+      if (html) {
         this.emitFile({
           type: 'asset',
           fileName: 'daily-challenge/index.html',
