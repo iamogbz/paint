@@ -12,7 +12,7 @@ import {
   handleSelectArtwork,
   draggedColorSignal,
   pushUndoState,
-footerStyleSignal,
+  footerStyleSignal,
 } from "../state/store";
 import { ProcessedArtwork, PALETTE_COLOR } from "../types";
 import { getDailyChallenge } from "../data/dailyChallenge";
@@ -63,7 +63,9 @@ export class EaselBoard extends SignalElement {
   private borderOverlayCtx: CanvasRenderingContext2D | null = null;
 
   public triggerFilePicker = () => {
-    const input = document.getElementById("easel-file-input") as HTMLInputElement;
+    const input = document.getElementById(
+      "easel-file-input"
+    ) as HTMLInputElement;
     if (input) {
       input.value = "";
       input.click();
@@ -91,9 +93,17 @@ export class EaselBoard extends SignalElement {
     window.addEventListener("easel-zoom-out", this.zoomOut);
     window.addEventListener("easel-zoom-set", this.handleZoomSet);
     window.addEventListener("easel-pan-delta", this.handlePanDelta);
-    window.addEventListener("pointerdown", this.handleGlobalPointerDown, { capture: true });
-        window.addEventListener("color-drag-move", this.handleColorDragMove as EventListener);
-    window.addEventListener("color-drop", this.handleColorDrop as EventListener);
+    window.addEventListener("pointerdown", this.handleGlobalPointerDown, {
+      capture: true,
+    });
+    window.addEventListener(
+      "color-drag-move",
+      this.handleColorDragMove as EventListener
+    );
+    window.addEventListener(
+      "color-drop",
+      this.handleColorDrop as EventListener
+    );
   }
 
   disconnectedCallback() {
@@ -106,9 +116,17 @@ export class EaselBoard extends SignalElement {
     window.removeEventListener("easel-zoom-out", this.zoomOut);
     window.removeEventListener("easel-zoom-set", this.handleZoomSet);
     window.removeEventListener("easel-pan-delta", this.handlePanDelta);
-    window.removeEventListener("pointerdown", this.handleGlobalPointerDown, { capture: true });
-        window.removeEventListener("color-drag-move", this.handleColorDragMove as EventListener);
-    window.removeEventListener("color-drop", this.handleColorDrop as EventListener);
+    window.removeEventListener("pointerdown", this.handleGlobalPointerDown, {
+      capture: true,
+    });
+    window.removeEventListener(
+      "color-drag-move",
+      this.handleColorDragMove as EventListener
+    );
+    window.removeEventListener(
+      "color-drop",
+      this.handleColorDrop as EventListener
+    );
   }
 
   private checkArtworkAndRender() {
@@ -127,12 +145,17 @@ export class EaselBoard extends SignalElement {
     this.regionExpectedColors.clear();
 
     if (artwork.regionExpectedColors) {
-      for (const [regionId, hex] of Object.entries(artwork.regionExpectedColors)) {
+      for (const [regionId, hex] of Object.entries(
+        artwork.regionExpectedColors
+      )) {
         this.regionExpectedColors.set(Number(regionId), hex);
       }
     }
 
-    if (artwork.regionMapData && artwork.regionMapData.length === artwork.width * artwork.height) {
+    if (
+      artwork.regionMapData &&
+      artwork.regionMapData.length === artwork.width * artwork.height
+    ) {
       this.regionMapData = new Int32Array(artwork.regionMapData);
       this.computeBorderMap(artwork.width, artwork.height);
 
@@ -184,12 +207,16 @@ export class EaselBoard extends SignalElement {
         for (let i = 0; i < w * h; i++) {
           const regionId = this.regionMapData[i];
           if (regionId >= 0 && !seenRegions.has(regionId)) {
-             seenRegions.add(regionId);
-             const r = data[i * 4];
-             const g = data[i * 4 + 1];
-             const b = data[i * 4 + 2];
-             const hex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}FF`.toUpperCase();
-             this.regionExpectedColors.set(regionId, hex);
+            seenRegions.add(regionId);
+            const r = data[i * 4];
+            const g = data[i * 4 + 1];
+            const b = data[i * 4 + 2];
+            const hex = `#${r.toString(16).padStart(2, "0")}${g
+              .toString(16)
+              .padStart(2, "0")}${b
+              .toString(16)
+              .padStart(2, "0")}FF`.toUpperCase();
+            this.regionExpectedColors.set(regionId, hex);
           }
         }
       }
@@ -221,7 +248,9 @@ export class EaselBoard extends SignalElement {
 
         const regionId = nextRegionId++;
 
-        const hex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}FF`.toUpperCase();
+        const hex = `#${r.toString(16).padStart(2, "0")}${g
+          .toString(16)
+          .padStart(2, "0")}${b.toString(16).padStart(2, "0")}FF`.toUpperCase();
         this.regionExpectedColors.set(regionId, hex);
 
         const queue = [x, y];
@@ -294,13 +323,15 @@ export class EaselBoard extends SignalElement {
           if (rRight >= 0 && rRight !== r1) {
             const idxRight = idx + 1;
             isBorder[idxRight] = 1;
-            if (!regionBorderSets.has(rRight)) regionBorderSets.set(rRight, new Set<number>());
+            if (!regionBorderSets.has(rRight))
+              regionBorderSets.set(rRight, new Set<number>());
             regionBorderSets.get(rRight)?.add(idxRight);
           }
           if (rDown >= 0 && rDown !== r1) {
             const idxDown = idx + w;
             isBorder[idxDown] = 1;
-            if (!regionBorderSets.has(rDown)) regionBorderSets.set(rDown, new Set<number>());
+            if (!regionBorderSets.has(rDown))
+              regionBorderSets.set(rDown, new Set<number>());
             regionBorderSets.get(rDown)?.add(idxDown);
           }
         }
@@ -333,15 +364,25 @@ export class EaselBoard extends SignalElement {
     const destCtx = canvas.getContext("2d");
     if (!destCtx) return;
 
-    if (!this.offscreenCanvas || this.offscreenCanvas.width !== w || this.offscreenCanvas.height !== h) {
+    if (
+      !this.offscreenCanvas ||
+      this.offscreenCanvas.width !== w ||
+      this.offscreenCanvas.height !== h
+    ) {
       this.offscreenCanvas = document.createElement("canvas");
       this.offscreenCanvas.width = w;
       this.offscreenCanvas.height = h;
-      this.offscreenCtx = this.offscreenCanvas.getContext("2d", { willReadFrequently: true });
+      this.offscreenCtx = this.offscreenCanvas.getContext("2d", {
+        willReadFrequently: true,
+      });
       this.lastPaintedStateStr = "";
     }
 
-    if (!this.borderOverlayCanvas || this.borderOverlayCanvas.width !== w || this.borderOverlayCanvas.height !== h) {
+    if (
+      !this.borderOverlayCanvas ||
+      this.borderOverlayCanvas.width !== w ||
+      this.borderOverlayCanvas.height !== h
+    ) {
       this.borderOverlayCanvas = document.createElement("canvas");
       this.borderOverlayCanvas.width = w;
       this.borderOverlayCanvas.height = h;
@@ -352,7 +393,9 @@ export class EaselBoard extends SignalElement {
     if (!this.offscreenCtx || !this.borderOverlayCtx) return;
 
     // 1. Render PURE PAINT CANVAS PIXELS (no borders or darkening embedded in image data!)
-    const currentPaintedStateStr = currentArtwork.modifiedAt ? currentArtwork.modifiedAt.toString() : "0";
+    const currentPaintedStateStr = currentArtwork.modifiedAt
+      ? currentArtwork.modifiedAt.toString()
+      : "0";
     if (this.lastPaintedStateStr !== currentPaintedStateStr) {
       const imgData = this.offscreenCtx.createImageData(w, h);
       const pixels = imgData.data;
@@ -395,10 +438,23 @@ export class EaselBoard extends SignalElement {
 
     if (this.lastTargetHex !== cacheableTargetHex) {
       this.borderOverlayCtx.clearRect(0, 0, w, h);
-      if (this.isBorderPixel && targetHex && targetHex !== PALETTE_COLOR.transparent.hexCode) {
+      if (
+        this.isBorderPixel &&
+        targetHex &&
+        targetHex !== PALETTE_COLOR.transparent.hexCode
+      ) {
         const targetRGBARaw = this.parseColorToRGBA(targetHex);
-        const darkenedRGB = this.getDarkenedRGB(targetRGBARaw[0], targetRGBARaw[1], targetRGBARaw[2]);
-        const targetRGBA = [darkenedRGB[0], darkenedRGB[1], darkenedRGB[2], targetRGBARaw[3]];
+        const darkenedRGB = this.getDarkenedRGB(
+          targetRGBARaw[0],
+          targetRGBARaw[1],
+          targetRGBARaw[2]
+        );
+        const targetRGBA = [
+          darkenedRGB[0],
+          darkenedRGB[1],
+          darkenedRGB[2],
+          targetRGBARaw[3],
+        ];
         const targetHexUpper = targetHex.toUpperCase();
         const overlayImgData = this.borderOverlayCtx.createImageData(w, h);
         const overlayPixels = overlayImgData.data;
@@ -407,9 +463,14 @@ export class EaselBoard extends SignalElement {
         for (let i = 0; i < w * h; i++) {
           if (this.isBorderPixel[i] === 1) {
             const regionId = this.regionMapData[i];
-            const expectedColor = this.regionExpectedColors.get(regionId) || currentArtwork.regionExpectedColors?.[regionId];
+            const expectedColor =
+              this.regionExpectedColors.get(regionId) ||
+              currentArtwork.regionExpectedColors?.[regionId];
 
-            if (expectedColor && expectedColor.startsWith(targetHexUpper.substring(0, 7))) {
+            if (
+              expectedColor &&
+              expectedColor.startsWith(targetHexUpper.substring(0, 7))
+            ) {
               const pxIdx = i * 4;
               overlayPixels[pxIdx] = targetRGBA[0];
               overlayPixels[pxIdx + 1] = targetRGBA[1];
@@ -436,7 +497,11 @@ export class EaselBoard extends SignalElement {
       if (borderIndices && borderIndices.length > 0) {
         if (targetHex && targetHex !== PALETTE_COLOR.transparent.hexCode) {
           const targetRGBARaw = this.parseColorToRGBA(targetHex);
-          const darkenedRGB = this.getDarkenedRGB(targetRGBARaw[0], targetRGBARaw[1], targetRGBARaw[2]);
+          const darkenedRGB = this.getDarkenedRGB(
+            targetRGBARaw[0],
+            targetRGBARaw[1],
+            targetRGBARaw[2]
+          );
           destCtx.fillStyle = `rgba(${darkenedRGB[0]}, ${darkenedRGB[1]}, ${darkenedRGB[2]}, 1.0)`;
         } else {
           destCtx.fillStyle = "rgba(0, 0, 0, 1.0)";
@@ -451,11 +516,20 @@ export class EaselBoard extends SignalElement {
     }
   }
 
-  private getDarkenedRGB(r: number, g: number, b: number): [number, number, number] {
+  private getDarkenedRGB(
+    r: number,
+    g: number,
+    b: number
+  ): [number, number, number] {
     const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
-    if (luminance > 127.5) { // 50% of 255
+    if (luminance > 127.5) {
+      // 50% of 255
       const scale = 127.5 / luminance;
-      return [Math.floor(r * scale), Math.floor(g * scale), Math.floor(b * scale)];
+      return [
+        Math.floor(r * scale),
+        Math.floor(g * scale),
+        Math.floor(b * scale),
+      ];
     }
     return [r, g, b];
   }
@@ -464,7 +538,10 @@ export class EaselBoard extends SignalElement {
     if (colorStr.startsWith("#")) {
       let hex = colorStr.slice(1);
       if (hex.length === 3 || hex.length === 4) {
-        hex = hex.split("").map((c) => c + c).join("");
+        hex = hex
+          .split("")
+          .map((c) => c + c)
+          .join("");
       }
       const r = parseInt(hex.slice(0, 2), 16) || 0;
       const g = parseInt(hex.slice(2, 4), 16) || 0;
@@ -512,7 +589,12 @@ export class EaselBoard extends SignalElement {
     const clickX = Math.floor((e.clientX - rect.left) * scaleX);
     const clickY = Math.floor((e.clientY - rect.top) * scaleY);
 
-    if (clickX >= 0 && clickX < canvas.width && clickY >= 0 && clickY < canvas.height) {
+    if (
+      clickX >= 0 &&
+      clickX < canvas.width &&
+      clickY >= 0 &&
+      clickY < canvas.height
+    ) {
       const pixelIdx = clickY * canvas.width + clickX;
       const regionId = this.regionMapData[pixelIdx];
       if (regionId !== undefined && regionId >= 0) {
@@ -527,7 +609,9 @@ export class EaselBoard extends SignalElement {
         }
 
         if (activeColor) {
-          const currentPainted = { ...(currentArtwork.paintedRegionsState || {}) };
+          const currentPainted = {
+            ...(currentArtwork.paintedRegionsState || {}),
+          };
 
           pushUndoState(currentPainted);
           if (activeColor.id === "transparent") {
@@ -663,7 +747,9 @@ export class EaselBoard extends SignalElement {
       if (x >= 0 && x < canvas.width && y >= 0 && y < canvas.height) {
         const regionId = this.regionMapData[y * canvas.width + x];
         if (regionId !== undefined && regionId >= 0) {
-          const currentPainted = { ...(currentArtwork.paintedRegionsState || {}) };
+          const currentPainted = {
+            ...(currentArtwork.paintedRegionsState || {}),
+          };
           pushUndoState(currentPainted);
 
           if (color === PALETTE_COLOR.transparent.hexCode) {
@@ -690,18 +776,41 @@ export class EaselBoard extends SignalElement {
     const container = this.querySelector<HTMLElement>("#easel-zoom-container");
     if (container && container !== this.containerElement) {
       if (this.containerElement) {
-        this.containerElement.removeEventListener("touchstart", this.handleTouchStart);
-        this.containerElement.removeEventListener("touchmove", this.handleTouchMove);
-        this.containerElement.removeEventListener("touchend", this.handleTouchEnd);
-        this.containerElement.removeEventListener("touchcancel", this.handleTouchEnd);
+        this.containerElement.removeEventListener(
+          "touchstart",
+          this.handleTouchStart
+        );
+        this.containerElement.removeEventListener(
+          "touchmove",
+          this.handleTouchMove
+        );
+        this.containerElement.removeEventListener(
+          "touchend",
+          this.handleTouchEnd
+        );
+        this.containerElement.removeEventListener(
+          "touchcancel",
+          this.handleTouchEnd
+        );
         this.containerElement.removeEventListener("wheel", this.handleWheel);
-        this.containerElement.removeEventListener("pointerdown", this.handlePointerDown);
+        this.containerElement.removeEventListener(
+          "pointerdown",
+          this.handlePointerDown
+        );
       }
       this.containerElement = container;
-      container.addEventListener("touchstart", this.handleTouchStart, { passive: false });
-      container.addEventListener("touchmove", this.handleTouchMove, { passive: false });
-      container.addEventListener("touchend", this.handleTouchEnd, { passive: false });
-      container.addEventListener("touchcancel", this.handleTouchEnd, { passive: false });
+      container.addEventListener("touchstart", this.handleTouchStart, {
+        passive: false,
+      });
+      container.addEventListener("touchmove", this.handleTouchMove, {
+        passive: false,
+      });
+      container.addEventListener("touchend", this.handleTouchEnd, {
+        passive: false,
+      });
+      container.addEventListener("touchcancel", this.handleTouchEnd, {
+        passive: false,
+      });
       container.addEventListener("wheel", this.handleWheel, { passive: false });
       container.addEventListener("pointerdown", this.handlePointerDown);
 
@@ -715,10 +824,13 @@ export class EaselBoard extends SignalElement {
   }
 
   private updateTransformStyle() {
-    const el = this.querySelector('#easel-transform-element') as HTMLElement;
+    const el = this.querySelector("#easel-transform-element") as HTMLElement;
     if (el) {
       el.style.transform = `translate3d(${this.panX}px, ${this.panY}px, 0px) scale(${this.scale})`;
-      el.style.transition = (this.isDragging || this.isPinching) ? "none" : "transform 0.15s cubic-bezier(0.2, 0, 0, 1)";
+      el.style.transition =
+        this.isDragging || this.isPinching
+          ? "none"
+          : "transform 0.15s cubic-bezier(0.2, 0, 0, 1)";
     }
   }
 
@@ -749,9 +861,9 @@ export class EaselBoard extends SignalElement {
     const basePan = (h * s) / 2;
     const minScreenSize = Math.min(window.innerHeight, window.innerWidth);
     // give some extra room at the bottom depending on screen size
-    const maxPanUp = basePan  + minScreenSize * 0.3;
+    const maxPanUp = basePan + minScreenSize * 0.3;
     // stop it from going to far down, limit adjustment by half screen size
-    const maxPanDown = basePan - minScreenSize * 0.5;
+    const maxPanDown = Math.max(0, basePan - minScreenSize * 0.5);
     return Math.max(-maxPanUp, Math.min(maxPanDown, y));
   }
 
@@ -764,7 +876,8 @@ export class EaselBoard extends SignalElement {
 
   private handlePanDelta = (e: Event) => {
     const { dx, dy } = (e as CustomEvent).detail;
-    if (true) { // always allow pan delta
+    if (true) {
+      // always allow pan delta
       this.panX = this.clampPanX(this.panX + dx, this.scale);
       this.panY = this.clampPanY(this.panY + dy, this.scale);
       this.updateTransformStyle();
@@ -786,7 +899,10 @@ export class EaselBoard extends SignalElement {
       this.hasDragged = true;
       const t1 = e.touches[0];
       const t2 = e.touches[1];
-      this.initialPinchDist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
+      this.initialPinchDist = Math.hypot(
+        t1.clientX - t2.clientX,
+        t1.clientY - t2.clientY
+      );
       this.initialScale = this.scale;
       this.startTouchX = (t1.clientX + t2.clientX) / 2;
       this.startTouchY = (t1.clientY + t2.clientY) / 2;
@@ -803,7 +919,6 @@ export class EaselBoard extends SignalElement {
       this.startPanX = this.panX;
       this.startPanY = this.panY;
       this.updateTransformStyle();
-
 
       const now = Date.now();
       if (now - this.lastTapTime < 300) {
@@ -828,7 +943,10 @@ export class EaselBoard extends SignalElement {
       const t2 = e.touches[1];
       const dist = Math.hypot(t1.clientX - t2.clientX, t1.clientY - t2.clientY);
       const ratio = dist / this.initialPinchDist;
-      const targetScale = Math.min(8.0, Math.max(1.0, this.initialScale * ratio));
+      const targetScale = Math.min(
+        8.0,
+        Math.max(1.0, this.initialScale * ratio)
+      );
 
       const midX = (t1.clientX + t2.clientX) / 2;
       const midY = (t1.clientY + t2.clientY) / 2;
@@ -846,7 +964,8 @@ export class EaselBoard extends SignalElement {
       if (Math.hypot(dx, dy) > 10) {
         this.hasDragged = true;
       }
-      if (true) { // always allow pan on touch
+      if (true) {
+        // always allow pan on touch
         e.preventDefault();
         this.panX = this.clampPanX(this.startPanX + dx, this.scale);
         this.panY = this.clampPanY(this.startPanY + dy, this.scale);
@@ -884,7 +1003,6 @@ export class EaselBoard extends SignalElement {
     this.updateTransformStyle();
   };
 
-
   private handlePointerMove = (e: PointerEvent) => {
     if (e.pointerType === "mouse" && e.buttons === 0 && this.isDragging) {
       this.isDragging = false;
@@ -892,11 +1010,15 @@ export class EaselBoard extends SignalElement {
       this.updateTransformStyle();
     }
     if (this.isPinching || !this.isDragging) return;
-    const dist = Math.hypot(e.clientX - this.pointerDownX, e.clientY - this.pointerDownY);
+    const dist = Math.hypot(
+      e.clientX - this.pointerDownX,
+      e.clientY - this.pointerDownY
+    );
     if (dist > 10) {
       this.hasDragged = true;
     }
-    if (true) { // always allow pan
+    if (true) {
+      // always allow pan
       const dx = e.clientX - this.startTouchX;
       const dy = e.clientY - this.startTouchY;
       this.panX = this.clampPanX(this.startPanX + dx, this.scale);
@@ -1003,7 +1125,9 @@ export class EaselBoard extends SignalElement {
       padding: "1.5rem",
       borderRadius: "28px",
       border: "3px dashed " + (isDragOver ? "#E63946" : "#000000"),
-      backgroundColor: isDragOver ? "rgba(255, 166, 201, 0.3)" : "rgba(255, 255, 255, 0.8)",
+      backgroundColor: isDragOver
+        ? "rgba(255, 166, 201, 0.3)"
+        : "rgba(255, 255, 255, 0.8)",
       transform: isDragOver ? "scale(1.02)" : "scale(1)",
       transition: "all 0.15s ease",
       display: "flex",
@@ -1034,7 +1158,12 @@ export class EaselBoard extends SignalElement {
           <!-- Zoom Transform Element -->
           <div
             id="easel-transform-element"
-            style="width: 100%; display: flex; flex-direction: column; align-items: center; transform: translate3d(${this.panX}px, ${this.panY}px, 0px) scale(${this.scale}); transform-origin: center center; transition: ${this.isDragging || this.isPinching ? "none" : "transform 0.15s cubic-bezier(0.2, 0, 0, 1)"}; will-change: transform;"
+            style="width: 100%; display: flex; flex-direction: column; align-items: center; transform: translate3d(${this
+              .panX}px, ${this.panY}px, 0px) scale(${this
+              .scale}); transform-origin: center center; transition: ${this
+              .isDragging || this.isPinching
+              ? "none"
+              : "transform 0.15s cubic-bezier(0.2, 0, 0, 1)"}; will-change: transform;"
           >
             <!-- Top Wooden Clamp -->
             <div style=${this.renderStyleObject(easelTopClampStyle)}></div>
@@ -1042,21 +1171,31 @@ export class EaselBoard extends SignalElement {
             <!-- Main Frame -->
             <div style=${this.renderStyleObject(mainFrameStyle)}>
               <!-- Easel Canvas Display Area -->
-              <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; padding: 0.5rem; background-size: 0.5rem 0.5rem; background-image: ${transparentImgCss};">
+              <div
+                style="display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; padding: 0.5rem; background-size: 0.5rem 0.5rem; background-image: ${transparentImgCss};"
+              >
                 <!-- STATE 1: Processing Loader -->
                 ${isProcessing
                   ? html`
-                      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
-                        <div style="position: relative; width: 5rem; height: 5rem; margin-bottom: 1rem; display: flex; align-items: center; justify-content: center;">
+                      <div
+                        style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;"
+                      >
+                        <div
+                          style="position: relative; width: 5rem; height: 5rem; margin-bottom: 1rem; display: flex; align-items: center; justify-content: center;"
+                        >
                           ${iconLoader2(64, "#FFD166")}
                           <div style="position: absolute;">
                             ${iconSparkles(32, "#FFD166")}
                           </div>
                         </div>
-                        <h3 style="font-size: 1.25rem; font-weight: 900; color: #3D2314; margin: 0 0 0.25rem 0; font-style: italic;">
+                        <h3
+                          style="font-size: 1.25rem; font-weight: 900; color: #3D2314; margin: 0 0 0.25rem 0; font-style: italic;"
+                        >
                           Preparing Canvas..
                         </h3>
-                        <p style="font-size: 0.75rem; font-weight: 700; color: #4A2810; text-transform: uppercase; margin: 0;">
+                        <p
+                          style="font-size: 0.75rem; font-weight: 700; color: #4A2810; text-transform: uppercase; margin: 0;"
+                        >
                           collecting paints and colouring palettes
                         </p>
                       </div>
@@ -1109,13 +1248,18 @@ export class EaselBoard extends SignalElement {
                               }}
                               style="background-color: #FFFFFF; color: #000000; border: 2.5px solid #000000; padding: 0.625rem 0.875rem; border-radius: 16px; font-weight: 900; font-size: 0.875rem; display: flex; align-items: center; gap: 0.375rem; box-shadow: 2px 2px 0px 0px #000000; cursor: pointer;"
                             >
-                              ${iconPaintBucket(20, "#000000")} Or Paint the Daily Challenge
+                              ${iconPaintBucket(
+                                20,
+                                "#000000"
+                              )} Or Paint the Daily Challenge
                             </button>
                           </div>
                         </div>
                       </div>
 
-                      <footer style=${this.renderStyleObject(footerStyleSignal.get())}>
+                      <footer style=${this.renderStyleObject(
+                        footerStyleSignal.get()
+                      )}>
                         <p style="margin: 0;">PAINT by COLOURS <a href="https://github.com/sponsors/iamogbz" target="_blank" style="color: inherit; text-decoration: inherit; cursor: pointer;">❤️ QBRKTS</a> ©️ ${new Date().getFullYear()}</p>
                       </footer>
                     </div>
@@ -1125,7 +1269,9 @@ export class EaselBoard extends SignalElement {
                 <!-- STATE 3: Interactive Line-Art Painting Canvas -->
                 ${currentArtwork && !isProcessing
                   ? html`
-                      <div style="width: 100%; display: flex; flex-direction: column; align-items: center;">
+                      <div
+                        style="width: 100%; display: flex; flex-direction: column; align-items: center;"
+                      >
                         <div
                           style="position: relative; width: 100%; aspect-ratio: ${currentArtwork.width} / ${currentArtwork.height}; border-radius: 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; background-color: #ffffff;"
                         >
@@ -1144,10 +1290,18 @@ export class EaselBoard extends SignalElement {
             </div>
 
             <!-- Wooden Easel Legs -->
-            <div style="width: 100%; max-width: 28rem; display: flex; justify-content: space-between; padding: 0 2rem; margin-top: -0.5rem; z-index: 0;">
-              <div style="width: 1.5rem; height: 4rem; background-color: #845442; border: 2px solid #845442; border-bottom-left-radius: 0.5rem; border-bottom-right-radius: 0.5rem; transform: rotate(12deg); box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
-              <div style="width: 1.5rem; height: 5rem; background-color: #845442; border: 2px solid #845442; border-bottom-left-radius: 0.5rem; border-bottom-right-radius: 0.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
-              <div style="width: 1.5rem; height: 4rem; background-color: #845442; border: 2px solid #845442; border-bottom-left-radius: 0.5rem; border-bottom-right-radius: 0.5rem; transform: rotate(-12deg); box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
+            <div
+              style="width: 100%; max-width: 28rem; display: flex; justify-content: space-between; padding: 0 2rem; margin-top: -0.5rem; z-index: 0;"
+            >
+              <div
+                style="width: 1.5rem; height: 4rem; background-color: #845442; border: 2px solid #845442; border-bottom-left-radius: 0.5rem; border-bottom-right-radius: 0.5rem; transform: rotate(12deg); box-shadow: 0 4px 6px rgba(0,0,0,0.1);"
+              ></div>
+              <div
+                style="width: 1.5rem; height: 5rem; background-color: #845442; border: 2px solid #845442; border-bottom-left-radius: 0.5rem; border-bottom-right-radius: 0.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"
+              ></div>
+              <div
+                style="width: 1.5rem; height: 4rem; background-color: #845442; border: 2px solid #845442; border-bottom-left-radius: 0.5rem; border-bottom-right-radius: 0.5rem; transform: rotate(-12deg); box-shadow: 0 4px 6px rgba(0,0,0,0.1);"
+              ></div>
             </div>
           </div>
         </div>
@@ -1157,7 +1311,10 @@ export class EaselBoard extends SignalElement {
 
   private renderStyleObject(styleObj: Record<string, string | number>): string {
     return Object.entries(styleObj)
-      .map(([k, v]) => `${k.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}: ${v};`)
+      .map(
+        ([k, v]) =>
+          `${k.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}: ${v};`
+      )
       .join(" ");
   }
 }
