@@ -415,6 +415,12 @@ export class PaintingControls extends SignalElement {
                   const isUsed = stat?.count > 0;
                   const colorStatus = expectedColorStatus.get(color.hexCode);
                   const isFullyPainted = colorStatus ? colorStatus.total > 0 && colorStatus.total === colorStatus.painted : false;
+                  
+                  let progressLabel = "♾️";
+                  if (colorStatus && colorStatus.total > 0) {
+                    progressLabel = `${colorStatus.painted}/${colorStatus.total}`;
+                  }
+
                   const isSelected = activeColor?.id === color.id;
                   const isCopied = copiedHex === color.hexCode;
 
@@ -487,11 +493,11 @@ export class PaintingControls extends SignalElement {
                         ${color.name}
                       </span>
 
-                      <!-- Percentage -->
+                      <!-- Progress -->
                       <span
                         style="font-size: 0.75rem; font-weight: ${isUsed ? "900" : "700"}; color: ${isUsed ? "#000000" : "#6B7280"};"
                       >
-                        ${stat?.percentage ?? 0}%
+                        ${progressLabel}
                       </span>
                     </button>
                   `;
