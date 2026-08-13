@@ -1,6 +1,7 @@
 import path from 'path';
 import fs from 'fs';
 import {defineConfig} from 'vite';
+import { VitePWA } from 'vite-plugin-pwa';
 
 const fileToLink = (f) => `<li><a href="/daily-challenge/${f}" style="color: blue; text-decoration: underline;">${f}</a></li>`;
 const getHtml = () => {
@@ -48,7 +49,28 @@ function directoryListingPlugin() {
 
 export default defineConfig(() => {
   return {
-    plugins: [directoryListingPlugin()],
+    plugins: [
+      directoryListingPlugin(),
+      VitePWA({
+        registerType: 'autoUpdate',
+        includeAssets: ['favicon.svg'],
+        manifest: {
+          name: 'PAINT by COLOURS',
+          short_name: 'PAINT',
+          description: 'Turn your photos into smoothed 800px cartoon artworks with a strict 24-color artist palette.',
+          theme_color: '#FCD5AE',
+          background_color: '#FCD5AE',
+          display: 'standalone',
+          icons: [
+            {
+              src: 'favicon.svg',
+              sizes: '192x192 512x512 any',
+              type: 'image/svg+xml'
+            }
+          ]
+        }
+      })
+    ],
     resolve: {
       alias: {
         '@': path.resolve(__dirname, '.'),
