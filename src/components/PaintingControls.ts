@@ -1,3 +1,25 @@
+import { html } from "lit";
+import { customElement, property } from "lit/decorators.js";
+import { SignalElement } from "../utils/SignalElement";
+import {
+  PALETTE_COLOR,
+  PaletteColor,
+  UsedColorStat,
+} from "../types";
+import {
+  selectedCategorySignal,
+  activeHighlightColorSignal,
+  copiedHexSignal,
+  artworksSignal,
+  currentArtworkSignal,
+  isProcessingSignal,
+  isGalleryOpenSignal,
+  zoomScaleSignal,
+  draggedColorSignal,
+  draggedPositionSignal,
+  undoStackSignal,
+  handleUndo,
+} from "../state/store";
 import {
   iconPalette,
   iconPaintBucket,
