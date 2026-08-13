@@ -363,6 +363,7 @@ export class EaselBoard extends SignalElement {
     const targetHex = draggedColorHex || activeColor?.hexCode;
 
     if (this.isBorderPixel && targetHex && targetHex !== PALETTE_COLOR.transparent.hexCode) {
+      const targetRGBA = this.parseColorToRGBA(targetHex);
       const targetHexUpper = targetHex.toUpperCase();
       const overlayImgData = destCtx.createImageData(w, h);
       const overlayPixels = overlayImgData.data;
@@ -375,10 +376,10 @@ export class EaselBoard extends SignalElement {
           
           if (expectedColor && expectedColor.startsWith(targetHexUpper.substring(0, 7))) { 
             const pxIdx = i * 4;
-            overlayPixels[pxIdx] = 0;
-            overlayPixels[pxIdx + 1] = 0;
-            overlayPixels[pxIdx + 2] = 0;
-            overlayPixels[pxIdx + 3] = 60; // 23% translucent dark guide border overlay
+            overlayPixels[pxIdx] = targetRGBA[0];
+            overlayPixels[pxIdx + 1] = targetRGBA[1];
+            overlayPixels[pxIdx + 2] = targetRGBA[2];
+            overlayPixels[pxIdx + 3] = 120; // partially transparent colored guide border
             hasVisibleBorders = true;
           }
         }
@@ -400,7 +401,12 @@ export class EaselBoard extends SignalElement {
     if (this.hoveredRegionId !== null && this.regionBorderPixels) {
       const borderIndices = this.regionBorderPixels.get(this.hoveredRegionId);
       if (borderIndices && borderIndices.length > 0) {
-        destCtx.fillStyle = "rgba(0, 0, 0, 1.0)";
+        if (targetHex && targetHex !== PALETTE_COLOR.transparent.hexCode) {
+          const targetRGBA = this.parseColorToRGBA(targetHex);
+          destCtx.fillStyle = `rgba(${targetRGBA[0]}, ${targetRGBA[1]}, ${targetRGBA[2]}, 1.0)`;
+        } else {
+          destCtx.fillStyle = "rgba(0, 0, 0, 1.0)";
+        }
         for (let k = 0; k < borderIndices.length; k++) {
           const pIdx = borderIndices[k];
           const bx = pIdx % w;
