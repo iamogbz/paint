@@ -5,7 +5,7 @@ export interface SampleImage {
 }
 
 // Ensure Vite includes the keys for files in the public directory
-const imageModules = import.meta.glob('/public/challengeImage/*.{png,jpg,jpeg,webp,gif,svg}');
+const imageModules = import.meta.glob('/public/daily-challenge/*.{png,jpg,jpeg,webp,gif,svg}');
 
 export function getDailyChallenge(): SampleImage {
   const keys = Object.keys(imageModules).sort();
