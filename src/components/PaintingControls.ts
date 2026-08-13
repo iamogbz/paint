@@ -25,7 +25,6 @@ import {
   iconCheck,
   iconFolderOpen,
   iconDownload,
-  iconImage,
   iconZoomIn,
   iconZoomOut,
   iconRotateCcw,
@@ -144,20 +143,6 @@ export class PaintingControls extends SignalElement {
     downloadImage(cleanDataUrl, `${artwork.name}-painting.png`);
   };
 
-  private triggerFilePicker = () => {
-    soundEffects.playPop();
-    const input = document.getElementById("easel-file-input") as HTMLInputElement;
-    if (input) {
-      input.value = "";
-      input.click();
-    } else {
-      const easel = document.querySelector("easel-board") as any;
-      if (easel?.triggerFilePicker) {
-        easel.triggerFilePicker();
-      }
-    }
-  };
-
   render() {
     const selectedCat = selectedCategorySignal.get();
     const activeColor = activeHighlightColorSignal.get();
@@ -232,7 +217,7 @@ export class PaintingControls extends SignalElement {
       alignItems: "center",
       justifyContent: "space-between",
       gap: "0.5rem",
-      padding: "0.75rem 1.25rem",
+      padding: "0.5rem",
       borderBottom: showPhotoControls ? "2px solid rgba(0, 0, 0, 0.15)" : "none",
       flexShrink: 0,
     };
@@ -311,14 +296,6 @@ export class PaintingControls extends SignalElement {
                   >
                     ${iconDownload(18, "#FFFFFF")}
                   </button>
-
-                  <button
-                    title="Change Photo"
-                    @click=${this.triggerFilePicker}
-                    style=${this.renderStyleObject(actionBtnStyle("#FFFFFF"))}
-                  >
-                    ${iconImage(18, "#000000")}
-                  </button>
                 `
               : ""}
           </div>
@@ -371,21 +348,18 @@ export class PaintingControls extends SignalElement {
                   ${categories.map((cat) => {
                     const isSel = selectedCat === cat;
                     const btnStyle = {
-                      fontSize: "0.75rem",
-                      padding: "0.375rem 0.875rem",
-                      borderRadius: "9999px",
-                      fontWeight: "900",
-                      textTransform: "uppercase" as const,
-                      letterSpacing: "0.05em",
-                      transition: "all 0.15s ease",
+                      width: "36px",
+                      height: "36px",
+                      borderRadius: "50%",
+                      backgroundColor: isSel ? "#000000" : "#FFFFFF",
                       border: "2.5px solid #000000",
-                      cursor: "pointer",
-                      backgroundColor: isSel ? "#000000" : "rgba(255, 255, 255, 0.8)",
-                      color: isSel ? "#FFFFFF" : "#000000",
-                      boxShadow: isSel ? "2px 2px 0px 0px rgba(0, 0, 0, 0.3)" : "none",
+                      boxShadow: "2px 2px 0px 0px #000000",
                       display: "flex",
                       alignItems: "center",
-                      gap: "0.25rem",
+                      justifyContent: "center",
+                      cursor: "pointer",
+                      padding: "0",
+                      transition: "transform 0.15s ease, box-shadow 0.15s ease",
                     };
 
                     return html`
