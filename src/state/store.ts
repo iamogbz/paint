@@ -31,7 +31,6 @@ export const appBackgroundStyleSignal = computed(() => ({
   minHeight: "100vh",
   fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif",
   position: "relative" as const,
-  paddingBottom: "3rem",
   overflowX: "hidden" as const,
   overflowY: "visible",
 }));

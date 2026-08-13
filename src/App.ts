@@ -49,7 +49,7 @@ export class PaintApp extends SignalElement {
       width: "95vmin",
       maxWidth: "95vmin",
       margin: "0 auto",
-      padding: "0 0 250px 0",
+      padding: "0",
       display: "flex",
       flexDirection: "column" as const,
       alignItems: "center",

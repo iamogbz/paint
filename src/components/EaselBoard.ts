@@ -729,15 +729,17 @@ export class EaselBoard extends SignalElement {
 
   private clampPanX(x: number, s: number): number {
     const w = this.containerElement?.clientWidth || 350;
-    const limit = (window.innerHeight || 800) * 0.1;
-    const maxPan = window.innerWidth / 2 + (w * s) / 2 - limit;
+    const minDim = Math.min(window.innerHeight, window.innerWidth);
+    const limit = (minDim || 800) * 0.1;
+    const maxPan = minDim / 10 + (w * s) / 2 - limit;
     return Math.max(-maxPan, Math.min(maxPan, x));
   }
 
   private clampPanY(y: number, s: number): number {
     const h = this.containerElement?.clientHeight || 350;
-    const limit = (window.innerHeight || 800) * 0.1;
-    const maxPan = window.innerHeight / 2 + (h * s) / 2 - limit;
+    const minDim = Math.min(window.innerHeight, window.innerWidth);
+    const limit = (minDim || 800) * 0.1;
+    const maxPan = minDim / 10 + (h * s) / 2 - limit;
     return Math.max(-maxPan, Math.min(maxPan, y));
   }
   private handleZoomSet = (e: Event) => {
@@ -934,6 +936,7 @@ export class EaselBoard extends SignalElement {
       this.panX = 0;
       this.panY = 0;
       zoomScaleSignal.set(1);
+      setTimeout(() => this.updateTransformStyle(), 0);
     }
     const isProcessing = isProcessingSignal.get();
     const isDragOver = isDragOverSignal.get();
@@ -1030,7 +1033,7 @@ export class EaselBoard extends SignalElement {
                 <!-- STATE 1: Processing Loader -->
                 ${isProcessing
                   ? html`
-                      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 3rem 1rem; text-align: center;">
+                      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
                         <div style="position: relative; width: 5rem; height: 5rem; margin-bottom: 1rem; display: flex; align-items: center; justify-content: center;">
                           ${iconLoader2(64, "#FFD166")}
                           <div style="position: absolute;">
