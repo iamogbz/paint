@@ -44,3 +44,15 @@ button {
     transform: rotate(360deg);
   }
 }
+
+@keyframes bounce-drop {
+  0%, 20%, 50%, 80%, 100% {
+    transform: translateY(0); /* Ground level */
+  }
+  40% {
+    transform: translateY(-8px); /* First high bounce */
+  }
+  60% {
+    transform: translateY(-4px); /* Second lower bounce */
+  }
+}

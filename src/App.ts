@@ -72,7 +72,7 @@ export class PaintApp extends SignalElement {
         ${draggedColor && draggedPos
           ? html`
               <div
-                style="position: fixed; left: ${draggedPos.x}px; top: ${draggedPos.y}px; transform: translate(-50%, -50%); width: 15px; height: 15px; border-radius: 50%; background-color: ${draggedColor}; background-size: 0.5rem 0.5rem; background-repeat: repeat; background-image: ${draggedColor === PALETTE_COLOR.transparent.hexCode ? transparentImgCss : 'none'}; border: 2px solid #FFFFFF; box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; z-index: 9999;"
+                style="position: fixed; left: ${draggedPos.x}px; top: ${draggedPos.y}px; transform: translate(-50%, -50%); width: 8px; height: 8px; border-radius: 50%; background-color: ${draggedColor}; background-size: 0.5rem 0.5rem; background-repeat: repeat; background-image: ${draggedColor === PALETTE_COLOR.transparent.hexCode ? transparentImgCss : 'none'}; border: 2px solid #FFFFFF; box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; z-index: 9999; animation: bounce-drop 2s ease infinite;"
               ></div>
             `
           : ""}

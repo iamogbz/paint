@@ -585,7 +585,9 @@ export class EaselBoard extends SignalElement {
     if (!canvas) return;
 
     const rect = canvas.getBoundingClientRect();
+    const elementAtPoint = document.elementFromPoint(clientX, clientY);
     if (
+      elementAtPoint === canvas &&
       clientX >= rect.left &&
       clientX <= rect.right &&
       clientY >= rect.top &&
@@ -630,7 +632,9 @@ export class EaselBoard extends SignalElement {
     if (!canvas) return;
 
     const rect = canvas.getBoundingClientRect();
+    const elementAtPoint = document.elementFromPoint(clientX, clientY);
     if (
+      elementAtPoint === canvas &&
       clientX >= rect.left &&
       clientX <= rect.right &&
       clientY >= rect.top &&
