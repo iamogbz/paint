@@ -131,6 +131,37 @@ export class ArtworkGalleryModal extends SignalElement {
               });
               const usedColorsCount = art.colorStats.filter((s) => s.count > 0).length;
 
+              const validStats = art.colorStats.filter(
+                (s) => s.count > 0 && s.color.category !== "Neutrals & Outlines"
+              );
+              
+              const categoryMap = new Map<string, typeof validStats>();
+              for (const stat of validStats) {
+                if (!categoryMap.has(stat.color.category)) {
+                  categoryMap.set(stat.color.category, []);
+                }
+                categoryMap.get(stat.color.category)!.push(stat);
+              }
+
+              const displayStats: typeof validStats = [];
+              
+              // 1. Pick at least one from each category present
+              for (const stats of categoryMap.values()) {
+                if (displayStats.length < 8) {
+                  displayStats.push(stats[0]);
+                }
+              }
+
+              // 2. Fill the rest up to 8 colors
+              if (displayStats.length < 8) {
+                for (const stat of validStats) {
+                  if (displayStats.length >= 8) break;
+                  if (!displayStats.includes(stat)) {
+                    displayStats.push(stat);
+                  }
+                }
+              }
+
               const itemCardStyle = {
                 padding: "0.75rem",
                 borderRadius: "24px",
@@ -211,10 +242,7 @@ export class ArtworkGalleryModal extends SignalElement {
                         <span style="font-size: 0.625rem; font-weight: 900; color: #000000; text-transform: uppercase; margin-right: 0.25rem;">
                           ${usedColorsCount} colors:
                         </span>
-                        ${art.colorStats
-                          .filter((s) => s.count > 0)
-                          .slice(0, 8)
-                          .map(
+                        ${displayStats.map(
                             (stat) => html`
                               <div
                                 style="width: 1rem; height: 1rem; border-radius: 9999px; border: 1px solid #000000; background-color: ${stat.color.hexCode};"
