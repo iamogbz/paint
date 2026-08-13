@@ -53,6 +53,7 @@ export default defineConfig(() => {
       directoryListingPlugin(),
       VitePWA({
         registerType: 'autoUpdate',
+        manifestFilename: 'manifest.json',
         includeAssets: ['favicon.svg'],
         manifest: {
           name: 'PAINT by COLOURS',
