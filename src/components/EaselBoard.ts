@@ -1088,7 +1088,7 @@ export class EaselBoard extends SignalElement {
                       </div>
 
                       <footer style=${this.renderStyleObject(footerStyleSignal.get())}>
-                        <p style="margin: 0;">PAINT by COLOURS ❤️ QBRKTS ©️ ${new Date().getFullYear()}</p>
+                        <p style="margin: 0;">PAINT by COLOURS <a href="https://github.com/sponsors/iamogbz" target="_blank" style="color: inherit; text-decoration: inherit; cursor: pointer;">❤️ QBRKTS</a> ©️ ${new Date().getFullYear()}</p>
                       </footer>
                     </div>
                     `
