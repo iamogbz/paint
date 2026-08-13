@@ -11,6 +11,7 @@ import {
   handleImageSelected,
   handleSelectArtwork,
   draggedColorSignal,
+  pushUndoState,
 } from "../state/store";
 import { ProcessedArtwork, PALETTE_COLOR } from "../types";
 import { getDailyChallenge } from "../data/sampleImages";
@@ -495,6 +496,7 @@ export class EaselBoard extends SignalElement {
         if (activeColor) {
           const currentPainted = { ...(currentArtwork.paintedRegionsState || {}) };
 
+          pushUndoState(currentPainted);
           if (activeColor.id === "transparent") {
             // Eraser mode
             delete currentPainted[regionId];
@@ -620,6 +622,7 @@ export class EaselBoard extends SignalElement {
         const regionId = this.regionMapData[y * canvas.width + x];
         if (regionId !== undefined && regionId >= 0) {
           const currentPainted = { ...(currentArtwork.paintedRegionsState || {}) };
+          pushUndoState(currentPainted);
           
           if (color === PALETTE_COLOR.transparent.hexCode) {
             delete currentPainted[regionId];

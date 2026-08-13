@@ -148,6 +148,7 @@ export class PaintingControls extends SignalElement {
     const activeColor = activeHighlightColorSignal.get();
     const copiedHex = copiedHexSignal.get();
     const currentArtwork = currentArtworkSignal.get();
+    const canUndo = undoStackSignal.get().length > 0;
     const hasArtworks = artworksSignal.get().length > 0;
     const isProcessing = isProcessingSignal.get();
     const zoomScale = zoomScaleSignal.get();
@@ -339,6 +340,35 @@ export class PaintingControls extends SignalElement {
           ${showPhotoControls
             ? html`
                 <div style="display: flex; align-items: center; gap: 0.5rem;">
+                  <!-- Undo Button -->
+                  <button
+                    title="Undo"
+                    @click=${() => {
+                      if (canUndo) {
+                        soundEffects.playPop();
+                        handleUndo();
+                      }
+                    }}
+                    style=${this.renderStyleObject({
+                      width: "36px",
+                      height: "36px",
+                      borderRadius: "50%",
+                      backgroundColor: "#FFFFFF",
+                      border: "2.5px solid #000000",
+                      boxShadow: "2px 2px 0px 0px #000000",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: canUndo ? "pointer" : "default",
+                      padding: "0",
+                      transition: "transform 0.15s ease, box-shadow 0.15s ease",
+                      opacity: canUndo ? "1" : "0.5",
+                      pointerEvents: canUndo ? "auto" : "none",
+                    })}
+                  >
+                    ${iconRotateCcw(18, "#000000")}
+                  </button>
+                  <div style="width: 1px; height: 24px; background-color: rgba(0,0,0,0.2); margin: 0 0.25rem;"></div>
                   ${categories.map((cat) => {
                     const isSel = selectedCat === cat;
                     const btnStyle = {
@@ -362,6 +392,9 @@ export class PaintingControls extends SignalElement {
                           selectedCategorySignal.set(cat);
                         }}
                         style=${this.renderStyleObject(btnStyle)}
+                        title="${cat === PALETTE_CATEGORIES_ALL
+                          ? 'All Colours'
+                          : 'Photo Swatch'}"
                       >
                         ${cat === PALETTE_CATEGORIES_ALL
                           ? iconPaintBucket(18, isSel ? "#FFFFFF" : "#000000")

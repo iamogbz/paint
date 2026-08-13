@@ -16,6 +16,7 @@ export const activeHighlightColorSignal = signal<PaletteColor | null>(null);
 export const isGalleryOpenSignal = signal<boolean>(false);
 export const selectedCategorySignal = signal<string>("All");
 export const copiedHexSignal = signal<string | null>(null);
+export const undoStackSignal = signal<Record<number, string>[]>([]);
 export const isDragOverSignal = signal<boolean>(false);
 export const zoomScaleSignal = signal<number>(1);
 
@@ -72,6 +73,10 @@ export function saveArtworksList(newList: ProcessedArtwork[]) {
 }
 
 export function handleSelectArtwork(artwork: ProcessedArtwork) {
+  const current = currentArtworkSignal.get();
+  if (current && current.id !== artwork.id) {
+    undoStackSignal.set([]);
+  }
   const updatedArtwork = {
     ...artwork,
     modifiedAt: Date.now(),
@@ -95,6 +100,7 @@ export async function handleImageSelected(imageSrc: string, name: string = "Unti
 
     const updatedList = [newArtwork, ...artworksSignal.get()];
     saveArtworksList(updatedList);
+    undoStackSignal.set([]);
     currentArtworkSignal.set(newArtwork);
     isProcessingSignal.set(false);
 
@@ -134,3 +140,33 @@ export function handleToggleSound() {
   soundEnabledSignal.set(next);
   soundEffects.enabled = next;
   }
+
+export function pushUndoState(paintedRegionsState: Record<number, string>) {
+  undoStackSignal.set([...undoStackSignal.get(), { ...paintedRegionsState }]);
+}
+
+export function handleUndo() {
+  const stack = undoStackSignal.get();
+  if (stack.length === 0) return;
+  const current = currentArtworkSignal.get();
+  if (!current) return;
+
+  const previousState = stack[stack.length - 1];
+  const newStack = stack.slice(0, stack.length - 1);
+  undoStackSignal.set(newStack);
+
+  const updatedArtwork = {
+    ...current,
+    paintedRegionsState: previousState,
+    modifiedAt: Date.now(),
+  };
+
+  const list = [...artworksSignal.get()];
+  const artworkIdx = list.findIndex((a) => a.id === updatedArtwork.id);
+  if (artworkIdx !== -1) {
+    list[artworkIdx] = updatedArtwork;
+    saveArtworksList(list);
+  }
+  currentArtworkSignal.set(updatedArtwork);
+  window.dispatchEvent(new CustomEvent("easel-redraw-artboard"));
+}
