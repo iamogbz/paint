@@ -207,7 +207,7 @@ export class PaintingControls extends SignalElement {
     const artwork = currentArtworkSignal.get();
     if (!artwork) return;
     const cleanDataUrl = exportArtworkCleanDataUrl(artwork);
-    downloadImage(cleanDataUrl, `${artwork.name}-painting.png`);
+    downloadImage(cleanDataUrl, `paint_by_numbers_${artwork.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}_paint.ogbizi.com.png`);
   };
 
   render() {
