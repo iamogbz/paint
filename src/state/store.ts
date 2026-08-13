@@ -104,6 +104,7 @@ export async function handleImageSelected(imageSrc: string, name: string = "Unti
     undoStackSignal.set([]);
     currentArtworkSignal.set(newArtwork);
     isProcessingSignal.set(false);
+    isWindowFocusedSignal.set(true);
 
     confetti({
       particleCount: 50,
