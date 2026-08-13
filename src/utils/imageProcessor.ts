@@ -518,7 +518,7 @@ export async function processImageToCartoonPalette(
       count,
       percentage,
     };
-  });
+  }).filter(stat => stat.count > 0 || stat.color.hexCode === "#00000000");
 
   return {
     id: `art-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
