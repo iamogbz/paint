@@ -85,6 +85,7 @@ export class EaselBoard extends SignalElement {
     window.addEventListener("easel-zoom-out", this.zoomOut);
     window.addEventListener("easel-zoom-set", this.handleZoomSet);
     window.addEventListener("easel-pan-delta", this.handlePanDelta);
+    window.addEventListener("pointerdown", this.handleGlobalPointerDown, { capture: true });
         window.addEventListener("color-drag-move", this.handleColorDragMove as EventListener);
     window.addEventListener("color-drop", this.handleColorDrop as EventListener);
   }
@@ -97,6 +98,7 @@ export class EaselBoard extends SignalElement {
     window.removeEventListener("easel-zoom-out", this.zoomOut);
     window.removeEventListener("easel-zoom-set", this.handleZoomSet);
     window.removeEventListener("easel-pan-delta", this.handlePanDelta);
+    window.removeEventListener("pointerdown", this.handleGlobalPointerDown, { capture: true });
         window.removeEventListener("color-drag-move", this.handleColorDragMove as EventListener);
     window.removeEventListener("color-drop", this.handleColorDrop as EventListener);
   }
@@ -465,8 +467,21 @@ export class EaselBoard extends SignalElement {
     return [255, 255, 255, 255];
   }
 
+  private pointerDownOnCanvas = false;
+
+  private handleGlobalPointerDown = (e: PointerEvent) => {
+    const canvas = this.querySelector("#artboard-canvas");
+    if (canvas) {
+      const path = e.composedPath();
+      this.pointerDownOnCanvas = path.includes(canvas);
+    } else {
+      this.pointerDownOnCanvas = false;
+    }
+  };
+
   private handleCanvasPointerUp = (e: PointerEvent) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
+    if (!this.pointerDownOnCanvas) return;
     
     if (this.hasDragged) {
       this.hasDragged = false;

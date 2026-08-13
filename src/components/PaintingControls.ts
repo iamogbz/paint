@@ -50,6 +50,9 @@ export class PaintingControls extends SignalElement {
   private handlePanPointerDown = (e: PointerEvent) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
     e.preventDefault();
+    
+    const target = e.currentTarget as HTMLElement;
+    target.setPointerCapture(e.pointerId);
 
     const startX = e.clientX;
     const startY = e.clientY;
@@ -61,6 +64,7 @@ export class PaintingControls extends SignalElement {
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
       window.removeEventListener("pointercancel", onPointerCancel);
+      target.releasePointerCapture(e.pointerId);
       if (this.panAnimationFrame !== null) {
         cancelAnimationFrame(this.panAnimationFrame);
         this.panAnimationFrame = null;
@@ -368,7 +372,6 @@ export class PaintingControls extends SignalElement {
               : ""}
           </div>
 
-
           <!-- Middle Group: Canvas Zoom Controls (Only when image is loaded) -->
           ${showPhotoControls
             ? html`
@@ -474,7 +477,6 @@ export class PaintingControls extends SignalElement {
                   >
                     ${iconRotateCcw(18, "#000000")}
                   </button>
-                  <div style="width: 1px; height: 24px; background-color: rgba(0,0,0,0.2); margin: 0 0.25rem;"></div>
                   ${categories.map((cat) => {
                     const isSel = selectedCat === cat;
                     const btnStyle = {
