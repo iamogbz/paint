@@ -36,7 +36,7 @@ export class AppTour extends SignalElement {
     },
     {
       title: "Starting a Painting",
-      description: "When you launch the app, you can either upload your own photo to generate a color-by-numbers canvas, or start the Daily Challenge directly from the easel.",
+      description: "When you launch the app, you can either upload your own photo to generate a custom canvas, or start the Daily Challenge directly from the easel.",
       icon: iconImage(48, PALETTE_COLOR.forest_green.hexCode),
     },
     {
@@ -57,7 +57,7 @@ export class AppTour extends SignalElement {
     },
     {
       title: "Applying Paint",
-      description: "Select a color from the palette and tap on the canvas. You can also drag the selected color swatch directly onto a region! To erase just click again to deselect the color, the eraser is selected by default.",
+      description: "Select a color from the palette and tap on the canvas. You can also drag the selected color swatch directly onto a region! Just click the color again to deselect and the eraser is selected by default.",
       icon: iconPaintbrush(48, PALETTE_COLOR.crimson_red.hexCode),
     },
     {
