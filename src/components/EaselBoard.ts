@@ -745,16 +745,16 @@ export class EaselBoard extends SignalElement {
 
   private clampPanY(y: number, s: number): number {
     const h = this.containerElement?.clientHeight || 350;
-    const screenH = window.innerHeight || 800;
-    
+    // half the scaled easel size cause panning is calculated from the middle
     const basePan = (h * s) / 2;
-    // Allow more panning UP (negative y) to reveal the bottom edge above the controls
-    const maxPanUp = basePan + screenH * 0.25;
-    // Restrict panning DOWN (positive y) to prevent too much empty space at the top
-    const maxPanDown = Math.max(0, basePan - screenH * 0.1);
-    
+    const minScreenSize = Math.min(window.innerHeight, window.innerWidth);
+    // give some extra room at the bottom depending on screen size
+    const maxPanUp = basePan  + minScreenSize * 0.3;
+    // stop it from going to far down, limit adjustment by half screen size
+    const maxPanDown = basePan - minScreenSize * 0.5;
     return Math.max(-maxPanUp, Math.min(maxPanDown, y));
   }
+
   private handleZoomSet = (e: Event) => {
     const scale = (e as CustomEvent).detail.scale;
     if (scale !== undefined) {
