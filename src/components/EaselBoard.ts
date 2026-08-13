@@ -484,7 +484,6 @@ export class EaselBoard extends SignalElement {
     if (!this.pointerDownOnCanvas) return;
     
     if (this.hasDragged) {
-      this.hasDragged = false;
       return;
     }
     if (draggedColorSignal.get()) {
@@ -845,7 +844,8 @@ export class EaselBoard extends SignalElement {
   };
 
   private handlePointerDown = (e: PointerEvent) => {
-    if (e.button !== 0) return;
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    if (this.isPinching) return;
     this.pointerDownX = e.clientX;
     this.pointerDownY = e.clientY;
     this.hasDragged = false;
@@ -859,7 +859,7 @@ export class EaselBoard extends SignalElement {
 
 
   private handlePointerMove = (e: PointerEvent) => {
-    if (!this.isDragging) return;
+    if (this.isPinching || !this.isDragging) return;
     const dist = Math.hypot(e.clientX - this.pointerDownX, e.clientY - this.pointerDownY);
     if (dist > 10) {
       this.hasDragged = true;
@@ -876,9 +876,6 @@ export class EaselBoard extends SignalElement {
   private handlePointerUp = () => {
     this.isDragging = false;
     this.updateTransformStyle();
-    setTimeout(() => {
-      this.hasDragged = false;
-    }, 0);
   };
 
   private handleFileInput = (file: File) => {
