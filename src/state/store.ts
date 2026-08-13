@@ -1,4 +1,5 @@
 import { signal, computed } from "@lit-labs/signals";
+import { get, set } from "idb-keyval";
 import { ProcessedArtwork, PALETTE_COLOR, PaletteColor } from "../types";
 import { processImageToCartoonPalette } from "../utils/imageProcessor";
 import { soundEffects } from "../utils/soundEffects";
@@ -42,29 +43,32 @@ export const footerStyleSignal = computed(() => ({
 }));
 
 // Storage Helpers
-export function loadSavedArtworks() {
+export async function loadSavedArtworks() {
   try {
-    const saved = localStorage.getItem(STORAGE_KEY_ALL_ARTWORKS);
-    if (saved) {
-      const parsed: ProcessedArtwork[] = JSON.parse(saved);
-      if (parsed && parsed.length > 0) {
-        const sorted = parsed.sort((a, b) => (b.modifiedAt || 0) - (a.modifiedAt || 0));
-        artworksSignal.set(sorted);
-        currentArtworkSignal.set(sorted[0]);
-      }
+    // Migrate from localStorage if it exists to avoid data loss
+    const localSaved = localStorage.getItem(STORAGE_KEY_ALL_ARTWORKS);
+    if (localSaved) {
+      const parsed: ProcessedArtwork[] = JSON.parse(localSaved);
+      await set(STORAGE_KEY_ALL_ARTWORKS, parsed);
+      localStorage.removeItem(STORAGE_KEY_ALL_ARTWORKS);
+    }
+
+    const parsed = await get<ProcessedArtwork[]>(STORAGE_KEY_ALL_ARTWORKS);
+    if (parsed && parsed.length > 0) {
+      const sorted = parsed.sort((a, b) => (b.modifiedAt || 0) - (a.modifiedAt || 0));
+      artworksSignal.set(sorted);
+      currentArtworkSignal.set(sorted[0]);
     }
   } catch (e) {
-    console.warn("Could not restore saved artworks from localStorage", e);
+    console.warn("Could not restore saved artworks from idb", e);
   }
 }
 
 export function saveArtworksList(newList: ProcessedArtwork[]) {
   artworksSignal.set(newList);
-  try {
-    localStorage.setItem(STORAGE_KEY_ALL_ARTWORKS, JSON.stringify(newList));
-  } catch (e) {
-    console.warn("Could not save to localStorage", e);
-  }
+  set(STORAGE_KEY_ALL_ARTWORKS, newList).catch((e) => {
+    console.warn("Could not save to idb", e);
+  });
 }
 
 export function handleSelectArtwork(artwork: ProcessedArtwork) {

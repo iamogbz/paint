@@ -19,6 +19,7 @@
     "canvas-confetti": "^1.9.4",
     "dotenv": "^17.2.3",
     "express": "^4.21.2",
+    "idb-keyval": "^6.3.0",
     "lit": "^3.3.3",
     "vite": "^6.2.3"
   },
