@@ -4,7 +4,7 @@ export interface SampleImage {
   dataUrl: string;
 }
 
-const imageModules = import.meta.glob('./challengeImages/*.png', { eager: true, import: 'default' });
+const imageModules = import.meta.glob('./challengeImages/*.{png,jpg,jpeg,webp,gif,svg}', { eager: true, import: 'default' });
 
 export function getDailyChallenge(): SampleImage {
   const keys = Object.keys(imageModules).sort();
