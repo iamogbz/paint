@@ -131,9 +131,11 @@ export class ArtworkGalleryModal extends SignalElement {
               });
               const usedColorsCount = art.colorStats.filter((s) => s.count > 0).length;
 
-              const validStats = art.colorStats.filter(
-                (s) => s.count > 0 && s.color.category !== "Neutrals & Outlines"
-              );
+              const validStats = art.colorStats
+                .filter(
+                  (s) => s.count > 0 && s.color.category !== "Neutrals & Outlines"
+                )
+                .sort((a, b) => b.count - a.count);
               
               const categoryMap = new Map<string, typeof validStats>();
               for (const stat of validStats) {
