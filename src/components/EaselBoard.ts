@@ -80,8 +80,13 @@ export class EaselBoard extends SignalElement {
     this.checkArtworkAndRender();
   }
 
+  private handleBlur = () => {
+    this.pointerDownOnCanvas = false;
+  };
+
   connectedCallback() {
     super.connectedCallback();
+    window.addEventListener("blur", this.handleBlur);
     window.addEventListener("easel-zoom-in", this.zoomIn);
     window.addEventListener("easel-zoom-out", this.zoomOut);
     window.addEventListener("easel-zoom-set", this.handleZoomSet);
@@ -93,6 +98,7 @@ export class EaselBoard extends SignalElement {
 
   disconnectedCallback() {
     super.disconnectedCallback();
+    window.removeEventListener("blur", this.handleBlur);
     window.removeEventListener("pointermove", this.handlePointerMove);
     window.removeEventListener("pointerup", this.handlePointerUp);
     window.removeEventListener("pointercancel", this.handlePointerUp);
@@ -485,6 +491,10 @@ export class EaselBoard extends SignalElement {
     if (e.pointerType === "mouse" && e.button !== 0) return;
     if (!this.pointerDownOnCanvas) return;
     
+    // Always reset the pointer down state so we don't accidentally paint on subsequent clicks
+    // that were swallowed during the pointerdown phase (e.g. dismissing overlays).
+    this.pointerDownOnCanvas = false;
+
     if (this.hasDragged) {
       return;
     }

@@ -27,9 +27,24 @@ export class PaintApp extends SignalElement {
     isWindowFocusedSignal.set(true);
   };
 
-  private handleGlobalPointerDown = () => {
+  private handleGlobalPointerDown = (e: Event) => {
     if (!isWindowFocusedSignal.get()) {
       isWindowFocusedSignal.set(true);
+      
+      const path = e.composedPath() as HTMLElement[];
+      const isModal = path.some(
+        (el) =>
+          el.tagName === "ARTWORK-GALLERY-MODAL" ||
+          el.tagName === "APP-TOUR"
+      );
+      
+      // If clicking outside the modals (e.g. on the canvas or controls), 
+      // consume the event so it ONLY dismisses the overlay and doesn't paint.
+      if (!isModal) {
+        e.stopPropagation();
+        e.stopImmediatePropagation();
+        e.preventDefault();
+      }
     }
   };
 
