@@ -651,6 +651,14 @@ export class EaselBoard extends SignalElement {
     }
   }
 
+  private updateTransformStyle() {
+    const el = this.querySelector('#easel-transform-element') as HTMLElement;
+    if (el) {
+      el.style.transform = `translate3d(${this.panX}px, ${this.panY}px, 0px) scale(${this.scale})`;
+      el.style.transition = (this.isDragging || this.isPinching) ? "none" : "transform 0.15s cubic-bezier(0.2, 0, 0, 1)";
+    }
+  }
+
   private setScale(s: number) {
     const newScale = Math.min(8.0, Math.max(1.0, s));
     if (newScale === 1) {
@@ -663,7 +671,7 @@ export class EaselBoard extends SignalElement {
       this.panY = this.clampPanY(this.panY, newScale);
     }
     zoomScaleSignal.set(this.scale);
-    this.requestUpdate();
+    this.updateTransformStyle();
   }
 
   private clampPanX(x: number, s: number): number {
@@ -686,7 +694,7 @@ export class EaselBoard extends SignalElement {
     this.panX = 0;
     this.panY = 0;
     zoomScaleSignal.set(1);
-    this.requestUpdate();
+    this.updateTransformStyle();
   };
 
   private zoomIn = () => {
@@ -712,6 +720,7 @@ export class EaselBoard extends SignalElement {
       this.startTouchY = (t1.clientY + t2.clientY) / 2;
       this.startPanX = this.panX;
       this.startPanY = this.panY;
+      this.updateTransformStyle();
     } else if (e.touches.length === 1) {
       this.isPinching = false;
       this.hasDragged = false;
@@ -721,6 +730,8 @@ export class EaselBoard extends SignalElement {
       this.startTouchY = e.touches[0].clientY;
       this.startPanX = this.panX;
       this.startPanY = this.panY;
+      this.updateTransformStyle();
+
 
       const now = Date.now();
       if (now - this.lastTapTime < 300) {
@@ -757,7 +768,7 @@ export class EaselBoard extends SignalElement {
       this.panX = this.clampPanX(this.startPanX + dx, targetScale);
       this.panY = this.clampPanY(this.startPanY + dy, targetScale);
       zoomScaleSignal.set(this.scale);
-      this.requestUpdate();
+      this.updateTransformStyle();
     } else if (e.touches.length === 1) {
       const dx = e.touches[0].clientX - this.pointerDownX;
       const dy = e.touches[0].clientY - this.pointerDownY;
@@ -768,7 +779,7 @@ export class EaselBoard extends SignalElement {
         e.preventDefault();
         this.panX = this.clampPanX(this.startPanX + dx, this.scale);
         this.panY = this.clampPanY(this.startPanY + dy, this.scale);
-        this.requestUpdate();
+        this.updateTransformStyle();
       }
     }
   };
@@ -778,6 +789,7 @@ export class EaselBoard extends SignalElement {
       this.isPinching = false;
       this.initialPinchDist = 0;
       zoomScaleSignal.set(this.scale);
+      this.updateTransformStyle();
     }
   };
 
@@ -797,6 +809,7 @@ export class EaselBoard extends SignalElement {
     this.startTouchY = e.clientY;
     this.startPanX = this.panX;
     this.startPanY = this.panY;
+    this.updateTransformStyle();
   };
 
   private handlePointerMove = (e: PointerEvent) => {
@@ -810,12 +823,13 @@ export class EaselBoard extends SignalElement {
       const dy = e.clientY - this.startTouchY;
       this.panX = this.clampPanX(this.startPanX + dx, this.scale);
       this.panY = this.clampPanY(this.startPanY + dy, this.scale);
-      this.requestUpdate();
+      this.updateTransformStyle();
     }
   };
 
   private handlePointerUp = () => {
     this.isDragging = false;
+    this.updateTransformStyle();
     setTimeout(() => {
       this.hasDragged = false;
     }, 0);
@@ -944,6 +958,7 @@ export class EaselBoard extends SignalElement {
         >
           <!-- Zoom Transform Element -->
           <div
+            id="easel-transform-element"
             style="width: 100%; display: flex; flex-direction: column; align-items: center; transform: translate3d(${this.panX}px, ${this.panY}px, 0px) scale(${this.scale}); transform-origin: center center; transition: ${this.isDragging || this.isPinching ? "none" : "transform 0.15s cubic-bezier(0.2, 0, 0, 1)"}; will-change: transform;"
           >
             <!-- Top Wooden Clamp -->
