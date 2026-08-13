@@ -468,6 +468,9 @@ export class EaselBoard extends SignalElement {
       this.hasDragged = false;
       return;
     }
+    if (draggedColorSignal.get()) {
+      return;
+    }
     if (!this.regionMapData) return;
     const currentArtwork = currentArtworkSignal.get();
     if (!currentArtwork) return;
@@ -520,7 +523,7 @@ export class EaselBoard extends SignalElement {
   };
 
   private handleCanvasMouseMove = (e: MouseEvent) => {
-    if (this.isDragging || this.hasDragged) {
+    if (this.isDragging || this.hasDragged || draggedColorSignal.get()) {
       return;
     }
     if (!this.regionMapData) return;
@@ -544,6 +547,7 @@ export class EaselBoard extends SignalElement {
   };
 
   private handleCanvasMouseLeave = () => {
+    if (draggedColorSignal.get()) return;
     if (this.hoveredRegionId !== null) {
       this.hoveredRegionId = null;
       this.drawArtboardCanvas();
