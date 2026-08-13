@@ -23,6 +23,7 @@ export const zoomScaleSignal = signal<number>(1);
 // Drag and drop colors
 export const draggedColorSignal = signal<string | null>(null);
 export const draggedPositionSignal = signal<{x: number, y: number} | null>(null);
+export const isWindowFocusedSignal = signal<boolean>(true);
 
 // Dynamic Style Signals
 export const appBackgroundStyleSignal = computed(() => ({

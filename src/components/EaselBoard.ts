@@ -542,7 +542,11 @@ export class EaselBoard extends SignalElement {
   };
 
   private handleCanvasMouseMove = (e: MouseEvent) => {
-    if (this.isDragging || this.hasDragged || draggedColorSignal.get()) {
+    if (e.buttons === 0 && this.isDragging) {
+      this.isDragging = false;
+      this.hasDragged = false;
+    }
+    if (this.isDragging || draggedColorSignal.get()) {
       return;
     }
     if (!this.regionMapData) return;
@@ -864,6 +868,11 @@ export class EaselBoard extends SignalElement {
 
 
   private handlePointerMove = (e: PointerEvent) => {
+    if (e.pointerType === "mouse" && e.buttons === 0 && this.isDragging) {
+      this.isDragging = false;
+      this.hasDragged = false;
+      this.updateTransformStyle();
+    }
     if (this.isPinching || !this.isDragging) return;
     const dist = Math.hypot(e.clientX - this.pointerDownX, e.clientY - this.pointerDownY);
     if (dist > 10) {
@@ -880,6 +889,9 @@ export class EaselBoard extends SignalElement {
 
   private handlePointerUp = () => {
     this.isDragging = false;
+    setTimeout(() => {
+      this.hasDragged = false;
+    }, 0);
     this.updateTransformStyle();
   };
 
@@ -961,7 +973,7 @@ export class EaselBoard extends SignalElement {
       width: "100%",
       backgroundColor: "#FFFFFF",
       border: "4px solid #845442",
-      borderRadius: "28px",
+      borderRadius: "8px",
       boxShadow: "12px 12px 0px 0px rgba(0,0,0,0.15)",
       position: "relative" as const,
       zIndex: 10,
@@ -1099,7 +1111,7 @@ export class EaselBoard extends SignalElement {
                   ? html`
                       <div style="width: 100%; display: flex; flex-direction: column; align-items: center;">
                         <div
-                          style="position: relative; width: 100%; aspect-ratio: ${currentArtwork.width} / ${currentArtwork.height}; border-radius: 12px; overflow: hidden; display: flex; align-items: center; justify-content: center; background-color: #ffffff; border: 2px solid rgba(0, 0, 0, 0.25);"
+                          style="position: relative; width: 100%; aspect-ratio: ${currentArtwork.width} / ${currentArtwork.height}; border-radius: 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; background-color: #ffffff; border: 2px solid rgba(0, 0, 0, 0.25);"
                         >
                           <canvas
                             id="artboard-canvas"
