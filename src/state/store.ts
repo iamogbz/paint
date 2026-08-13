@@ -123,6 +123,20 @@ export async function handleImageSelected(imageSrc: string, name: string = "Unti
   }
 }
 
+export function handleRenameArtwork(id: string, newName: string) {
+  const updated = artworksSignal.get().map((art) => {
+    if (art.id === id) {
+      return { ...art, name: newName, modifiedAt: Date.now() };
+    }
+    return art;
+  });
+  saveArtworksList(updated);
+  const current = currentArtworkSignal.get();
+  if (current?.id === id) {
+    currentArtworkSignal.set({ ...current, name: newName, modifiedAt: Date.now() });
+  }
+}
+
 export function handleDeleteArtwork(id: string) {
   const updated = artworksSignal.get().filter((art) => art.id !== id);
   if (currentArtworkSignal.get()?.id === id) {

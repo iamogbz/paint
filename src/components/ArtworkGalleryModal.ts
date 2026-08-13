@@ -1,5 +1,5 @@
 import { html } from "lit";
-import { customElement } from "lit/decorators.js";
+import { customElement, state } from "lit/decorators.js";
 import { SignalElement } from "../utils/SignalElement";
 import {
   isGalleryOpenSignal,
@@ -7,6 +7,7 @@ import {
   currentArtworkSignal,
   handleSelectArtwork,
   handleDeleteArtwork,
+  handleRenameArtwork,
 } from "../state/store";
 import {
   iconGalleryVertical,
@@ -15,12 +16,18 @@ import {
   iconDownload,
   iconTrash2,
   iconImage,
+  iconEdit2,
 } from "./icons";
 import { soundEffects } from "../utils/soundEffects";
 import { downloadImage, exportArtworkCleanDataUrl } from "../utils/download";
 
 @customElement("artwork-gallery-modal")
 export class ArtworkGalleryModal extends SignalElement {
+  @state()
+  private editingId: string | null = null;
+  @state()
+  private editNameValue: string = "";
+
   render() {
     const isOpen = isGalleryOpenSignal.get();
     if (!isOpen) return html``;
@@ -230,9 +237,59 @@ export class ArtworkGalleryModal extends SignalElement {
                   <!-- Details -->
                   <div style="flex: 1; min-width: 200px; display: flex; flex-direction: column; justify-content: space-between;">
                     <div>
-                      <h3 style="font-weight: 900; color: #000000; font-size: 1rem; margin: 0; white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">
-                        ${art.name}
-                      </h3>
+                      ${this.editingId === art.id
+                        ? html`
+                            <input
+                              type="text"
+                              .value="${this.editNameValue}"
+                              @input="${(e: Event) => {
+                                this.editNameValue = (e.target as HTMLInputElement).value;
+                              }}"
+                              @keydown="${(e: KeyboardEvent) => {
+                                if (e.key === 'Enter') {
+                                  handleRenameArtwork(art.id, this.editNameValue || "Untitled");
+                                  this.editingId = null;
+                                } else if (e.key === 'Escape') {
+                                  this.editingId = null;
+                                }
+                              }}"
+                              @blur="${() => {
+                                handleRenameArtwork(art.id, this.editNameValue || "Untitled");
+                                this.editingId = null;
+                              }}"
+                              style="font-weight: 900; color: #000000; font-size: 1rem; margin: 0; padding: 2px 4px; border: 2px solid #000; border-radius: 4px; width: 100%; box-sizing: border-box;"
+                              autofocus
+                            />
+                          `
+                        : html`
+                            <h3 
+                              style="display: flex; align-items: center; font-weight: 900; color: #000000; font-size: 1rem; margin: 0; cursor: pointer; width: 100%;"
+                              @click="${() => {
+                                if (!art.name.startsWith('Daily Challenge')) {
+                                  this.editingId = art.id;
+                                  this.editNameValue = art.name;
+                                }
+                              }}"
+                            >
+                              <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${art.name}</span>
+                              ${!art.name.startsWith('Daily Challenge') 
+                                ? html`
+                                    <button 
+                                      style="margin-left: 0.5rem; background: none; border: none; cursor: pointer; padding: 0; display: flex; align-items: center; flex-shrink: 0;"
+                                      title="Rename"
+                                      @click="${(e: Event) => {
+                                        e.stopPropagation();
+                                        this.editingId = art.id;
+                                        this.editNameValue = art.name;
+                                      }}"
+                                    >
+                                      ${iconEdit2(14, "#4A2810")}
+                                    </button>
+                                  `
+                                : ""}
+                            </h3>
+                          `
+                      }
                       <p style="font-size: 0.75rem; color: #4A2810; font-weight: 700; margin: 0.25rem 0 0 0;">
                         Created: ${dateStr} • ${art.width}×${art.height}px
                       </p>
