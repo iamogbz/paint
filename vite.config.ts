@@ -53,6 +53,7 @@ export default defineConfig(() => {
       directoryListingPlugin(),
       VitePWA({
         registerType: 'autoUpdate',
+        devOptions: { enabled: true },
         manifestFilename: 'manifest.json',
         includeAssets: ['favicon.svg'],
         manifest: {
