@@ -55,6 +55,10 @@ export class EaselBoard extends SignalElement {
   private artworkHeight = 0;
   private offscreenCanvas: HTMLCanvasElement | null = null;
   private offscreenCtx: CanvasRenderingContext2D | null = null;
+  private lastPaintedStateStr = "";
+  private lastTargetHex: string | null = null;
+  private borderOverlayCanvas: HTMLCanvasElement | null = null;
+  private borderOverlayCtx: CanvasRenderingContext2D | null = null;
 
   public triggerFilePicker = () => {
     const input = document.getElementById("easel-file-input") as HTMLInputElement;
@@ -321,36 +325,49 @@ export class EaselBoard extends SignalElement {
       this.offscreenCanvas.width = w;
       this.offscreenCanvas.height = h;
       this.offscreenCtx = this.offscreenCanvas.getContext("2d", { willReadFrequently: true });
+      this.lastPaintedStateStr = "";
     }
 
-    if (!this.offscreenCtx) return;
+    if (!this.borderOverlayCanvas || this.borderOverlayCanvas.width !== w || this.borderOverlayCanvas.height !== h) {
+      this.borderOverlayCanvas = document.createElement("canvas");
+      this.borderOverlayCanvas.width = w;
+      this.borderOverlayCanvas.height = h;
+      this.borderOverlayCtx = this.borderOverlayCanvas.getContext("2d");
+      this.lastTargetHex = null;
+    }
+
+    if (!this.offscreenCtx || !this.borderOverlayCtx) return;
 
     // 1. Render PURE PAINT CANVAS PIXELS (no borders or darkening embedded in image data!)
-    const imgData = this.offscreenCtx.createImageData(w, h);
-    const pixels = imgData.data;
-    const paintedState = currentArtwork.paintedRegionsState || {};
+    const currentPaintedStateStr = currentArtwork.modifiedAt ? currentArtwork.modifiedAt.toString() : "0";
+    if (this.lastPaintedStateStr !== currentPaintedStateStr) {
+      const imgData = this.offscreenCtx.createImageData(w, h);
+      const pixels = imgData.data;
+      const paintedState = currentArtwork.paintedRegionsState || {};
 
-    for (let i = 0; i < w * h; i++) {
-      const pxIdx = i * 4;
-      const regionId = this.regionMapData[i];
-      const paintedColor = paintedState[regionId];
+      for (let i = 0; i < w * h; i++) {
+        const pxIdx = i * 4;
+        const regionId = this.regionMapData[i];
+        const paintedColor = paintedState[regionId];
 
-      if (paintedColor) {
-        const rgba = this.parseColorToRGBA(paintedColor);
-        pixels[pxIdx] = rgba[0];
-        pixels[pxIdx + 1] = rgba[1];
-        pixels[pxIdx + 2] = rgba[2];
-        pixels[pxIdx + 3] = rgba[3];
-      } else {
-        // Unpainted island starts as clean white
-        pixels[pxIdx] = 255;
-        pixels[pxIdx + 1] = 255;
-        pixels[pxIdx + 2] = 255;
-        pixels[pxIdx + 3] = 255;
+        if (paintedColor) {
+          const rgba = this.parseColorToRGBA(paintedColor);
+          pixels[pxIdx] = rgba[0];
+          pixels[pxIdx + 1] = rgba[1];
+          pixels[pxIdx + 2] = rgba[2];
+          pixels[pxIdx + 3] = rgba[3];
+        } else {
+          // Unpainted island starts as clean white
+          pixels[pxIdx] = 255;
+          pixels[pxIdx + 1] = 255;
+          pixels[pxIdx + 2] = 255;
+          pixels[pxIdx + 3] = 255;
+        }
       }
-    }
 
-    this.offscreenCtx.putImageData(imgData, 0, 0);
+      this.offscreenCtx.putImageData(imgData, 0, 0);
+      this.lastPaintedStateStr = currentPaintedStateStr;
+    }
 
     // 2. Draw base paint canvas onto screen context
     destCtx.fillStyle = "#ffffff";
@@ -361,43 +378,44 @@ export class EaselBoard extends SignalElement {
     const activeColor = activeHighlightColorSignal.get();
     const draggedColorHex = draggedColorSignal.get();
     const targetHex = draggedColorHex || activeColor?.hexCode;
+    const cacheableTargetHex = targetHex || "none";
 
-    if (this.isBorderPixel && targetHex && targetHex !== PALETTE_COLOR.transparent.hexCode) {
-      const targetRGBARaw = this.parseColorToRGBA(targetHex);
-      const darkenedRGB = this.getDarkenedRGB(targetRGBARaw[0], targetRGBARaw[1], targetRGBARaw[2]);
-      const targetRGBA = [darkenedRGB[0], darkenedRGB[1], darkenedRGB[2], targetRGBARaw[3]];
-      const targetHexUpper = targetHex.toUpperCase();
-      const overlayImgData = destCtx.createImageData(w, h);
-      const overlayPixels = overlayImgData.data;
+    if (this.lastTargetHex !== cacheableTargetHex) {
+      this.borderOverlayCtx.clearRect(0, 0, w, h);
+      if (this.isBorderPixel && targetHex && targetHex !== PALETTE_COLOR.transparent.hexCode) {
+        const targetRGBARaw = this.parseColorToRGBA(targetHex);
+        const darkenedRGB = this.getDarkenedRGB(targetRGBARaw[0], targetRGBARaw[1], targetRGBARaw[2]);
+        const targetRGBA = [darkenedRGB[0], darkenedRGB[1], darkenedRGB[2], targetRGBARaw[3]];
+        const targetHexUpper = targetHex.toUpperCase();
+        const overlayImgData = this.borderOverlayCtx.createImageData(w, h);
+        const overlayPixels = overlayImgData.data;
 
-      let hasVisibleBorders = false;
-      for (let i = 0; i < w * h; i++) {
-        if (this.isBorderPixel[i] === 1) {
-          const regionId = this.regionMapData[i];
-          const expectedColor = this.regionExpectedColors.get(regionId) || currentArtwork.regionExpectedColors?.[regionId];
-          
-          if (expectedColor && expectedColor.startsWith(targetHexUpper.substring(0, 7))) { 
-            const pxIdx = i * 4;
-            overlayPixels[pxIdx] = targetRGBA[0];
-            overlayPixels[pxIdx + 1] = targetRGBA[1];
-            overlayPixels[pxIdx + 2] = targetRGBA[2];
-            overlayPixels[pxIdx + 3] = 128; // 50% partially transparent colored guide border
-            hasVisibleBorders = true;
+        let hasVisibleBorders = false;
+        for (let i = 0; i < w * h; i++) {
+          if (this.isBorderPixel[i] === 1) {
+            const regionId = this.regionMapData[i];
+            const expectedColor = this.regionExpectedColors.get(regionId) || currentArtwork.regionExpectedColors?.[regionId];
+            
+            if (expectedColor && expectedColor.startsWith(targetHexUpper.substring(0, 7))) { 
+              const pxIdx = i * 4;
+              overlayPixels[pxIdx] = targetRGBA[0];
+              overlayPixels[pxIdx + 1] = targetRGBA[1];
+              overlayPixels[pxIdx + 2] = targetRGBA[2];
+              overlayPixels[pxIdx + 3] = 128; // 50% partially transparent colored guide border
+              hasVisibleBorders = true;
+            }
           }
         }
-      }
 
-      if (hasVisibleBorders) {
-        const tempOverlayCanvas = document.createElement("canvas");
-        tempOverlayCanvas.width = w;
-        tempOverlayCanvas.height = h;
-        const tempCtx = tempOverlayCanvas.getContext("2d");
-        if (tempCtx) {
-          tempCtx.putImageData(overlayImgData, 0, 0);
-          destCtx.drawImage(tempOverlayCanvas, 0, 0);
+        if (hasVisibleBorders) {
+          this.borderOverlayCtx.putImageData(overlayImgData, 0, 0);
         }
       }
+      this.lastTargetHex = cacheableTargetHex;
     }
+
+    // Draw the cached border overlay
+    destCtx.drawImage(this.borderOverlayCanvas, 0, 0);
 
     // 4. Hover Highlight Pass: draw active hover region outline overlay
     if (this.hoveredRegionId !== null && this.regionBorderPixels) {
@@ -503,10 +521,6 @@ export class EaselBoard extends SignalElement {
 
   private handleCanvasMouseMove = (e: MouseEvent) => {
     if (this.isDragging || this.hasDragged) {
-      if (this.hoveredRegionId !== null) {
-        this.hoveredRegionId = null;
-        this.drawArtboardCanvas();
-      }
       return;
     }
     if (!this.regionMapData) return;
@@ -536,9 +550,12 @@ export class EaselBoard extends SignalElement {
     }
   };
 
+  private dropperBufferPx = 60;
+
   private handleColorDragMove = (e: Event) => {
     const customEvent = e as CustomEvent;
-    const { x: clientX, y: clientY } = customEvent.detail;
+    const { x: clientX, y: mouseY } = customEvent.detail;
+    const clientY = mouseY - this.dropperBufferPx;
     if (!this.regionMapData) return;
 
     const canvas = this.querySelector("#artboard-canvas") as HTMLCanvasElement;
@@ -573,7 +590,8 @@ export class EaselBoard extends SignalElement {
 
   private handleColorDrop = (e: Event) => {
     const customEvent = e as CustomEvent;
-    const { x: clientX, y: clientY, color } = customEvent.detail;
+    const { x: clientX, y: mouseY, color } = customEvent.detail;
+    const clientY = mouseY - this.dropperBufferPx;
     
     // Clear hover effect
     if (this.hoveredRegionId !== null) {
@@ -634,7 +652,7 @@ export class EaselBoard extends SignalElement {
         this.containerElement.removeEventListener("touchend", this.handleTouchEnd);
         this.containerElement.removeEventListener("touchcancel", this.handleTouchEnd);
         this.containerElement.removeEventListener("wheel", this.handleWheel);
-        this.containerElement.removeEventListener("pointerdown", this.handlePointerDown);
+        // this.containerElement.removeEventListener("pointerdown", this.handlePointerDown);
       }
       this.containerElement = container;
       container.addEventListener("touchstart", this.handleTouchStart, { passive: false });
@@ -642,10 +660,12 @@ export class EaselBoard extends SignalElement {
       container.addEventListener("touchend", this.handleTouchEnd, { passive: false });
       container.addEventListener("touchcancel", this.handleTouchEnd, { passive: false });
       container.addEventListener("wheel", this.handleWheel, { passive: false });
-      container.addEventListener("pointerdown", this.handlePointerDown);
+      // container.addEventListener("pointerdown", this.handlePointerDown);
 
-      window.removeEventListener("pointermove", this.handlePointerMove);
-      window.removeEventListener("pointerup", this.handlePointerUp);
+      // window.removeEventListener("pointerdown", this.handlePointerDown);
+      // window.removeEventListener("pointermove", this.handlePointerMove);
+      // window.removeEventListener("pointerup", this.handlePointerUp);
+      window.addEventListener("pointerdown", this.handlePointerDown);
       window.addEventListener("pointermove", this.handlePointerMove);
       window.addEventListener("pointerup", this.handlePointerUp);
     }

@@ -95,7 +95,8 @@ export class PaintingControls extends SignalElement {
       }
 
       if (isDragging) {
-        draggedPositionSignal.set({ x: moveEvent.clientX, y: moveEvent.clientY });
+        // offset by certain amount on the Y axis for better visibility
+        draggedPositionSignal.set({ x: moveEvent.clientX, y: moveEvent.clientY - 60 });
         const moveEvt = new CustomEvent("color-drag-move", {
           detail: { x: moveEvent.clientX, y: moveEvent.clientY }
         });
