@@ -14,7 +14,6 @@ export const isProcessingSignal = signal<boolean>(false);
 export const soundEnabledSignal = signal<boolean>(true);
 export const activeHighlightColorSignal = signal<PaletteColor | null>(null);
 export const isGalleryOpenSignal = signal<boolean>(false);
-export const selectedCategorySignal = signal<string>("All");
 export const copiedHexSignal = signal<string | null>(null);
 export const undoStackSignal = signal<Record<number, string>[]>([]);
 export const isDragOverSignal = signal<boolean>(false);

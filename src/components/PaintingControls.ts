@@ -3,7 +3,6 @@ import { customElement, property } from "lit/decorators.js";
 import { SignalElement } from "../utils/SignalElement";
 import { PaletteColor, UsedColorStat } from "../types";
 import {
-  selectedCategorySignal,
   activeHighlightColorSignal,
   copiedHexSignal,
   artworksSignal,
@@ -26,14 +25,11 @@ import {
   iconZoomIn,
   iconZoomOut,
   iconRotateCcw,
-  iconMove
+  iconMove,
 } from "./icons";
 import { transparentImgCss } from "./constants";
 import { soundEffects } from "../utils/soundEffects";
 import { downloadImage, exportArtworkCleanDataUrl } from "../utils/download";
-
-const PALETTE_CATEGORIES_ALL = "All";
-const PALETTE_CATEGORIES_USED = "Used Only";
 
 @customElement("painting-controls")
 export class PaintingControls extends SignalElement {
@@ -72,9 +68,14 @@ export class PaintingControls extends SignalElement {
       if (!this.isPanning) return;
       if (hasDragged) {
         const speedFactor = 0.1;
-        window.dispatchEvent(new CustomEvent("easel-pan-delta", {
-          detail: { dx: currentDx * speedFactor, dy: currentDy * speedFactor }
-        }));
+        window.dispatchEvent(
+          new CustomEvent("easel-pan-delta", {
+            detail: {
+              dx: currentDx * speedFactor,
+              dy: currentDy * speedFactor,
+            },
+          })
+        );
       }
       this.panAnimationFrame = requestAnimationFrame(panLoop);
     };
@@ -96,7 +97,9 @@ export class PaintingControls extends SignalElement {
       if (!hasDragged) {
         const currentScale = zoomScaleSignal.get();
         const nextScale = currentScale === 1 ? 2 : 1;
-        window.dispatchEvent(new CustomEvent("easel-zoom-set", { detail: { scale: nextScale } }));
+        window.dispatchEvent(
+          new CustomEvent("easel-zoom-set", { detail: { scale: nextScale } })
+        );
       }
     };
 
@@ -160,9 +163,12 @@ export class PaintingControls extends SignalElement {
 
       if (isDragging) {
         // offset by certain amount on the Y axis for better visibility
-        draggedPositionSignal.set({ x: moveEvent.clientX, y: moveEvent.clientY - 60 });
+        draggedPositionSignal.set({
+          x: moveEvent.clientX,
+          y: moveEvent.clientY - 60,
+        });
         const moveEvt = new CustomEvent("color-drag-move", {
-          detail: { x: moveEvent.clientX, y: moveEvent.clientY }
+          detail: { x: moveEvent.clientX, y: moveEvent.clientY },
         });
         window.dispatchEvent(moveEvt);
       }
@@ -205,11 +211,16 @@ export class PaintingControls extends SignalElement {
     const artwork = currentArtworkSignal.get();
     if (!artwork) return;
     const cleanDataUrl = exportArtworkCleanDataUrl(artwork);
-    downloadImage(cleanDataUrl, `paint_by_numbers_${artwork.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}_paint.ogbizi.com.png`);
+    downloadImage(
+      cleanDataUrl,
+      `paint_by_numbers_${artwork.name
+        .toLowerCase()
+        .replace(/[^a-z0-9]+/g, "-")
+        .replace(/(^-|-$)/g, "")}_paint.ogbizi.com.png`
+    );
   };
 
   render() {
-    const selectedCat = selectedCategorySignal.get();
     const activeColor = activeHighlightColorSignal.get();
     const copiedHex = copiedHexSignal.get();
     const currentArtwork = currentArtworkSignal.get();
@@ -227,14 +238,21 @@ export class PaintingControls extends SignalElement {
 
     // Map stats by color ID
     const statsMap = new Map<string, UsedColorStat>();
-    (this.colorStats || []).forEach((stat) => statsMap.set(stat.color.hexCode, stat));
+    (this.colorStats || []).forEach((stat) =>
+      statsMap.set(stat.color.hexCode, stat)
+    );
 
     // Check which colors are fully painted
     const paintedRegionsState = currentArtwork?.paintedRegionsState || {};
-    const expectedColorStatus = new Map<string, { total: number; painted: number }>();
+    const expectedColorStatus = new Map<
+      string,
+      { total: number; painted: number }
+    >();
 
     if (currentArtwork?.regionExpectedColors) {
-      for (const [regionIdStr, expectedHex] of Object.entries(currentArtwork.regionExpectedColors)) {
+      for (const [regionIdStr, expectedHex] of Object.entries(
+        currentArtwork.regionExpectedColors
+      )) {
         if (!expectedColorStatus.has(expectedHex)) {
           expectedColorStatus.set(expectedHex, { total: 0, painted: 0 });
         }
@@ -248,16 +266,13 @@ export class PaintingControls extends SignalElement {
       }
     }
 
-    const allColors = (this.colorStats || []).map(s => s.color);
-    const filteredColors = allColors.filter((color) => {
-      const stat = statsMap.get(color.hexCode);
-      const isUsed = stat?.count > 0;
-
-      if (selectedCat === PALETTE_CATEGORIES_USED) return isUsed;
-      return true;
-    });
-
-    const categories = [PALETTE_CATEGORIES_ALL, PALETTE_CATEGORIES_USED];
+    const allColors = (this.colorStats || [])
+      .sort((sa, sb) => {
+        if (sa.color.hexCode === "#00000000") return -1;
+        if (sb.color.hexCode === "#00000000") return 1;
+        return sb.count - sa.count;
+      })
+      .map((s) => s.color);
 
     const containerStyle = {
       position: "fixed" as const,
@@ -287,7 +302,9 @@ export class PaintingControls extends SignalElement {
       justifyContent: "space-between",
       gap: "0.5rem",
       padding: "0.5rem",
-      borderBottom: showPhotoControls ? "2px solid rgba(0, 0, 0, 0.15)" : "none",
+      borderBottom: showPhotoControls
+        ? "2px solid rgba(0, 0, 0, 0.15)"
+        : "none",
       flexShrink: 0,
     };
 
@@ -329,7 +346,7 @@ export class PaintingControls extends SignalElement {
       overflowX: "auto" as const,
       overflowY: "hidden" as const,
       width: "100%",
-      padding: "0.25rem 0.25rem 0.75rem 0.25rem",
+      padding: "0.25rem 0.75rem",
       boxSizing: "border-box" as const,
       scrollBehavior: "smooth" as const,
       WebkitOverflowScrolling: "touch" as const,
@@ -337,7 +354,10 @@ export class PaintingControls extends SignalElement {
     };
 
     return html`
-      <div id="color-palette-section" style=${this.renderStyleObject(containerStyle)}>
+      <div
+        id="color-palette-section"
+        style=${this.renderStyleObject(containerStyle)}
+      >
         <!-- Header Controls: Action Buttons (Left), Zoom (Middle) & Category Toggles (Right) -->
         <div style=${this.renderStyleObject(headerStyle)}>
           <!-- Left Group: Action Buttons -->
@@ -373,11 +393,15 @@ export class PaintingControls extends SignalElement {
           <!-- Middle Group: Canvas Zoom Controls (Only when image is loaded) -->
           ${showPhotoControls
             ? html`
-                <div id="easel-zoom-container" style="display: flex; align-items: center; gap: 0.5rem;">
+                <div
+                  id="easel-zoom-container"
+                  style="display: flex; align-items: center; gap: 0.5rem;"
+                >
                   <!-- Zoom Out Button -->
                   <button
                     title="Zoom Out"
-                    @click=${() => window.dispatchEvent(new CustomEvent("easel-zoom-out"))}
+                    @click=${() =>
+                      window.dispatchEvent(new CustomEvent("easel-zoom-out"))}
                     style=${this.renderStyleObject({
                       width: "36px",
                       height: "36px",
@@ -422,7 +446,8 @@ export class PaintingControls extends SignalElement {
                   <!-- Zoom In Button -->
                   <button
                     title="Zoom In"
-                    @click=${() => window.dispatchEvent(new CustomEvent("easel-zoom-in"))}
+                    @click=${() =>
+                      window.dispatchEvent(new CustomEvent("easel-zoom-in"))}
                     style=${this.renderStyleObject({
                       width: "36px",
                       height: "36px",
@@ -447,7 +472,10 @@ export class PaintingControls extends SignalElement {
           <!-- Right Group: Color Category Buttons (Only when image is loaded) -->
           ${showPhotoControls
             ? html`
-                <div id="palette-mode-toggles" style="display: flex; align-items: center; gap: 0.5rem;">
+                <div
+                  id="palette-mode-toggles"
+                  style="display: flex; align-items: center; gap: 0.5rem;"
+                >
                   <!-- Undo Button -->
                   <button
                     id="undo-btn"
@@ -477,39 +505,28 @@ export class PaintingControls extends SignalElement {
                   >
                     ${iconRotateCcw(18, "#000000")}
                   </button>
-                  ${categories.map((cat) => {
-                    const isSel = selectedCat === cat;
-                    const btnStyle = {
+                  <button
+                    @click=${() => {
+                      // TODO: reenable canvas drag to pan
+                    }}
+                    style=${this.renderStyleObject({
                       width: "36px",
                       height: "36px",
                       borderRadius: "50%",
-                      backgroundColor: isSel ? "#000000" : "#FFFFFF",
+                      backgroundColor: "#000000",
                       border: "2.5px solid #000000",
-                      boxShadow: "2px 2px 0px 0px #000000",
+                      boxShadow: "2px 2px 0px 0px #E63946",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
                       cursor: "pointer",
                       padding: "0",
                       transition: "transform 0.15s ease, box-shadow 0.15s ease",
-                    };
-
-                    return html`
-                      <button
-                        @click=${() => {
-                          selectedCategorySignal.set(cat);
-                        }}
-                        style=${this.renderStyleObject(btnStyle)}
-                        title="${cat === PALETTE_CATEGORIES_ALL
-                          ? 'All Colours'
-                          : 'Photo Swatch'}"
-                      >
-                        ${cat === PALETTE_CATEGORIES_ALL
-                          ? iconPaintBucket(18, isSel ? "#FFFFFF" : "#000000")
-                          : iconPalette(18, isSel ? "#FFFFFF" : "#000000")}
-                      </button>
-                    `;
-                  })}
+                    })}
+                    title="All Colours"
+                  >
+                    ${iconPaintBucket(18, "#FFFFFF")}
+                  </button>
                 </div>
               `
             : ""}
@@ -519,11 +536,14 @@ export class PaintingControls extends SignalElement {
         ${showPhotoControls
           ? html`
               <div style=${this.renderStyleObject(scrollRowStyle)}>
-                ${filteredColors.map((color) => {
+                ${allColors.map((color) => {
                   const stat = statsMap.get(color.hexCode);
                   const isUsed = stat?.count > 0;
                   const colorStatus = expectedColorStatus.get(color.hexCode);
-                  const isFullyPainted = colorStatus ? colorStatus.total > 0 && colorStatus.total === colorStatus.painted : false;
+                  const isFullyPainted = colorStatus
+                    ? colorStatus.total > 0 &&
+                      colorStatus.total === colorStatus.painted
+                    : false;
 
                   let progressLabel = "♾️";
                   if (colorStatus && colorStatus.total > 0) {
@@ -543,9 +563,15 @@ export class PaintingControls extends SignalElement {
                     borderRadius: "1rem",
                     transition: "all 0.15s ease",
                     cursor: "pointer",
-                    border: isSelected ? "3px solid #E63946" : "2.5px solid transparent",
-                    backgroundColor: isSelected ? "rgba(254, 243, 199, 0.95)" : "rgba(255, 255, 255, 0.5)",
-                    boxShadow: isSelected ? "3px 3px 0px 0px #E63946" : "0px 0px 0px 0px rgba(0,0,0,0.08)",
+                    border: isSelected
+                      ? "3px solid #E63946"
+                      : "2.5px solid transparent",
+                    backgroundColor: isSelected
+                      ? "rgba(254, 243, 199, 0.95)"
+                      : "rgba(255, 255, 255, 0.5)",
+                    boxShadow: isSelected
+                      ? "3px 3px 0px 0px #E63946"
+                      : "0px 0px 0px 0px rgba(0,0,0,0.08)",
                     transform: isSelected ? "scale(1.05)" : "scale(1)",
                     opacity: isSelected ? "1" : "0.85",
                     touchAction: isSelected ? "none" : "auto",
@@ -562,17 +588,19 @@ export class PaintingControls extends SignalElement {
                     justifyContent: "center",
                     position: "relative" as const,
                     backgroundColor: color.hexCode,
-                    backgroundSize: '1.5rem 1.5rem',
-                    backgroundRepeat: 'repeat',
-                    backgroundImage: color.hexCode === "#00000000"
-                      ? transparentImgCss
-                      : color.hexCode,
+                    backgroundSize: "1.5rem 1.5rem",
+                    backgroundRepeat: "repeat",
+                    backgroundImage:
+                      color.hexCode === "#00000000"
+                        ? transparentImgCss
+                        : color.hexCode,
                     transition: "transform 0.15s ease",
                   };
 
                   return html`
                     <button
-                      @pointerdown=${(e: PointerEvent) => this.handleSwatchPointerDown(e, color)}
+                      @pointerdown=${(e: PointerEvent) =>
+                        this.handleSwatchPointerDown(e, color)}
                       style=${this.renderStyleObject(colorCardStyle)}
                     >
                       <!-- Color Circle -->
@@ -589,25 +617,19 @@ export class PaintingControls extends SignalElement {
 
                         <!-- Copied Feedback -->
                         <div
-                          style="position: absolute; inset: 0; width: 50%; height: 50%; margin: auto; background-color: #FFFFFF; border-radius: 9999px; display: flex; align-items: center; justify-content: center; opacity: ${isCopied ? 1 : 0}; transition: opacity 0.3s;"
+                          style="position: absolute; inset: 0; width: 50%; height: 50%; margin: auto; background-color: #FFFFFF; border-radius: 9999px; display: flex; align-items: center; justify-content: center; opacity: ${isCopied
+                            ? 1
+                            : 0}; transition: opacity 0.3s;"
                         >
                           ${iconPaintbrush(14, "#000000")}
                         </div>
                       </div>
 
-                      <!-- Color Label -->
+                      <!-- Color Label/Progress -->
                       <span
                         style="font-size: 0.6875rem; font-weight: 900; color: #3D2314; margin-top: 0.375rem; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; line-height: 1.2;"
                       >
-                        ${color.hexCode}
-                      </span>
-
-                      <!-- Progress -->
-                      <span
-                        class="color-progress-label"
-                        style="font-size: 0.75rem; font-weight: ${isUsed ? "900" : "700"}; color: ${isUsed ? "#000000" : "#6B7280"};"
-                      >
-                        ${progressLabel}
+                        ${color.hexCode === "#00000000" ? "Eraser" : progressLabel}
                       </span>
                     </button>
                   `;
@@ -621,7 +643,10 @@ export class PaintingControls extends SignalElement {
 
   private renderStyleObject(styleObj: Record<string, string | number>): string {
     return Object.entries(styleObj)
-      .map(([k, v]) => `${k.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}: ${v};`)
+      .map(
+        ([k, v]) =>
+          `${k.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}: ${v};`
+      )
       .join(" ");
   }
 }
