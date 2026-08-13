@@ -363,7 +363,9 @@ export class EaselBoard extends SignalElement {
     const targetHex = draggedColorHex || activeColor?.hexCode;
 
     if (this.isBorderPixel && targetHex && targetHex !== PALETTE_COLOR.transparent.hexCode) {
-      const targetRGBA = this.parseColorToRGBA(targetHex);
+      const targetRGBARaw = this.parseColorToRGBA(targetHex);
+      const darkenedRGB = this.getDarkenedRGB(targetRGBARaw[0], targetRGBARaw[1], targetRGBARaw[2]);
+      const targetRGBA = [darkenedRGB[0], darkenedRGB[1], darkenedRGB[2], targetRGBARaw[3]];
       const targetHexUpper = targetHex.toUpperCase();
       const overlayImgData = destCtx.createImageData(w, h);
       const overlayPixels = overlayImgData.data;
@@ -402,8 +404,9 @@ export class EaselBoard extends SignalElement {
       const borderIndices = this.regionBorderPixels.get(this.hoveredRegionId);
       if (borderIndices && borderIndices.length > 0) {
         if (targetHex && targetHex !== PALETTE_COLOR.transparent.hexCode) {
-          const targetRGBA = this.parseColorToRGBA(targetHex);
-          destCtx.fillStyle = `rgba(${targetRGBA[0]}, ${targetRGBA[1]}, ${targetRGBA[2]}, 1.0)`;
+          const targetRGBARaw = this.parseColorToRGBA(targetHex);
+          const darkenedRGB = this.getDarkenedRGB(targetRGBARaw[0], targetRGBARaw[1], targetRGBARaw[2]);
+          destCtx.fillStyle = `rgba(${darkenedRGB[0]}, ${darkenedRGB[1]}, ${darkenedRGB[2]}, 1.0)`;
         } else {
           destCtx.fillStyle = "rgba(0, 0, 0, 1.0)";
         }
@@ -415,6 +418,15 @@ export class EaselBoard extends SignalElement {
         }
       }
     }
+  }
+
+  private getDarkenedRGB(r: number, g: number, b: number): [number, number, number] {
+    const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
+    if (luminance > 127.5) { // 50% of 255
+      const scale = 127.5 / luminance;
+      return [Math.floor(r * scale), Math.floor(g * scale), Math.floor(b * scale)];
+    }
+    return [r, g, b];
   }
 
   private parseColorToRGBA(colorStr: string): [number, number, number, number] {
