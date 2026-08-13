@@ -14,7 +14,7 @@ import {
   pushUndoState,
 } from "../state/store";
 import { ProcessedArtwork, PALETTE_COLOR } from "../types";
-import { getDailyChallenge } from "../data/sampleImages";
+import { getDailyChallenge } from "../data/dailyChallenge";
 import { soundEffects } from "../utils/soundEffects";
 import {
   iconImage,
