@@ -381,7 +381,7 @@ export class EaselBoard extends SignalElement {
             overlayPixels[pxIdx] = targetRGBA[0];
             overlayPixels[pxIdx + 1] = targetRGBA[1];
             overlayPixels[pxIdx + 2] = targetRGBA[2];
-            overlayPixels[pxIdx + 3] = 120; // partially transparent colored guide border
+            overlayPixels[pxIdx + 3] = 128; // 50% partially transparent colored guide border
             hasVisibleBorders = true;
           }
         }
