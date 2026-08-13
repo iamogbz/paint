@@ -30,6 +30,7 @@ export class PaintApp extends SignalElement {
   private handleGlobalPointerDown = (e: Event) => {
     if (!isWindowFocusedSignal.get()) {
       isWindowFocusedSignal.set(true);
+      window.focus();
       
       const path = e.composedPath() as HTMLElement[];
       const isModal = path.some(
