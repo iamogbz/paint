@@ -332,6 +332,7 @@ export class PaintingControls extends SignalElement {
       boxSizing: "border-box" as const,
       scrollBehavior: "smooth" as const,
       WebkitOverflowScrolling: "touch" as const,
+      touchAction: "pan-x" as const,
     };
 
     return html`
