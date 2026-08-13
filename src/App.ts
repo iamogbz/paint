@@ -13,7 +13,6 @@ import "./components/EaselBoard";
 import "./components/PaintingControls";
 import "./components/ArtworkGalleryModal";
 import "./components/TourGuide";
-import { PALETTE_COLOR } from "./types";
 import { transparentImgCss } from "./components/constants";
 import { iconPaintbrush } from "./components/icons";
 
@@ -121,7 +120,7 @@ export class PaintApp extends SignalElement {
         ${draggedColor && draggedPos
           ? html`
               <div
-                style="position: fixed; left: ${draggedPos.x}px; top: ${draggedPos.y}px; transform: translate(-50%, -50%); width: 8px; height: 8px; border-radius: 50%; background-color: ${draggedColor}; background-size: 0.5rem 0.5rem; background-repeat: repeat; background-image: ${draggedColor === PALETTE_COLOR.transparent.hexCode ? transparentImgCss : 'none'}; border: 2px solid #FFFFFF; box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; z-index: 9999; animation: bounce-drop 2s ease infinite;"
+                style="position: fixed; left: ${draggedPos.x}px; top: ${draggedPos.y}px; transform: translate(-50%, -50%); width: 8px; height: 8px; border-radius: 50%; background-color: ${draggedColor}; background-size: 0.5rem 0.5rem; background-repeat: repeat; background-image: ${draggedColor === "#00000000" ? transparentImgCss : 'none'}; border: 2px solid #FFFFFF; box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; z-index: 9999; animation: bounce-drop 2s ease infinite;"
               ></div>
             `
           : ""}
@@ -144,9 +143,9 @@ export class PaintApp extends SignalElement {
                 }}
                 style="position: fixed; inset: 0; z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: rgba(255, 255, 255, 0.4); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); cursor: pointer;"
               >
-                <div style="background: white; padding: 2rem 3rem; border-radius: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); display: flex; flex-direction: column; align-items: center; gap: 1rem; border: 2px solid ${PALETTE_COLOR.peach_base.hexCode};">
-                  ${iconPaintbrush(48, PALETTE_COLOR.crimson_red.hexCode)}
-                  <h2 style="margin: 0; font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; color: ${PALETTE_COLOR.dark_espresso.hexCode};">Resume painting</h2>
+                <div style="background: white; padding: 2rem 3rem; border-radius: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); display: flex; flex-direction: column; align-items: center; gap: 1rem; border: 2px solid ${"#FCD5AE"};">
+                  ${iconPaintbrush(48, "#E63946")}
+                  <h2 style="margin: 0; font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; color: ${"#4A2810"};">Resume painting</h2>
                   <p style="margin: 0; font-size: 0.875rem; color: #666; font-family: 'Plus Jakarta Sans', sans-serif;">Click anywhere to continue</p>
                 </div>
               </div>

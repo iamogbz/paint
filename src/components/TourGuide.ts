@@ -18,7 +18,6 @@ import {
   iconPaintBucket,
 iconZoomOut,
 } from "./icons";
-import { PALETTE_COLOR } from "../types";
 
 // Dev Note: Keep these instructions updated as features are added/removed/modified.
 // If you add a new control button, assign it a slide here.
@@ -32,53 +31,53 @@ export class AppTour extends SignalElement {
     {
       title: "Welcome to PAINT by COLOURS!",
       description: "Let's take a quick tour of the controls so you can start painting your masterpiece.",
-      icon: iconPaintBucket(48, PALETTE_COLOR.crimson_red.hexCode),
+      icon: iconPaintBucket(48, "#E63946"),
     },
     {
       title: "Starting a Painting",
       description: "When you launch the app, you can either upload your own photo to generate a custom canvas, or start the Daily Challenge directly from the easel.",
-      icon: iconImage(48, PALETTE_COLOR.forest_green.hexCode),
+      icon: iconImage(48, "#2A9D8F"),
     },
     {
       title: "Your Gallery & Saving",
       description: html`Click the yellow Gallery icon to view existing paintings, change their names, or start a new one. Click the green Save icon to download your painting to your device.`,
       icon: html`
-        ${iconFolderOpen(48, PALETTE_COLOR.vibrant_orange.hexCode)}
-        ${iconDownload(24, PALETTE_COLOR.forest_green.hexCode)}`,
+        ${iconFolderOpen(48, "#F4A261")}
+        ${iconDownload(24, "#2A9D8F")}`,
     },
     {
       title: "Navigating the Canvas",
       description: "Use the Zoom in/out buttons, scroll wheel or pinch to zoom on your device. To pan around, start dragging in a direction from the Pan button or simply click and drag the canvas directly.",
       icon: html`
-      ${iconZoomOut(12, PALETTE_COLOR.pure_black.hexCode)}
-      ${iconMove(48, PALETTE_COLOR.pure_black.hexCode)}
-      ${iconZoomIn(12, PALETTE_COLOR.pure_black.hexCode)}
+      ${iconZoomOut(12, "#000000")}
+      ${iconMove(48, "#000000")}
+      ${iconZoomIn(12, "#000000")}
       `,
     },
     {
       title: "Applying Paint",
       description: "Select a color from the palette and tap on the canvas. You can also drag the selected color swatch directly onto a region! Just click the color again to deselect and the eraser is selected by default.",
-      icon: iconPaintbrush(48, PALETTE_COLOR.crimson_red.hexCode),
+      icon: iconPaintbrush(48, "#E63946"),
     },
     {
       title: "Color Modes",
       description: "Toggle between the Palette, which shows only the colors needed for this specific painting, and the Paint Bucket button (allows using any color).",
-      icon: iconPalette(48, PALETTE_COLOR.crimson_red.hexCode),
+      icon: iconPalette(48, "#E63946"),
     },
     {
       title: "Track Your Progress",
       description: "Each color swatch shows your progress in number of regions painted. Once a color is fully painted, a checkmark will appear on its swatch. However this is just a guide, you are the artist!",
-      icon: iconCheck(48, PALETTE_COLOR.forest_green.hexCode),
+      icon: iconCheck(48, "#2A9D8F"),
     },
     {
       title: "Fixing Mistakes",
       description: "Made a mistake? No worries! Just click the Undo button to revert your last stroke and try again.",
-      icon: iconRotateCcw(48, PALETTE_COLOR.pure_black.hexCode),
+      icon: iconRotateCcw(48, "#000000"),
     },
     {
       title: "Enjoy!",
       description: "Looking forward to your next masterpiece! Share it with your friends and maybe they can make their own too.",
-      icon: iconSparkles(48, PALETTE_COLOR.forest_green.hexCode),
+      icon: iconSparkles(48, "#2A9D8F"),
     },
   ];
 

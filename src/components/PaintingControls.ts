@@ -1,11 +1,7 @@
 import { html } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import { SignalElement } from "../utils/SignalElement";
-import {
-  PALETTE_COLOR,
-  PaletteColor,
-  UsedColorStat,
-} from "../types";
+import { PaletteColor, UsedColorStat } from "../types";
 import {
   selectedCategorySignal,
   activeHighlightColorSignal,
@@ -115,7 +111,7 @@ export class PaintingControls extends SignalElement {
     soundEffects.playPop();
     const active = activeHighlightColorSignal.get();
 
-    if (active?.id === color.id) {
+    if (active?.hexCode === color.hexCode) {
       activeHighlightColorSignal.set(null);
     } else {
       window.clearTimeout(this.timeoutId);
@@ -137,7 +133,7 @@ export class PaintingControls extends SignalElement {
     if (e.pointerType === "mouse" && e.button !== 0) return;
 
     const activeColor = activeHighlightColorSignal.get();
-    const isActive = activeColor?.id === color.id;
+    const isActive = activeColor?.hexCode === color.hexCode;
 
     const startX = e.clientX;
     const startY = e.clientY;
@@ -231,7 +227,7 @@ export class PaintingControls extends SignalElement {
 
     // Map stats by color ID
     const statsMap = new Map<string, UsedColorStat>();
-    (this.colorStats || []).forEach((stat) => statsMap.set(stat.color.id, stat));
+    (this.colorStats || []).forEach((stat) => statsMap.set(stat.color.hexCode, stat));
     
     // Check which colors are fully painted
     const paintedRegionsState = currentArtwork?.paintedRegionsState || {};
@@ -252,9 +248,9 @@ export class PaintingControls extends SignalElement {
       }
     }
 
-    const allColors = Object.values(PALETTE_COLOR);
+    const allColors = (this.colorStats || []).map(s => s.color);
     const filteredColors = allColors.filter((color) => {
-      const stat = statsMap.get(color.id);
+      const stat = statsMap.get(color.hexCode);
       const isUsed = stat?.count > 0;
 
       if (selectedCat === PALETTE_CATEGORIES_USED) return isUsed;
@@ -521,7 +517,7 @@ export class PaintingControls extends SignalElement {
           ? html`
               <div style=${this.renderStyleObject(scrollRowStyle)}>
                 ${filteredColors.map((color) => {
-                  const stat = statsMap.get(color.id);
+                  const stat = statsMap.get(color.hexCode);
                   const isUsed = stat?.count > 0;
                   const colorStatus = expectedColorStatus.get(color.hexCode);
                   const isFullyPainted = colorStatus ? colorStatus.total > 0 && colorStatus.total === colorStatus.painted : false;
@@ -531,7 +527,7 @@ export class PaintingControls extends SignalElement {
                     progressLabel = `${colorStatus.painted}/${colorStatus.total}`;
                   }
 
-                  const isSelected = activeColor?.id === color.id;
+                  const isSelected = activeColor?.hexCode === color.hexCode;
                   const isCopied = copiedHex === color.hexCode;
 
                   const colorCardStyle = {
@@ -565,7 +561,7 @@ export class PaintingControls extends SignalElement {
                     backgroundColor: color.hexCode,
                     backgroundSize: '1.5rem 1.5rem',
                     backgroundRepeat: 'repeat',
-                    backgroundImage: color.id === PALETTE_COLOR.transparent.id
+                    backgroundImage: color.hexCode === "#00000000"
                       ? transparentImgCss
                       : color.hexCode,
                     transition: "transform 0.15s ease",
@@ -600,7 +596,7 @@ export class PaintingControls extends SignalElement {
                       <span
                         style="font-size: 0.6875rem; font-weight: 900; color: #3D2314; margin-top: 0.375rem; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; line-height: 1.2;"
                       >
-                        ${color.name}
+                        ${color.hexCode}
                       </span>
 
                       <!-- Progress -->

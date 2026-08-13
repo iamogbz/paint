@@ -139,16 +139,16 @@ export class ArtworkGalleryModal extends SignalElement {
 
               const validStats = art.colorStats
                 .filter(
-                  (s) => s.count > 0 && s.color.category !== "Neutrals & Outlines"
+                  (s) => s.count > 0 && s.color.hexCode !== "#00000000"
                 )
                 .sort((a, b) => b.count - a.count);
               
               const categoryMap = new Map<string, typeof validStats>();
               for (const stat of validStats) {
-                if (!categoryMap.has(stat.color.category)) {
-                  categoryMap.set(stat.color.category, []);
+                if (!categoryMap.has(stat.color.hexCode)) {
+                  categoryMap.set(stat.color.hexCode, []);
                 }
-                categoryMap.get(stat.color.category)!.push(stat);
+                categoryMap.get(stat.color.hexCode)!.push(stat);
               }
 
               const displayStats: typeof validStats = [];
@@ -303,7 +303,7 @@ export class ArtworkGalleryModal extends SignalElement {
                             (stat) => html`
                               <div
                                 style="width: 1rem; height: 1rem; border-radius: 9999px; border: 1px solid #000000; background-color: ${stat.color.hexCode};"
-                                title="${stat.color.name}: ${stat.percentage}%"
+                                title="${stat.color.hexCode}: ${stat.percentage}%"
                               ></div>
                             `
                           )}

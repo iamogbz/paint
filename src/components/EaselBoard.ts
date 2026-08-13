@@ -14,7 +14,7 @@ import {
   pushUndoState,
   footerStyleSignal,
 } from "../state/store";
-import { ProcessedArtwork, PALETTE_COLOR } from "../types";
+import { ProcessedArtwork } from "../types";
 import { getDailyChallenge } from "../data/dailyChallenge";
 import { soundEffects } from "../utils/soundEffects";
 import {
@@ -441,7 +441,7 @@ export class EaselBoard extends SignalElement {
       if (
         this.isBorderPixel &&
         targetHex &&
-        targetHex !== PALETTE_COLOR.transparent.hexCode
+        targetHex !== "#00000000"
       ) {
         const targetRGBARaw = this.parseColorToRGBA(targetHex);
         const darkenedRGB = this.getDarkenedRGB(
@@ -495,7 +495,7 @@ export class EaselBoard extends SignalElement {
     if (this.hoveredRegionId !== null && this.regionBorderPixels) {
       const borderIndices = this.regionBorderPixels.get(this.hoveredRegionId);
       if (borderIndices && borderIndices.length > 0) {
-        if (targetHex && targetHex !== PALETTE_COLOR.transparent.hexCode) {
+        if (targetHex && targetHex !== "#00000000") {
           const targetRGBARaw = this.parseColorToRGBA(targetHex);
           const darkenedRGB = this.getDarkenedRGB(
             targetRGBARaw[0],
@@ -601,7 +601,7 @@ export class EaselBoard extends SignalElement {
         let activeColor = activeHighlightColorSignal.get();
         if (!activeColor) {
           // If no color selected yet, default to first palette color
-          const defaultColor = Object.values(PALETTE_COLOR)[0];
+          const defaultColor = currentArtwork.colorStats[0]?.color;
           if (defaultColor) {
             activeHighlightColorSignal.set(defaultColor);
             activeColor = defaultColor;
@@ -614,7 +614,7 @@ export class EaselBoard extends SignalElement {
           };
 
           pushUndoState(currentPainted);
-          if (activeColor.id === "transparent") {
+          if (activeColor.hexCode === "#00000000") {
             // Eraser mode
             delete currentPainted[regionId];
             soundEffects.playPop();
@@ -752,7 +752,7 @@ export class EaselBoard extends SignalElement {
           };
           pushUndoState(currentPainted);
 
-          if (color === PALETTE_COLOR.transparent.hexCode) {
+          if (color === "#00000000") {
             delete currentPainted[regionId];
             soundEffects.playPop();
           } else {

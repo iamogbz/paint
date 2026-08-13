@@ -1,14 +1,5 @@
-import {
-  PALETTE_COLOR,
-  PALETTE_COLORS,
-  ProcessedArtwork,
-  UsedColorStat,
-} from "../types";
-import {
-  clearColorCache,
-  findClosestPaletteColorFast,
-  getPerceptualColorDistance,
-} from "./colorUtils";
+import { ProcessedArtwork, UsedColorStat, PaletteColor } from "../types";
+import { generateDynamicPalette, ColorQuantizer, getPerceptualColorDistance } from "./colorUtils";
 
 /**
  * Asynchronously loads an image from a URL or DataURL into an HTMLImageElement
@@ -185,14 +176,13 @@ function applyMajoritySmoothing(
 function removeRareColors(
   colorIndices: Int16Array,
   totalPixels: number,
+  paletteColors: PaletteColor[],
   minRatio = 0.0025
 ) {
   const threshold = Math.round(totalPixels * minRatio);
-  const transparentIdx = PALETTE_COLORS.findIndex(
-    (c) => c.id === PALETTE_COLOR.transparent.id
-  );
+  const transparentIdx = 0;
 
-  const counts = new Array(PALETTE_COLORS.length).fill(0);
+  const counts = new Array(paletteColors.length).fill(0);
   for (let i = 0; i < colorIndices.length; i++) {
     counts[colorIndices[i]]++;
   }
@@ -200,7 +190,7 @@ function removeRareColors(
   const rareIndices: number[] = [];
   const frequentIndices: number[] = [];
 
-  for (let i = 0; i < PALETTE_COLORS.length; i++) {
+  for (let i = 0; i < paletteColors.length; i++) {
     if (i === transparentIdx) continue;
     if (counts[i] > 0) {
       if (counts[i] < threshold) {
@@ -215,12 +205,12 @@ function removeRareColors(
 
   const remapTable = new Map<number, number>();
   for (const rareIdx of rareIndices) {
-    const rareColor = PALETTE_COLORS[rareIdx];
+    const rareColor = paletteColors[rareIdx];
     let bestFrequent = frequentIndices[0];
     let minD = Infinity;
 
     for (const freqIdx of frequentIndices) {
-      const freqColor = PALETTE_COLORS[freqIdx];
+      const freqColor = paletteColors[freqIdx];
       const d = getPerceptualColorDistance(rareColor.rgba, freqColor.rgba);
       if (d < minD) {
         minD = d;
@@ -385,7 +375,9 @@ export async function processImageToCartoonPalette(
   imageSrc: string,
   artworkName: string
 ): Promise<ProcessedArtwork> {
-  clearColorCache();
+  
+  const transparentColor: PaletteColor = { hexCode: "#00000000", rgba: [0, 0, 0, 0] };
+
 
   // 1. Load original image and calculate canvas dimensions
   const img = await loadImage(imageSrc);
@@ -410,6 +402,11 @@ export async function processImageToCartoonPalette(
   let smoothedPixels = applyBilateralFilter(rawPixels, width, height, 3.0, 45.0, 3);
   smoothedPixels = applyBilateralFilter(smoothedPixels, width, height, 3.0, 45.0, 3);
 
+    // 3.5 Generate Dynamic Palette
+  const generatedColors = generateDynamicPalette(smoothedPixels, 24);
+  const paletteColors = [transparentColor, ...generatedColors];
+  const quantizer = new ColorQuantizer(paletteColors);
+
   // 4. Quantize pixels to nearest Oklab palette color
   const totalPixels = width * height;
   const colorIndices = new Int16Array(totalPixels);
@@ -421,8 +418,8 @@ export async function processImageToCartoonPalette(
     const b = smoothedPixels[pxIdx + 2];
     const a = smoothedPixels[pxIdx + 3];
 
-    const closest = findClosestPaletteColorFast(r, g, b, a);
-    const palIdx = PALETTE_COLORS.findIndex((c) => c.id === closest.id);
+    const closest = quantizer.findClosestPaletteColorFast(r, g, b, a);
+    const palIdx = paletteColors.findIndex((c) => c.hexCode === closest.hexCode);
     colorIndices[i] = palIdx >= 0 ? palIdx : 0;
   }
 
@@ -436,7 +433,7 @@ export async function processImageToCartoonPalette(
   }
 
   // 6. Clean up rare isolated micro-colors
-  removeRareColors(colorIndices, totalPixels, 0.0025);
+  removeRareColors(colorIndices, totalPixels, paletteColors, 0.0025);
 
   // 6b. Eliminate small isolated islands (noise) under 50 pixels
   eliminateSmallIslands(colorIndices, width, height, 50);
@@ -450,14 +447,14 @@ export async function processImageToCartoonPalette(
 
   const cartoonImgData = outputCtx.createImageData(width, height);
   const cartoonPixels = cartoonImgData.data;
-  const colorCounts = new Array(PALETTE_COLORS.length).fill(0);
+  const colorCounts = new Array(paletteColors.length).fill(0);
 
   for (let i = 0; i < totalPixels; i++) {
     const palIdx = colorIndices[i];
     const pxIdx = i * 4;
 
     colorCounts[palIdx]++;
-    const palColor = PALETTE_COLORS[palIdx];
+    const palColor = paletteColors[palIdx];
 
     cartoonPixels[pxIdx] = palColor.rgba[0];
     cartoonPixels[pxIdx + 1] = palColor.rgba[1];
@@ -481,7 +478,7 @@ export async function processImageToCartoonPalette(
 
       const colorIdx = colorIndices[idx];
       const regionId = nextRegionId++;
-      regionExpectedColors[regionId] = PALETTE_COLORS[colorIdx].hexCode;
+      regionExpectedColors[regionId] = paletteColors[colorIdx].hexCode;
       const queue = [x, y];
       visited[idx] = 1;
 
@@ -513,7 +510,7 @@ export async function processImageToCartoonPalette(
   }
 
   // 9. Calculate color statistics for used colors
-  const colorStats: UsedColorStat[] = PALETTE_COLORS.map((color, index) => {
+  const colorStats: UsedColorStat[] = paletteColors.map((color, index) => {
     const count = colorCounts[index];
     const percentage = Math.ceil((count / totalPixels) * 100);
     return {

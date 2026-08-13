@@ -1,4 +1,5 @@
-import { PALETTE_COLOR, PALETTE_COLORS, PaletteColor } from "../types";
+
+import { PaletteColor } from "../types";
 
 /**
  * Converts sRGB channel [0-255] to linear sRGB [0-1].
@@ -36,11 +37,7 @@ export function rgbToOklab(
   return [okL, okA, okB];
 }
 
-/**
- * Fast cached version of rgbToOklab for 8-bit RGB values.
- */
 const oklabCache = new Map<number, [number, number, number]>();
-
 export function rgbToOklabCached(
   r: number,
   g: number,
@@ -59,9 +56,6 @@ export function rgbToOklabCached(
   return cached;
 }
 
-/**
- * Converts RGBA to Oklab with linear sRGB compositing over white for semi-transparent pixels.
- */
 export function rgbaToOklabLinearComposite(
   r: number,
   g: number,
@@ -95,42 +89,15 @@ export function rgbaToOklabLinearComposite(
   return [okL, okA, okB];
 }
 
-// Pre-computed Oklab entries for all non-transparent palette colors
-interface PaletteOklabEntry {
-  color: PaletteColor;
-  oklab: [number, number, number];
-  chroma: number;
-}
-
-const PALETTE_OKLAB_ENTRIES: PaletteOklabEntry[] = PALETTE_COLORS.filter(
-  (c) => c.id !== PALETTE_COLOR.transparent.id
-).map((color) => {
-  const oklab = rgbaToOklabLinearComposite(
-    color.rgba[0],
-    color.rgba[1],
-    color.rgba[2],
-    color.rgba[3] ?? 255
-  );
-  const chroma = Math.sqrt(oklab[1] * oklab[1] + oklab[2] * oklab[2]);
-  return { color, oklab, chroma };
-});
-
 const LIGHTNESS_WEIGHT = 1.25;
 
-/**
- * Calculates perceptual color distance in Oklab uniform color space.
- * Priorities:
- * 1. Maintaining contrast (Lightness L weighted 1.25x)
- * 2. Color vibrancy and accuracy (a, b chromaticity with vibrancy protection)
- */
 export function getPerceptualColorDistance(
-  color1: readonly [number, number, number, number],
-  color2: readonly [number, number, number, number]
+  color1: readonly [number, number, number, number?],
+  color2: readonly [number, number, number, number?]
 ): number {
   const [r1, g1, b1, a1 = 255] = color1;
   const [r2, g2, b2, a2 = 255] = color2;
 
-  // Transparent pixel boundaries
   if (a1 < 10 && a2 < 10) return 0;
   if (a1 < 10 || a2 < 10) return 10.0;
 
@@ -145,7 +112,6 @@ export function getPerceptualColorDistance(
   const C1 = Math.sqrt(okA1 * okA1 + okB1 * okB1);
   const C2 = Math.sqrt(okA2 * okA2 + okB2 * okB2);
 
-  // Vibrancy protection: if input color has chroma and target candidate is neutral gray, add small penalty
   let vibrancyPenalty = 0;
   if (C1 > 0.03 && C2 < 0.015) {
     vibrancyPenalty = 0.05 + (C1 - C2) * 0.5;
@@ -160,62 +126,169 @@ export function getPerceptualColorDistance(
   return Math.sqrt(distSq) + vibrancyPenalty;
 }
 
-/**
- * Finds the closest palette color for any given RGBA tuple using balanced Oklab space.
- */
-export function findClosestPaletteColor(
-  r: number,
-  g: number,
-  b: number,
-  a: number = 255
-): PaletteColor {
-  if (a < 10) {
-    return PALETTE_COLOR.transparent;
-  }
+function toHex(r: number, g: number, b: number): string {
+  return "#" + [r, g, b].map(x => Math.max(0, Math.min(255, Math.round(x))).toString(16).padStart(2, "0").toUpperCase()).join("");
+}
 
-  const targetRgba: [number, number, number, number] = [r, g, b, a];
-  let minDistance = Infinity;
-  let closestColor: PaletteColor = PALETTE_OKLAB_ENTRIES[0].color;
-
-  for (let i = 0; i < PALETTE_OKLAB_ENTRIES.length; i++) {
-    const entry = PALETTE_OKLAB_ENTRIES[i];
-    const dist = getPerceptualColorDistance(targetRgba, entry.color.rgba);
-
-    if (dist < minDistance) {
-      minDistance = dist;
-      closestColor = entry.color;
+export function generateDynamicPalette(pixels: Uint8ClampedArray, maxColors: number = 24): PaletteColor[] {
+  
+  const opaquePixels: [number, number, number][] = [];
+  
+  // Sample up to 5000 opaque pixels
+  const step = Math.max(1, Math.floor((pixels.length / 4) / 5000));
+  for (let i = 0; i < pixels.length; i += 4 * step) {
+    if (pixels[i + 3] > 128) {
+      opaquePixels.push([pixels[i], pixels[i+1], pixels[i+2]]);
     }
   }
-
-  return closestColor;
-}
-
-/**
- * Fast color lookup cache using 5-bit color precision per channel.
- */
-const lookupCache = new Map<number, PaletteColor>();
-
-export function findClosestPaletteColorFast(
-  r: number,
-  g: number,
-  b: number,
-  a: number = 255
-): PaletteColor {
-  const r5 = Math.max(0, Math.min(31, r >> 3));
-  const g5 = Math.max(0, Math.min(31, g >> 3));
-  const b5 = Math.max(0, Math.min(31, b >> 3));
-  const a5 = Math.max(0, Math.min(31, a >> 3));
-  const key = (r5 << 15) | (g5 << 10) | (b5 << 5) | a5;
-
-  let cached = lookupCache.get(key);
-  if (!cached) {
-    cached = findClosestPaletteColor(r, g, b, a);
-    lookupCache.set(key, cached);
+  
+  if (opaquePixels.length === 0) return [];
+  if (opaquePixels.length <= maxColors) {
+    const unique = new Map<string, [number, number, number]>();
+    for (const p of opaquePixels) {
+      unique.set(toHex(p[0], p[1], p[2]), p);
+    }
+    return Array.from(unique.values()).map(p => ({ hexCode: toHex(p[0], p[1], p[2]), rgba: [p[0], p[1], p[2], 255] }));
   }
-  return cached;
+
+  const centroids: [number, number, number][] = [];
+  const firstIdx = Math.floor(Math.random() * opaquePixels.length);
+  centroids.push(opaquePixels[firstIdx]);
+  
+  const oklabs = opaquePixels.map(p => rgbToOklabCached(p[0], p[1], p[2]));
+  const centroidOklabs: [number, number, number][] = [oklabs[firstIdx]];
+  const minDists = new Float32Array(opaquePixels.length).fill(Infinity);
+  
+  for (let k = 1; k < maxColors; k++) {
+    let maxDist = -1;
+    let nextIdx = 0;
+    const lastCentroidOklab = centroidOklabs[centroidOklabs.length - 1];
+    
+    for (let i = 0; i < opaquePixels.length; i++) {
+      const pOk = oklabs[i];
+      const dL = pOk[0] - lastCentroidOklab[0];
+      const da = pOk[1] - lastCentroidOklab[1];
+      const db = pOk[2] - lastCentroidOklab[2];
+      const dSq = dL*dL*LIGHTNESS_WEIGHT + da*da + db*db;
+      
+      if (dSq < minDists[i]) minDists[i] = dSq;
+      if (minDists[i] > maxDist) {
+        maxDist = minDists[i];
+        nextIdx = i;
+      }
+    }
+    centroids.push(opaquePixels[nextIdx]);
+    centroidOklabs.push(oklabs[nextIdx]);
+  }
+  
+  const assignments = new Int32Array(opaquePixels.length);
+  for (let iter = 0; iter < 5; iter++) {
+    for (let i = 0; i < opaquePixels.length; i++) {
+      let bestD = Infinity;
+      let bestC = 0;
+      const pOk = oklabs[i];
+      for (let c = 0; c < maxColors; c++) {
+        const cOk = centroidOklabs[c];
+        const dL = pOk[0] - cOk[0];
+        const da = pOk[1] - cOk[1];
+        const db = pOk[2] - cOk[2];
+        const dSq = dL*dL*LIGHTNESS_WEIGHT + da*da + db*db;
+        if (dSq < bestD) { bestD = dSq; bestC = c; }
+      }
+      assignments[i] = bestC;
+    }
+    
+    const sums = Array.from({length: maxColors}, () => [0,0,0]);
+    const counts = new Int32Array(maxColors);
+    for (let i = 0; i < opaquePixels.length; i++) {
+      const c = assignments[i];
+      sums[c][0] += opaquePixels[i][0];
+      sums[c][1] += opaquePixels[i][1];
+      sums[c][2] += opaquePixels[i][2];
+      counts[c]++;
+    }
+    
+    for (let c = 0; c < maxColors; c++) {
+      if (counts[c] > 0) {
+        const meanR = sums[c][0] / counts[c];
+        const meanG = sums[c][1] / counts[c];
+        const meanB = sums[c][2] / counts[c];
+        
+        let bestSnapD = Infinity;
+        let bestSnapP = centroids[c];
+        let bestSnapOk = centroidOklabs[c];
+        for (let i = 0; i < opaquePixels.length; i++) {
+          if (assignments[i] === c) {
+            const r = opaquePixels[i][0], g = opaquePixels[i][1], b = opaquePixels[i][2];
+            const dSq = (r-meanR)**2 + (g-meanG)**2 + (b-meanB)**2;
+            if (dSq < bestSnapD) {
+              bestSnapD = dSq;
+              bestSnapP = opaquePixels[i];
+              bestSnapOk = oklabs[i];
+            }
+          }
+        }
+        centroids[c] = bestSnapP;
+        centroidOklabs[c] = bestSnapOk;
+      }
+    }
+  }
+  
+  const palette: PaletteColor[] = centroids.map(c => ({
+    hexCode: toHex(c[0], c[1], c[2]),
+    rgba: [c[0], c[1], c[2], 255]
+  }));
+  
+  const uniqueMap = new Map<string, PaletteColor>();
+  for (const color of palette) {
+    if (!uniqueMap.has(color.hexCode)) {
+      uniqueMap.set(color.hexCode, color);
+    }
+  }
+  
+  return Array.from(uniqueMap.values());
 }
 
-export function clearColorCache(): void {
-  lookupCache.clear();
-  oklabCache.clear();
+export class ColorQuantizer {
+  private palette: PaletteColor[];
+  private lookupCache: Map<number, PaletteColor>;
+
+  constructor(paletteColors: PaletteColor[]) {
+    this.palette = paletteColors;
+    this.lookupCache = new Map();
+  }
+  
+  findClosestPaletteColorFast(r: number, g: number, b: number, a: number = 255): PaletteColor {
+    if (a < 10) {
+      return this.palette[0];
+    }
+    const r5 = Math.max(0, Math.min(31, r >> 3));
+    const g5 = Math.max(0, Math.min(31, g >> 3));
+    const b5 = Math.max(0, Math.min(31, b >> 3));
+    const a5 = Math.max(0, Math.min(31, a >> 3));
+    const key = (r5 << 15) | (g5 << 10) | (b5 << 5) | a5;
+    let cached = this.lookupCache.get(key);
+    if (!cached) {
+      cached = this._findClosest(r, g, b, a);
+      this.lookupCache.set(key, cached);
+    }
+    return cached;
+  }
+  
+  private _findClosest(r: number, g: number, b: number, a: number): PaletteColor {
+    const targetRgba: [number, number, number, number] = [r, g, b, a];
+    let minDistance = Infinity;
+    let closestColor = this.palette[1] || this.palette[0];
+    const startIdx = (this.palette[0] && this.palette[0].hexCode === "#00000000") ? 1 : 0;
+    
+    for (let i = startIdx; i < this.palette.length; i++) {
+      const entry = this.palette[i];
+      const dist = getPerceptualColorDistance(targetRgba, entry.rgba);
+      if (dist < minDistance) {
+        minDistance = dist;
+        closestColor = entry;
+      }
+    }
+    return closestColor;
+  }
 }

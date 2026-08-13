@@ -1,6 +1,6 @@
 import { signal, computed } from "@lit-labs/signals";
 import { get, set } from "idb-keyval";
-import { ProcessedArtwork, PALETTE_COLOR, PaletteColor } from "../types";
+import { ProcessedArtwork, PaletteColor } from "../types";
 import { processImageToCartoonPalette } from "../utils/imageProcessor";
 import { soundEffects } from "../utils/soundEffects";
 import confetti from "canvas-confetti";
@@ -27,7 +27,7 @@ export const isWindowFocusedSignal = signal<boolean>(true);
 
 // Dynamic Style Signals
 export const appBackgroundStyleSignal = computed(() => ({
-  background: `radial-gradient(circle at 50% 50%, ${PALETTE_COLOR.pale_ivory.hexCode} 0%, ${PALETTE_COLOR.peach_base.hexCode} 100%)`,
+  background: `radial-gradient(circle at 50% 50%, ${"#FFE5D9"} 0%, ${"#FCD5AE"} 100%)`,
   minHeight: "100vh",
   fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif",
   position: "relative" as const,
@@ -40,7 +40,7 @@ export const footerStyleSignal = computed(() => ({
   textAlign: "center" as const,
   fontSize: "0.75rem",
   fontWeight: "800",
-  color: PALETTE_COLOR.dark_espresso.hexCode,
+  color: "#4A2810",
 }));
 
 // Storage Helpers
@@ -110,11 +110,11 @@ export async function handleImageSelected(imageSrc: string, name: string = "Unti
       spread: 70,
       origin: { y: 0.6 },
       colors: [
-        PALETTE_COLOR.crimson_red.hexCode,
-        PALETTE_COLOR.bright_yellow.hexCode,
-        PALETTE_COLOR.lime_green.hexCode,
-        PALETTE_COLOR.sky_blue.hexCode,
-        PALETTE_COLOR.bright_lavender.hexCode,
+        "#E63946",
+        "#FFD166",
+        "#06D6A0",
+        "#4EA8DE",
+        "#B5179E",
       ],
     });
   } catch (err) {
