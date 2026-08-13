@@ -38,7 +38,7 @@ export class ArtworkGalleryModal extends SignalElement {
     const overlayStyle = {
       position: "fixed" as const,
       inset: 0,
-      zIndex: 50,
+      zIndex: 2000,
       backgroundColor: "rgba(0, 0, 0, 0.6)",
       backdropFilter: "blur(8px)",
       display: "flex",
