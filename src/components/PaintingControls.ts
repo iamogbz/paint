@@ -17,6 +17,8 @@ import {
   zoomScaleSignal,
   draggedColorSignal,
   draggedPositionSignal,
+  undoStackSignal,
+  handleUndo,
 } from "../state/store";
 import {
   iconPalette,
@@ -27,7 +29,7 @@ import {
   iconDownload,
   iconZoomIn,
   iconZoomOut,
-  
+  iconRotateCcw,
 } from "./icons";
 import { transparentImgCss } from "./constants";
 import { soundEffects } from "../utils/soundEffects";
