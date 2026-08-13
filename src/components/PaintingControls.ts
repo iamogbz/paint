@@ -360,6 +360,7 @@ export class PaintingControls extends SignalElement {
             ${showPhotoControls
               ? html`
                   <button
+                    id="save-painting-btn"
                     title="Save Painting to Device"
                     @click=${this.handleDownload}
                     style=${this.renderStyleObject(actionBtnStyle("#2A9D8F"))}
@@ -373,7 +374,7 @@ export class PaintingControls extends SignalElement {
           <!-- Middle Group: Canvas Zoom Controls (Only when image is loaded) -->
           ${showPhotoControls
             ? html`
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <div id="easel-zoom-container" style="display: flex; align-items: center; gap: 0.5rem;">
                   <!-- Zoom Out Button -->
                   <button
                     title="Zoom Out"
@@ -398,6 +399,7 @@ export class PaintingControls extends SignalElement {
 
                   <!-- Pan Button -->
                   <button
+                    id="easel-pan-btn"
                     title="Pan Canvas"
                     @pointerdown=${this.handlePanPointerDown}
                     style=${this.renderStyleObject({
@@ -446,9 +448,10 @@ export class PaintingControls extends SignalElement {
           <!-- Right Group: Color Category Buttons (Only when image is loaded) -->
           ${showPhotoControls
             ? html`
-                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                <div id="palette-mode-toggles" style="display: flex; align-items: center; gap: 0.5rem;">
                   <!-- Undo Button -->
                   <button
+                    id="undo-btn"
                     title="Undo"
                     @click=${() => {
                       if (canUndo) {
@@ -602,6 +605,7 @@ export class PaintingControls extends SignalElement {
 
                       <!-- Progress -->
                       <span
+                        class="color-progress-label"
                         style="font-size: 0.75rem; font-weight: ${isUsed ? "900" : "700"}; color: ${isUsed ? "#000000" : "#6B7280"};"
                       >
                         ${progressLabel}

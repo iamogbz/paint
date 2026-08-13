@@ -357,6 +357,7 @@ export class ArtworkGalleryModal extends SignalElement {
           <!-- Footer -->
           <div style="padding-top: 0.75rem; border-top: 2px solid rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: space-between;">
             <button
+              id="gallery-new-painting-btn"
               @click=${() => {
                 isGalleryOpenSignal.set(false);
                 currentArtworkSignal.set(null);

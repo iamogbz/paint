@@ -168,3 +168,15 @@ export const iconEdit2 = (size = 16, color = "currentColor") => html`
     <path d="M17 3a2.828 2.828 0 1 1 4 4L7.5 20.5 2 22l1.5-5.5L17 3z"></path>
   </svg>
 `;
+
+export const iconChevronLeft = (size = 24, color = "currentColor") => html`
+  <svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m15 18-6-6 6-6"/>
+  </svg>
+`;
+
+export const iconChevronRight = (size = 24, color = "currentColor") => html`
+  <svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <path d="m9 18 6-6-6-6"/>
+  </svg>
+`;
