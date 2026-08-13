@@ -52,15 +52,15 @@ function applyBilateralFilter(
   srcPixels: Uint8ClampedArray,
   width: number,
   height: number,
-  spatialSigma = 2.0,
-  rangeSigma = 35.0
+  spatialSigma = 3.0,
+  rangeSigma = 45.0,
+  radius = 3 // 7x7 window
 ): Uint8ClampedArray {
   const dstPixels = new Uint8ClampedArray(srcPixels.length);
-  const radius = 2; // 5x5 spatial window
   const twoSpatialSigmaSq = 2 * spatialSigma * spatialSigma;
   const twoRangeSigmaSq = 2 * rangeSigma * rangeSigma;
 
-  // Precompute spatial weights for 5x5 window
+  // Precompute spatial weights
   const spatialWeights: number[][] = [];
   for (let dy = -radius; dy <= radius; dy++) {
     spatialWeights[dy + radius] = [];
@@ -239,6 +239,102 @@ function removeRareColors(
 }
 
 /**
+ * Eliminates small isolated regions (islands) by merging them into their dominant neighboring color.
+ */
+function eliminateSmallIslands(
+  colorIndices: Int16Array,
+  width: number,
+  height: number,
+  minRegionSize: number
+) {
+  const totalPixels = width * height;
+  const visited = new Uint8Array(totalPixels);
+  const queue = new Int32Array(totalPixels * 2);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const startIdx = y * width + x;
+      if (visited[startIdx]) continue;
+
+      const colorIdx = colorIndices[startIdx];
+      let head = 0;
+      let tail = 0;
+
+      queue[tail++] = x;
+      queue[tail++] = y;
+      visited[startIdx] = 1;
+
+      while (head < tail) {
+        const qx = queue[head++];
+        const qy = queue[head++];
+
+        const neighbors = [
+          [qx + 1, qy],
+          [qx - 1, qy],
+          [qx, qy + 1],
+          [qx, qy - 1],
+        ];
+
+        for (const [nx, ny] of neighbors) {
+          if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+            const nIdx = ny * width + nx;
+            if (!visited[nIdx] && colorIndices[nIdx] === colorIdx) {
+              visited[nIdx] = 1;
+              queue[tail++] = nx;
+              queue[tail++] = ny;
+            }
+          }
+        }
+      }
+
+      const regionSize = tail / 2;
+      if (regionSize < minRegionSize) {
+        const neighborCounts = new Map<number, number>();
+        let maxCount = 0;
+        let dominantNeighbor = -1;
+
+        for (let i = 0; i < tail; i += 2) {
+          const rx = queue[i];
+          const ry = queue[i + 1];
+          const neighbors = [
+            [rx + 1, ry],
+            [rx - 1, ry],
+            [rx, ry + 1],
+            [rx, ry - 1],
+            [rx + 1, ry + 1],
+            [rx - 1, ry - 1],
+            [rx - 1, ry + 1],
+            [rx + 1, ry - 1]
+          ];
+          for (const [nx, ny] of neighbors) {
+            if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+              const nIdx = ny * width + nx;
+              const nColor = colorIndices[nIdx];
+              if (nColor !== colorIdx) {
+                const count = (neighborCounts.get(nColor) || 0) + 1;
+                neighborCounts.set(nColor, count);
+                if (count > maxCount) {
+                  maxCount = count;
+                  dominantNeighbor = nColor;
+                }
+              }
+            }
+          }
+        }
+
+        if (dominantNeighbor !== -1) {
+          for (let i = 0; i < tail; i += 2) {
+            const rx = queue[i];
+            const ry = queue[i + 1];
+            colorIndices[ry * width + rx] = dominantNeighbor;
+          }
+        }
+      }
+    }
+  }
+}
+
+/**
  * Main Image Processing Pipeline:
  * Takes original image source, scales to max 800px, applies bilateral painterly smoothing,
  * Oklab palette quantization, majority curve smoothing, and color statistics computation.
@@ -269,7 +365,8 @@ export async function processImageToCartoonPalette(
   const rawPixels = origImgData.data;
 
   // 3. Apply Bilateral Painterly Filter for noise reduction & smooth color fields
-  const smoothedPixels = applyBilateralFilter(rawPixels, width, height, 2.0, 35.0);
+  let smoothedPixels = applyBilateralFilter(rawPixels, width, height, 3.0, 45.0, 3);
+  smoothedPixels = applyBilateralFilter(smoothedPixels, width, height, 3.0, 45.0, 3);
 
   // 4. Quantize pixels to nearest Oklab palette color
   const totalPixels = width * height;
@@ -288,13 +385,16 @@ export async function processImageToCartoonPalette(
   }
 
   // 5. Apply Majority Smoothing passes to round staircases and clean noise
-  const smoothingPasses = 0;
+  const smoothingPasses = 5;
   for (let i = 0; i < smoothingPasses; i++) {
     applyMajoritySmoothing(colorIndices, width, height);
   }
 
   // 6. Clean up rare isolated micro-colors
   removeRareColors(colorIndices, totalPixels, 0.0025);
+
+  // 6b. Eliminate small isolated islands (noise) under 20 pixels
+  eliminateSmallIslands(colorIndices, width, height, 20);
 
   // 7. Render final cartoon output canvas and calculate color counts
   const outputCanvas = document.createElement("canvas");

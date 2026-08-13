@@ -940,7 +940,7 @@ export class EaselBoard extends SignalElement {
                   ? html`
                       <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; padding: 3rem 1rem; text-align: center;">
                         <div style="position: relative; width: 5rem; height: 5rem; margin-bottom: 1rem; display: flex; align-items: center; justify-content: center;">
-                          ${iconLoader2(64, "#E63946")}
+                          ${iconLoader2(64, "#FFD166")}
                           <div style="position: absolute;">
                             ${iconSparkles(32, "#FFD166")}
                           </div>
