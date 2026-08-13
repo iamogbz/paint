@@ -340,11 +340,11 @@ function applyModeFilter(
   radius: number
 ) {
   const copy = new Int16Array(colorIndices);
-  
+
   for (let y = 0; y < height; y++) {
     for (let x = 0; x < width; x++) {
       const idx = y * width + x;
-      
+
       const counts = new Map<number, number>();
       let maxCount = 0;
       let dominantVal = copy[idx];
@@ -375,7 +375,7 @@ export async function processImageToCartoonPalette(
   imageSrc: string,
   artworkName: string
 ): Promise<ProcessedArtwork> {
-  
+
   const transparentColor: PaletteColor = { hexCode: "#00000000", rgba: [0, 0, 0, 0] };
 
 
@@ -518,7 +518,7 @@ export async function processImageToCartoonPalette(
       count,
       percentage,
     };
-  }).filter(stat => stat.count > 0 || stat.color.hexCode === "#00000000");
+  })
 
   return {
     id: `art-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
