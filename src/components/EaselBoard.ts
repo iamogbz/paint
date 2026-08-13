@@ -95,6 +95,7 @@ export class EaselBoard extends SignalElement {
     super.disconnectedCallback();
     window.removeEventListener("pointermove", this.handlePointerMove);
     window.removeEventListener("pointerup", this.handlePointerUp);
+    window.removeEventListener("pointercancel", this.handlePointerUp);
     window.removeEventListener("easel-zoom-in", this.zoomIn);
     window.removeEventListener("easel-zoom-out", this.zoomOut);
     window.removeEventListener("easel-zoom-set", this.handleZoomSet);
@@ -694,10 +695,12 @@ export class EaselBoard extends SignalElement {
       container.addEventListener("wheel", this.handleWheel, { passive: false });
       container.addEventListener("pointerdown", this.handlePointerDown);
 
-            window.removeEventListener("pointermove", this.handlePointerMove);
+      window.removeEventListener("pointermove", this.handlePointerMove);
       window.removeEventListener("pointerup", this.handlePointerUp);
-            window.addEventListener("pointermove", this.handlePointerMove);
+      window.removeEventListener("pointercancel", this.handlePointerUp);
+      window.addEventListener("pointermove", this.handlePointerMove);
       window.addEventListener("pointerup", this.handlePointerUp);
+      window.addEventListener("pointercancel", this.handlePointerUp);
     }
   }
 
@@ -889,9 +892,6 @@ export class EaselBoard extends SignalElement {
 
   private handlePointerUp = () => {
     this.isDragging = false;
-    setTimeout(() => {
-      this.hasDragged = false;
-    }, 0);
     this.updateTransformStyle();
   };
 
