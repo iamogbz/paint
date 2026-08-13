@@ -103,7 +103,6 @@ export class ArtworkGalleryModal extends SignalElement {
 
             <button
               @click=${() => {
-                soundEffects.playPop();
                 isGalleryOpenSignal.set(false);
               }}
               style=${this.renderStyleObject(closeBtnStyle)}
@@ -213,7 +212,6 @@ export class ArtworkGalleryModal extends SignalElement {
                   <!-- Thumbnail -->
                   <div
                     @click=${() => {
-                      soundEffects.playPop();
                       handleSelectArtwork(art);
                       isGalleryOpenSignal.set(false);
                     }}
@@ -259,7 +257,6 @@ export class ArtworkGalleryModal extends SignalElement {
                     <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid rgba(0,0,0,0.15);">
                       <button
                         @click=${() => {
-                          soundEffects.playPop();
                           handleSelectArtwork(art);
                           isGalleryOpenSignal.set(false);
                         }}
@@ -273,7 +270,6 @@ export class ArtworkGalleryModal extends SignalElement {
                         <!-- Download -->
                         <button
                           @click=${() => {
-                            soundEffects.playPop();
                             const cleanDataUrl = exportArtworkCleanDataUrl(art);
                             downloadImage(cleanDataUrl, `${art.name}-painting.png`);
                           }}
@@ -286,7 +282,6 @@ export class ArtworkGalleryModal extends SignalElement {
                         <!-- Delete -->
                         <button
                           @click=${() => {
-                            soundEffects.playPop();
                             handleDeleteArtwork(art.id);
                           }}
                           style="padding: 0.5rem; border-radius: 14px; background-color: #FFFFFF; border: 2px solid #000000; color: #000000; boxShadow: 2px 2px 0px 0px #000000; cursor: pointer;"
@@ -306,7 +301,6 @@ export class ArtworkGalleryModal extends SignalElement {
           <div style="padding-top: 0.75rem; border-top: 2px solid rgba(0,0,0,0.2); display: flex; align-items: center; justify-content: space-between;">
             <button
               @click=${() => {
-                soundEffects.playPop();
                 isGalleryOpenSignal.set(false);
                 currentArtworkSignal.set(null);
                 setTimeout(() => {
@@ -321,7 +315,6 @@ export class ArtworkGalleryModal extends SignalElement {
 
             <button
               @click=${() => {
-                soundEffects.playPop();
                 isGalleryOpenSignal.set(false);
               }}
               style="background-color: #FFFFFF; color: #000000; border: 2.5px solid #000000; font-weight: 900; padding: 0.625rem 1.25rem; border-radius: 20px; font-size: 0.75rem; box-shadow: 2px 2px 0px 0px #000000; text-transform: uppercase; cursor: pointer;"

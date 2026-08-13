@@ -46,8 +46,6 @@ export function exportArtworkCleanDataUrl(artwork: ProcessedArtwork): string {
 }
 
 export async function downloadImage(dataUrl: string, filename: string): Promise<void> {
-  soundEffects.playPop();
-
   if (!dataUrl) return;
 
   try {

@@ -89,8 +89,6 @@ export function handleSelectArtwork(artwork: ProcessedArtwork) {
 
 export async function handleImageSelected(imageSrc: string, name: string = "Untitled") {
   isProcessingSignal.set(true);
-  soundEffects.playBrushSwoosh();
-
   try {
     const artworkName = name.substring(0, 32);
     const newArtwork = await processImageToCartoonPalette(imageSrc, artworkName);
@@ -100,7 +98,6 @@ export async function handleImageSelected(imageSrc: string, name: string = "Unti
     currentArtworkSignal.set(newArtwork);
     isProcessingSignal.set(false);
 
-    soundEffects.playSuccessChime();
     confetti({
       particleCount: 50,
       spread: 70,
@@ -136,5 +133,4 @@ export function handleToggleSound() {
   const next = !soundEnabledSignal.get();
   soundEnabledSignal.set(next);
   soundEffects.enabled = next;
-  if (next) soundEffects.playPop();
-}
+  }

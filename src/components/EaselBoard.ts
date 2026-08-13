@@ -650,7 +650,7 @@ export class EaselBoard extends SignalElement {
         this.containerElement.removeEventListener("touchend", this.handleTouchEnd);
         this.containerElement.removeEventListener("touchcancel", this.handleTouchEnd);
         this.containerElement.removeEventListener("wheel", this.handleWheel);
-        // this.containerElement.removeEventListener("pointerdown", this.handlePointerDown);
+        this.containerElement.removeEventListener("pointerdown", this.handlePointerDown);
       }
       this.containerElement = container;
       container.addEventListener("touchstart", this.handleTouchStart, { passive: false });
@@ -658,12 +658,12 @@ export class EaselBoard extends SignalElement {
       container.addEventListener("touchend", this.handleTouchEnd, { passive: false });
       container.addEventListener("touchcancel", this.handleTouchEnd, { passive: false });
       container.addEventListener("wheel", this.handleWheel, { passive: false });
-      // container.addEventListener("pointerdown", this.handlePointerDown);
+      container.addEventListener("pointerdown", this.handlePointerDown);
 
-      // window.removeEventListener("pointerdown", this.handlePointerDown);
-      // window.removeEventListener("pointermove", this.handlePointerMove);
-      // window.removeEventListener("pointerup", this.handlePointerUp);
-      window.addEventListener("pointerdown", this.handlePointerDown);
+      window.removeEventListener("pointerdown", this.detectDragStartOutsideBoard);
+      window.removeEventListener("pointermove", this.handlePointerMove);
+      window.removeEventListener("pointerup", this.handlePointerUp);
+      window.addEventListener("pointerdown", this.detectDragStartOutsideBoard);
       window.addEventListener("pointermove", this.handlePointerMove);
       window.addEventListener("pointerup", this.handlePointerUp);
     }
@@ -706,12 +706,10 @@ export class EaselBoard extends SignalElement {
     return Math.max(-maxPan, Math.min(maxPan, y));
   }
   private zoomIn = () => {
-    soundEffects.playPop();
     this.setScale(this.scale * 1.4);
   };
 
   private zoomOut = () => {
-    soundEffects.playPop();
     this.setScale(this.scale / 1.4);
   };
 
@@ -743,10 +741,9 @@ export class EaselBoard extends SignalElement {
 
       const now = Date.now();
       if (now - this.lastTapTime < 300) {
-        soundEffects.playPop();
         this.hasDragged = true;
         if (this.scale > 1.2) {
-          this.resetZoom();
+          this.setScale(1);
         } else {
           this.setScale(2.5);
         }
@@ -820,6 +817,10 @@ export class EaselBoard extends SignalElement {
     this.updateTransformStyle();
   };
 
+  private detectDragStartOutsideBoard = (e: PointerEvent) => {
+    this.isDragging = true;
+  }
+
   private handlePointerMove = (e: PointerEvent) => {
     if (!this.isDragging) return;
     const dist = Math.hypot(e.clientX - this.pointerDownX, e.clientY - this.pointerDownY);
@@ -845,7 +846,6 @@ export class EaselBoard extends SignalElement {
 
   private handleFileInput = (file: File) => {
     if (file && file.type.startsWith("image/")) {
-      soundEffects.playPop();
       const reader = new FileReader();
       reader.onload = (event) => {
         if (event.target?.result) {
@@ -1035,7 +1035,6 @@ export class EaselBoard extends SignalElement {
                             <button
                               @click=${(e: Event) => {
                                 e.stopPropagation();
-                                soundEffects.playPop();
                                 handleImageSelected(
                                   dailyChallengeImage.dataUrl,
                                   dailyChallengeImage.name

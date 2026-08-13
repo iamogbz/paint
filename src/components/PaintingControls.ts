@@ -277,7 +277,6 @@ export class PaintingControls extends SignalElement {
                   <button
                     title="Open Gallery"
                     @click=${() => {
-                      soundEffects.playPop();
                       isGalleryOpenSignal.set(true);
                     }}
                     id="view-other-artworks-btn"
@@ -310,7 +309,6 @@ export class PaintingControls extends SignalElement {
                   <button
                     title="Zoom Out"
                     @click=${() => {
-                      soundEffects.playPop();
                       window.dispatchEvent(new CustomEvent("easel-zoom-out"));
                     }}
                     style="flex: 1; display: flex; align-items: center; justify-content: flex-start; padding: 0.375rem 1rem 0.375rem 0.75rem; border: none; background: transparent; cursor: pointer; color: #000000; min-width: 50px;"
@@ -327,7 +325,6 @@ export class PaintingControls extends SignalElement {
                   <button
                     title="Zoom In"
                     @click=${() => {
-                      soundEffects.playPop();
                       window.dispatchEvent(new CustomEvent("easel-zoom-in"));
                     }}
                     style="flex: 1; display: flex; align-items: center; justify-content: flex-end; padding: 0.375rem 0.75rem 0.375rem 1rem; border: none; background: transparent; cursor: pointer; color: #000000; min-width: 50px;"
@@ -362,7 +359,6 @@ export class PaintingControls extends SignalElement {
                     return html`
                       <button
                         @click=${() => {
-                          soundEffects.playPop();
                           selectedCategorySignal.set(cat);
                         }}
                         style=${this.renderStyleObject(btnStyle)}
