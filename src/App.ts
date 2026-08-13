@@ -23,15 +23,29 @@ export class PaintApp extends SignalElement {
     isWindowFocusedSignal.set(false);
   };
 
+  private handleFocus = () => {
+    isWindowFocusedSignal.set(true);
+  };
+
+  private handleGlobalPointerDown = () => {
+    if (!isWindowFocusedSignal.get()) {
+      isWindowFocusedSignal.set(true);
+    }
+  };
+
   connectedCallback() {
     super.connectedCallback();
     loadSavedArtworks();
     window.addEventListener("blur", this.handleBlur);
+    window.addEventListener("focus", this.handleFocus);
+    window.addEventListener("pointerdown", this.handleGlobalPointerDown, { capture: true });
     // Initialize state
     isWindowFocusedSignal.set(document.hasFocus());
   }
 
   disconnectedCallback() {
+    window.removeEventListener("pointerdown", this.handleGlobalPointerDown, { capture: true });
+    window.removeEventListener("focus", this.handleFocus);
     window.removeEventListener("blur", this.handleBlur);
     super.disconnectedCallback();
   }
