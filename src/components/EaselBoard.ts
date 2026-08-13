@@ -83,6 +83,8 @@ export class EaselBoard extends SignalElement {
     super.connectedCallback();
     window.addEventListener("easel-zoom-in", this.zoomIn);
     window.addEventListener("easel-zoom-out", this.zoomOut);
+    window.addEventListener("easel-zoom-set", this.handleZoomSet);
+    window.addEventListener("easel-pan-delta", this.handlePanDelta);
         window.addEventListener("color-drag-move", this.handleColorDragMove as EventListener);
     window.addEventListener("color-drop", this.handleColorDrop as EventListener);
   }
@@ -93,6 +95,8 @@ export class EaselBoard extends SignalElement {
     window.removeEventListener("pointerup", this.handlePointerUp);
     window.removeEventListener("easel-zoom-in", this.zoomIn);
     window.removeEventListener("easel-zoom-out", this.zoomOut);
+    window.removeEventListener("easel-zoom-set", this.handleZoomSet);
+    window.removeEventListener("easel-pan-delta", this.handlePanDelta);
         window.removeEventListener("color-drag-move", this.handleColorDragMove as EventListener);
     window.removeEventListener("color-drop", this.handleColorDrop as EventListener);
   }
@@ -710,6 +714,22 @@ export class EaselBoard extends SignalElement {
     const maxPan = ((s - 1) * h) / 2 + h * 0.25;
     return Math.max(-maxPan, Math.min(maxPan, y));
   }
+  private handleZoomSet = (e: Event) => {
+    const scale = (e as CustomEvent).detail.scale;
+    if (scale !== undefined) {
+      this.setScale(scale);
+    }
+  };
+
+  private handlePanDelta = (e: Event) => {
+    const { dx, dy } = (e as CustomEvent).detail;
+    if (this.scale > 1) {
+      this.panX = this.clampPanX(this.panX + dx, this.scale);
+      this.panY = this.clampPanY(this.panY + dy, this.scale);
+      this.updateTransformStyle();
+    }
+  };
+
   private zoomIn = () => {
     this.setScale(this.scale * 1.4);
   };

@@ -151,3 +151,14 @@ export const iconRotateCcw = (size = 16, color = "currentColor") => html`
   </svg>
 `;
 
+
+export const iconMove = (size = 16, color = "currentColor") => html`
+  <svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <polyline points="5 9 2 12 5 15"/>
+    <polyline points="9 5 12 2 15 5"/>
+    <polyline points="19 9 22 12 19 15"/>
+    <polyline points="9 19 12 22 15 19"/>
+    <line x1="2" y1="12" x2="22" y2="12"/>
+    <line x1="12" y1="2" x2="12" y2="22"/>
+  </svg>
+`;

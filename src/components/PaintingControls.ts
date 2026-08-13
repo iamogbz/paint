@@ -1,25 +1,3 @@
-import { html } from "lit";
-import { customElement, property } from "lit/decorators.js";
-import { SignalElement } from "../utils/SignalElement";
-import {
-  PALETTE_COLOR,
-  PaletteColor,
-  UsedColorStat,
-} from "../types";
-import {
-  selectedCategorySignal,
-  activeHighlightColorSignal,
-  copiedHexSignal,
-  artworksSignal,
-  currentArtworkSignal,
-  isProcessingSignal,
-  isGalleryOpenSignal,
-  zoomScaleSignal,
-  draggedColorSignal,
-  draggedPositionSignal,
-  undoStackSignal,
-  handleUndo,
-} from "../state/store";
 import {
   iconPalette,
   iconPaintBucket,
@@ -30,6 +8,7 @@ import {
   iconZoomIn,
   iconZoomOut,
   iconRotateCcw,
+  iconMove
 } from "./icons";
 import { transparentImgCss } from "./constants";
 import { soundEffects } from "../utils/soundEffects";
@@ -43,6 +22,71 @@ export class PaintingControls extends SignalElement {
   @property({ type: Array }) colorStats: UsedColorStat[] = [];
 
   private timeoutId?: number;
+  private panAnimationFrame: number | null = null;
+  private isPanning = false;
+
+  private handlePanPointerDown = (e: PointerEvent) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    e.preventDefault();
+
+    const startX = e.clientX;
+    const startY = e.clientY;
+    let hasDragged = false;
+    let currentDx = 0;
+    let currentDy = 0;
+
+    const cleanup = () => {
+      window.removeEventListener("pointermove", onPointerMove);
+      window.removeEventListener("pointerup", onPointerUp);
+      window.removeEventListener("pointercancel", onPointerCancel);
+      if (this.panAnimationFrame !== null) {
+        cancelAnimationFrame(this.panAnimationFrame);
+        this.panAnimationFrame = null;
+      }
+      this.isPanning = false;
+    };
+
+    const panLoop = () => {
+      if (!this.isPanning) return;
+      if (hasDragged) {
+        const speedFactor = 0.1;
+        window.dispatchEvent(new CustomEvent("easel-pan-delta", {
+          detail: { dx: currentDx * speedFactor, dy: currentDy * speedFactor }
+        }));
+      }
+      this.panAnimationFrame = requestAnimationFrame(panLoop);
+    };
+
+    const onPointerMove = (moveEvent: PointerEvent) => {
+      const dx = moveEvent.clientX - startX;
+      const dy = moveEvent.clientY - startY;
+      currentDx = dx;
+      currentDy = dy;
+      if (!hasDragged && Math.hypot(dx, dy) > 5) {
+        hasDragged = true;
+        this.isPanning = true;
+        this.panAnimationFrame = requestAnimationFrame(panLoop);
+      }
+    };
+
+    const onPointerUp = () => {
+      cleanup();
+      if (!hasDragged) {
+        const zoomScale = zoomScaleSignal.get();
+        if (zoomScale === 1) {
+          window.dispatchEvent(new CustomEvent("easel-zoom-set", { detail: { scale: 2 } }));
+        } else {
+          window.dispatchEvent(new CustomEvent("easel-zoom-set", { detail: { scale: 1 } }));
+        }
+      }
+    };
+
+    const onPointerCancel = () => cleanup();
+
+    window.addEventListener("pointermove", onPointerMove);
+    window.addEventListener("pointerup", onPointerUp);
+    window.addEventListener("pointercancel", onPointerCancel);
+  };
 
   private handleColorClick = (color: PaletteColor) => {
     soundEffects.playPop();
@@ -302,37 +346,75 @@ export class PaintingControls extends SignalElement {
               : ""}
           </div>
 
+
           <!-- Middle Group: Canvas Zoom Controls (Only when image is loaded) -->
           ${showPhotoControls
             ? html`
-                <div
-                  style="display: flex; align-items: center; background: rgba(255, 255, 255, 0.95); border: 2.5px solid #000000; border-radius: 9999px; box-shadow: 2px 2px 0px 0px #000000; overflow: hidden; position: relative;"
-                >
-                  <!-- Zoom Out (Left Half) -->
+                <div style="display: flex; align-items: center; gap: 0.5rem;">
+                  <!-- Zoom Out Button -->
                   <button
                     title="Zoom Out"
-                    @click=${() => {
-                      window.dispatchEvent(new CustomEvent("easel-zoom-out"));
-                    }}
-                    style="flex: 1; display: flex; align-items: center; justify-content: flex-start; padding: 0.375rem 1rem 0.375rem 0.75rem; border: none; background: transparent; cursor: pointer; color: #000000; min-width: 50px;"
+                    @click=${() => window.dispatchEvent(new CustomEvent("easel-zoom-out"))}
+                    style=${this.renderStyleObject({
+                      width: "36px",
+                      height: "36px",
+                      borderRadius: "50%",
+                      backgroundColor: "#FFFFFF",
+                      border: "2.5px solid #000000",
+                      boxShadow: "2px 2px 0px 0px #000000",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: "pointer",
+                      padding: "0",
+                      transition: "transform 0.15s ease, box-shadow 0.15s ease",
+                    })}
                   >
-                    ${iconZoomOut(16, "#000000")}
+                    ${iconZoomOut(18, "#000000")}
                   </button>
-                  
-                  <!-- Center Text Overlay (Pointer Events None) -->
-                  <div style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none; font-size: 0.75rem; font-weight: 900; color: #000000;">
-                    ${Math.round(zoomScale * 100)}%
-                  </div>
 
-                  <!-- Zoom In (Right Half) -->
+                  <!-- Pan Button -->
+                  <button
+                    title="Pan Canvas"
+                    @pointerdown=${this.handlePanPointerDown}
+                    style=${this.renderStyleObject({
+                      width: "36px",
+                      height: "36px",
+                      borderRadius: "50%",
+                      backgroundColor: zoomScale !== 1 ? "#000000" : "#FFFFFF",
+                      border: "2.5px solid #000000",
+                      boxShadow: "2px 2px 0px 0px #000000",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: "grab",
+                      padding: "0",
+                      transition: "transform 0.15s ease, box-shadow 0.15s ease",
+                    })}
+                  >
+                    ${iconMove(18, zoomScale !== 1 ? "#FFFFFF" : "#000000")}
+                  </button>
+
+                  <!-- Zoom In Button -->
                   <button
                     title="Zoom In"
-                    @click=${() => {
-                      window.dispatchEvent(new CustomEvent("easel-zoom-in"));
-                    }}
-                    style="flex: 1; display: flex; align-items: center; justify-content: flex-end; padding: 0.375rem 0.75rem 0.375rem 1rem; border: none; background: transparent; cursor: pointer; color: #000000; min-width: 50px;"
+                    @click=${() => window.dispatchEvent(new CustomEvent("easel-zoom-in"))}
+                    style=${this.renderStyleObject({
+                      width: "36px",
+                      height: "36px",
+                      borderRadius: "50%",
+                      backgroundColor: "#FFFFFF",
+                      border: "2.5px solid #000000",
+                      boxShadow: "2px 2px 0px 0px #000000",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: "pointer",
+                      padding: "0",
+                      transition: "transform 0.15s ease, box-shadow 0.15s ease",
+                    })}
                   >
-                    ${iconZoomIn(16, "#000000")}
+                    ${iconZoomIn(18, "#000000")}
                   </button>
                 </div>
               `
