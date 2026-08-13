@@ -27,7 +27,7 @@ import {
   iconDownload,
   iconZoomIn,
   iconZoomOut,
-  iconRotateCcw,
+  
 } from "./icons";
 import { transparentImgCss } from "./constants";
 import { soundEffects } from "../utils/soundEffects";
@@ -304,36 +304,33 @@ export class PaintingControls extends SignalElement {
           ${showPhotoControls
             ? html`
                 <div
-                  style="display: flex; align-items: center; gap: 0.25rem; background: rgba(255, 255, 255, 0.95); border: 2.5px solid #000000; border-radius: 9999px; padding: 0.25rem 0.5rem; box-shadow: 2px 2px 0px 0px #000000;"
+                  style="display: flex; align-items: center; background: rgba(255, 255, 255, 0.95); border: 2.5px solid #000000; border-radius: 9999px; box-shadow: 2px 2px 0px 0px #000000; overflow: hidden; position: relative;"
                 >
+                  <!-- Zoom Out (Left Half) -->
                   <button
                     title="Zoom Out"
                     @click=${() => {
                       soundEffects.playPop();
                       window.dispatchEvent(new CustomEvent("easel-zoom-out"));
                     }}
-                    style="display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: none; background: transparent; cursor: pointer; color: #000000; padding: 0;"
+                    style="flex: 1; display: flex; align-items: center; justify-content: flex-start; padding: 0.375rem 1rem 0.375rem 0.75rem; border: none; background: transparent; cursor: pointer; color: #000000; min-width: 50px;"
                   >
                     ${iconZoomOut(16, "#000000")}
                   </button>
-                  <button
-                    title="Reset Zoom"
-                    @click=${() => {
-                      soundEffects.playPop();
-                      window.dispatchEvent(new CustomEvent("easel-zoom-reset"));
-                    }}
-                    style="font-size: 0.75rem; font-weight: 900; color: #000000; padding: 0 4px; display: flex; align-items: center; gap: 2px; border: none; background: transparent; cursor: pointer;"
-                  >
+                  
+                  <!-- Center Text Overlay (Pointer Events None) -->
+                  <div style="position: absolute; left: 50%; top: 50%; transform: translate(-50%, -50%); pointer-events: none; font-size: 0.75rem; font-weight: 900; color: #000000;">
                     ${Math.round(zoomScale * 100)}%
-                    ${zoomScale > 1.05 ? iconRotateCcw(12, "#E63946") : ""}
-                  </button>
+                  </div>
+
+                  <!-- Zoom In (Right Half) -->
                   <button
                     title="Zoom In"
                     @click=${() => {
                       soundEffects.playPop();
                       window.dispatchEvent(new CustomEvent("easel-zoom-in"));
                     }}
-                    style="display: flex; align-items: center; justify-content: center; width: 26px; height: 26px; border: none; background: transparent; cursor: pointer; color: #000000; padding: 0;"
+                    style="flex: 1; display: flex; align-items: center; justify-content: flex-end; padding: 0.375rem 0.75rem 0.375rem 1rem; border: none; background: transparent; cursor: pointer; color: #000000; min-width: 50px;"
                   >
                     ${iconZoomIn(16, "#000000")}
                   </button>

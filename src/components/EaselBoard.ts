@@ -82,8 +82,7 @@ export class EaselBoard extends SignalElement {
     super.connectedCallback();
     window.addEventListener("easel-zoom-in", this.zoomIn);
     window.addEventListener("easel-zoom-out", this.zoomOut);
-    window.addEventListener("easel-zoom-reset", this.resetZoom);
-    window.addEventListener("color-drag-move", this.handleColorDragMove as EventListener);
+        window.addEventListener("color-drag-move", this.handleColorDragMove as EventListener);
     window.addEventListener("color-drop", this.handleColorDrop as EventListener);
   }
 
@@ -93,8 +92,7 @@ export class EaselBoard extends SignalElement {
     window.removeEventListener("pointerup", this.handlePointerUp);
     window.removeEventListener("easel-zoom-in", this.zoomIn);
     window.removeEventListener("easel-zoom-out", this.zoomOut);
-    window.removeEventListener("easel-zoom-reset", this.resetZoom);
-    window.removeEventListener("color-drag-move", this.handleColorDragMove as EventListener);
+        window.removeEventListener("color-drag-move", this.handleColorDragMove as EventListener);
     window.removeEventListener("color-drop", this.handleColorDrop as EventListener);
   }
 
@@ -707,16 +705,6 @@ export class EaselBoard extends SignalElement {
     const maxPan = ((s - 1) * h) / 2 + h * 0.25;
     return Math.max(-maxPan, Math.min(maxPan, y));
   }
-
-  private resetZoom = () => {
-    soundEffects.playPop();
-    this.scale = 1;
-    this.panX = 0;
-    this.panY = 0;
-    zoomScaleSignal.set(1);
-    this.updateTransformStyle();
-  };
-
   private zoomIn = () => {
     soundEffects.playPop();
     this.setScale(this.scale * 1.4);
