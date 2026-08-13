@@ -466,16 +466,9 @@ export class EaselBoard extends SignalElement {
             delete currentPainted[regionId];
             soundEffects.playPop();
           } else {
-            // Paint or replace existing region color ONLY if it's the correct expected color
-            const expectedHex = currentArtwork.regionExpectedColors?.[regionId];
-            if (activeColor.hexCode === expectedHex) {
-              currentPainted[regionId] = activeColor.hexCode;
-              soundEffects.playPop();
-            } else if (!expectedHex) {
-              // fallback if no expected hex
-              currentPainted[regionId] = activeColor.hexCode;
-              soundEffects.playPop();
-            }
+            // Paint or replace existing region color
+            currentPainted[regionId] = activeColor.hexCode;
+            soundEffects.playPop();
           }
 
           const updatedArtwork: ProcessedArtwork = {
@@ -598,14 +591,8 @@ export class EaselBoard extends SignalElement {
             delete currentPainted[regionId];
             soundEffects.playPop();
           } else {
-            const expectedHex = currentArtwork.regionExpectedColors?.[regionId];
-            if (color === expectedHex) {
-              currentPainted[regionId] = color;
-              soundEffects.playPop();
-            } else if (!expectedHex) {
-              currentPainted[regionId] = color;
-              soundEffects.playPop();
-            }
+            currentPainted[regionId] = color;
+            soundEffects.playPop();
           }
 
           const updatedArtwork: ProcessedArtwork = {
