@@ -135,7 +135,7 @@ export class EaselBoard extends SignalElement {
     if (artwork.regionMapData && artwork.regionMapData.length === artwork.width * artwork.height) {
       this.regionMapData = new Int32Array(artwork.regionMapData);
       this.computeBorderMap(artwork.width, artwork.height);
-      
+
       // If we didn't have regionExpectedColors but we had regionMapData, we must extract colors from image
       if (!artwork.regionExpectedColors) {
         this.extractColorsFromImage(artwork);
@@ -174,7 +174,7 @@ export class EaselBoard extends SignalElement {
       if (!ctx) return;
       ctx.drawImage(img, 0, 0);
       const srcData = ctx.getImageData(0, 0, artwork.width, artwork.height);
-      
+
       // Just extract colors using existing map
       if (this.regionMapData) {
         const w = artwork.width;
@@ -220,7 +220,7 @@ export class EaselBoard extends SignalElement {
         const a = data[pxIdx + 3];
 
         const regionId = nextRegionId++;
-        
+
         const hex = `#${r.toString(16).padStart(2, '0')}${g.toString(16).padStart(2, '0')}${b.toString(16).padStart(2, '0')}FF`.toUpperCase();
         this.regionExpectedColors.set(regionId, hex);
 
@@ -408,8 +408,8 @@ export class EaselBoard extends SignalElement {
           if (this.isBorderPixel[i] === 1) {
             const regionId = this.regionMapData[i];
             const expectedColor = this.regionExpectedColors.get(regionId) || currentArtwork.regionExpectedColors?.[regionId];
-            
-            if (expectedColor && expectedColor.startsWith(targetHexUpper.substring(0, 7))) { 
+
+            if (expectedColor && expectedColor.startsWith(targetHexUpper.substring(0, 7))) {
               const pxIdx = i * 4;
               overlayPixels[pxIdx] = targetRGBA[0];
               overlayPixels[pxIdx + 1] = targetRGBA[1];
@@ -490,7 +490,7 @@ export class EaselBoard extends SignalElement {
   private handleCanvasPointerUp = (e: PointerEvent) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
     if (!this.pointerDownOnCanvas) return;
-    
+
     // Always reset the pointer down state so we don't accidentally paint on subsequent clicks
     // that were swallowed during the pointerdown phase (e.g. dismissing overlays).
     this.pointerDownOnCanvas = false;
@@ -632,7 +632,7 @@ export class EaselBoard extends SignalElement {
     const customEvent = e as CustomEvent;
     const { x: clientX, y: mouseY, color } = customEvent.detail;
     const clientY = mouseY - this.dropperBufferPx;
-    
+
     // Clear hover effect
     if (this.hoveredRegionId !== null) {
       this.hoveredRegionId = null;
@@ -665,7 +665,7 @@ export class EaselBoard extends SignalElement {
         if (regionId !== undefined && regionId >= 0) {
           const currentPainted = { ...(currentArtwork.paintedRegionsState || {}) };
           pushUndoState(currentPainted);
-          
+
           if (color === PALETTE_COLOR.transparent.hexCode) {
             delete currentPainted[regionId];
             soundEffects.playPop();
@@ -1042,7 +1042,7 @@ export class EaselBoard extends SignalElement {
             <!-- Main Frame -->
             <div style=${this.renderStyleObject(mainFrameStyle)}>
               <!-- Easel Canvas Display Area -->
-              <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; padding: 1rem; background-size: 0.5rem 0.5rem; background-image: ${transparentImgCss};">
+              <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; padding: 0.5rem; background-size: 0.5rem 0.5rem; background-image: ${transparentImgCss};">
                 <!-- STATE 1: Processing Loader -->
                 ${isProcessing
                   ? html`
@@ -1127,7 +1127,7 @@ export class EaselBoard extends SignalElement {
                   ? html`
                       <div style="width: 100%; display: flex; flex-direction: column; align-items: center;">
                         <div
-                          style="position: relative; width: 100%; aspect-ratio: ${currentArtwork.width} / ${currentArtwork.height}; border-radius: 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; background-color: #ffffff; border: 2px solid rgba(0, 0, 0, 0.25);"
+                          style="position: relative; width: 100%; aspect-ratio: ${currentArtwork.width} / ${currentArtwork.height}; border-radius: 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; background-color: #ffffff;"
                         >
                           <canvas
                             id="artboard-canvas"
