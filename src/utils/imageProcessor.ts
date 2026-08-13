@@ -370,7 +370,7 @@ export async function processImageToCartoonPalette(
   // 9. Calculate color statistics for used colors
   const colorStats: UsedColorStat[] = PALETTE_COLORS.map((color, index) => {
     const count = colorCounts[index];
-    const percentage = Math.round((count / totalPixels) * 100);
+    const percentage = Math.ceil((count / totalPixels) * 100);
     return {
       color,
       count,

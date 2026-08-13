@@ -176,6 +176,25 @@ export class PaintingControls extends SignalElement {
     // Map stats by color ID
     const statsMap = new Map<string, UsedColorStat>();
     (this.colorStats || []).forEach((stat) => statsMap.set(stat.color.id, stat));
+    
+    // Check which colors are fully painted
+    const paintedRegionsState = currentArtwork?.paintedRegionsState || {};
+    const expectedColorStatus = new Map<string, { total: number; painted: number }>();
+
+    if (currentArtwork?.regionExpectedColors) {
+      for (const [regionIdStr, expectedHex] of Object.entries(currentArtwork.regionExpectedColors)) {
+        if (!expectedColorStatus.has(expectedHex)) {
+          expectedColorStatus.set(expectedHex, { total: 0, painted: 0 });
+        }
+        const status = expectedColorStatus.get(expectedHex)!;
+        status.total += 1;
+        
+        const regionId = parseInt(regionIdStr, 10);
+        if (paintedRegionsState[regionId] === expectedHex) {
+          status.painted += 1;
+        }
+      }
+    }
 
     const allColors = Object.values(PALETTE_COLOR);
     const filteredColors = allColors.filter((color) => {
@@ -394,6 +413,8 @@ export class PaintingControls extends SignalElement {
                 ${filteredColors.map((color) => {
                   const stat = statsMap.get(color.id);
                   const isUsed = stat?.count > 0;
+                  const colorStatus = expectedColorStatus.get(color.hexCode);
+                  const isFullyPainted = colorStatus ? colorStatus.total > 0 && colorStatus.total === colorStatus.painted : false;
                   const isSelected = activeColor?.id === color.id;
                   const isCopied = copiedHex === color.hexCode;
 
@@ -441,7 +462,7 @@ export class PaintingControls extends SignalElement {
                     >
                       <!-- Color Circle -->
                       <div style=${this.renderStyleObject(circleStyle)}>
-                        ${isUsed
+                        ${isFullyPainted
                           ? html`
                               <div
                                 style="position: absolute; top: -4px; right: -4px; width: 20px; height: 20px; background-color: #000000; border-radius: 9999px; border: 2px solid #FFFFFF; display: flex; align-items: center; justify-content: center; color: #FFFFFF;"
