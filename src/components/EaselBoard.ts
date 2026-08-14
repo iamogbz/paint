@@ -1251,19 +1251,50 @@ export class EaselBoard extends SignalElement {
     }
   }
 
-  private setScale(s: number) {
-    const newScale = Math.min(8.0, Math.max(0.5, s));
-    if (newScale === 1) {
-      this.scale = 1;
-      this.panX = 0;
-      this.panY = 0;
+  private setScaleAtPoint(newScale: number, clientX?: number, clientY?: number) {
+    newScale = Math.min(8.0, Math.max(0.5, newScale));
+    if (newScale === this.scale) return;
+
+    if (clientX === undefined || clientY === undefined || !this.containerElement) {
+      if (newScale === 1) {
+        this.scale = 1;
+        this.panX = 0;
+        this.panY = 0;
+      } else {
+        this.scale = newScale;
+        this.panX = this.clampPanX(this.panX, newScale);
+        this.panY = this.clampPanY(this.panY, newScale);
+      }
     } else {
-      this.scale = newScale;
-      this.panX = this.clampPanX(this.panX, newScale);
-      this.panY = this.clampPanY(this.panY, newScale);
+      const rect = this.containerElement.getBoundingClientRect();
+      const centerX = rect.left + rect.width / 2;
+      const centerY = rect.top + rect.height / 2;
+      
+      const x = clientX - centerX;
+      const y = clientY - centerY;
+      
+      const ratio = newScale / this.scale;
+      
+      const newPanX = x - (x - this.panX) * ratio;
+      const newPanY = y - (y - this.panY) * ratio;
+
+      if (newScale === 1) {
+        this.scale = 1;
+        this.panX = 0;
+        this.panY = 0;
+      } else {
+        this.scale = newScale;
+        this.panX = this.clampPanX(newPanX, newScale);
+        this.panY = this.clampPanY(newPanY, newScale);
+      }
     }
+    
     zoomScaleSignal.set(this.scale);
     this.updateTransformStyle();
+  }
+
+  private setScale(s: number) {
+    this.setScaleAtPoint(s);
   }
 
   private clampPanX(x: number, s: number): number {
@@ -1372,12 +1403,28 @@ export class EaselBoard extends SignalElement {
 
       const midX = (t1.clientX + t2.clientX) / 2;
       const midY = (t1.clientY + t2.clientY) / 2;
-      const dx = midX - this.startTouchX;
-      const dy = midY - this.startTouchY;
+      
+      let newPanX = this.startPanX;
+      let newPanY = this.startPanY;
+      
+      if (this.containerElement) {
+        const rect = this.containerElement.getBoundingClientRect();
+        const centerX = rect.left + rect.width / 2;
+        const centerY = rect.top + rect.height / 2;
+        
+        const startX = this.startTouchX - centerX;
+        const startY = this.startTouchY - centerY;
+        const endX = midX - centerX;
+        const endY = midY - centerY;
+        
+        const scaleRatio = targetScale / this.initialScale;
+        newPanX = endX - (startX - this.startPanX) * scaleRatio;
+        newPanY = endY - (startY - this.startPanY) * scaleRatio;
+      }
 
       this.scale = targetScale;
-      this.panX = this.clampPanX(this.startPanX + dx, targetScale);
-      this.panY = this.clampPanY(this.startPanY + dy, targetScale);
+      this.panX = this.clampPanX(newPanX, targetScale);
+      this.panY = this.clampPanY(newPanY, targetScale);
       zoomScaleSignal.set(this.scale);
       this.updateTransformStyle();
     } else if (e.touches.length === 1) {
@@ -1408,7 +1455,7 @@ export class EaselBoard extends SignalElement {
   private handleWheel = (e: WheelEvent) => {
     e.preventDefault();
     const delta = e.deltaY < 0 ? 1.15 : 0.85;
-    this.setScale(this.scale * delta);
+    this.setScaleAtPoint(this.scale * delta, e.clientX, e.clientY);
   };
 
   private handlePointerDown = (e: PointerEvent) => {
