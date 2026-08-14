@@ -2,7 +2,7 @@ import { ProcessedArtwork, UsedColorStat, PaletteColor } from "../types";
 import { generateDynamicPalette, ColorQuantizer, getPerceptualColorDistance } from "./colorUtils";
 
 export const MIN_SIZE_PX = 400;
-export const MAX_SIZE_PX = 1200;
+export const MAX_SIZE_PX = 1600;
 
 // Base values designed for an 800px image, will be scaled relative to the actual image area
 export const BASE_ISLAND_AREA = 32;
@@ -421,8 +421,8 @@ export async function processImageToCartoonPalette(
   }
   const smoothedPixels = currentPixels;
   
-  // Generate Dynamic Palette allowing up to 128 colors
-  const generatedColors = generateDynamicPalette(smoothedPixels, 128);
+  // Generate Dynamic Palette
+  const generatedColors = generateDynamicPalette(smoothedPixels, 32);
   const paletteColors = [transparentColor, ...generatedColors];
   const quantizer = new ColorQuantizer(paletteColors);
 
