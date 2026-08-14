@@ -10,6 +10,11 @@ export interface UsedColorStat {
   percentage: number;
 }
 
+export interface UndoHistoryItem {
+  paintedRegionsState: Record<number, string>;
+  colorStats?: UsedColorStat[];
+}
+
 export interface ProcessedArtwork {
   id: string;
   name: string;

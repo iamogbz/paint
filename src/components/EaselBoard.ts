@@ -900,7 +900,7 @@ export class EaselBoard extends SignalElement {
     // give some extra room at the bottom depending on screen size
     const maxPanUp = basePan + minScreenSize * 0.3;
     // stop it from going to far down, limit adjustment by half screen size
-    const maxPanDown = Math.max(0, basePan - minScreenSize * 0.5);
+    const maxPanDown = Math.max(0, basePan - minScreenSize * 0.3);
     return Math.max(-maxPanUp, Math.min(maxPanDown, y));
   }
 

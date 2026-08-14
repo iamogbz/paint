@@ -1,6 +1,6 @@
 import { signal, computed } from "@lit-labs/signals";
 import { get, set } from "idb-keyval";
-import { ProcessedArtwork, PaletteColor } from "../types";
+import { ProcessedArtwork, PaletteColor, UndoHistoryItem, UsedColorStat } from "../types";
 import { processImageToCartoonPalette } from "../utils/imageProcessor";
 import { soundEffects } from "../utils/soundEffects";
 import confetti from "canvas-confetti";
@@ -16,7 +16,7 @@ export const activeHighlightColorSignal = signal<PaletteColor | null>(null);
 export const isGalleryOpenSignal = signal<boolean>(false);
 export const isColorPickerOpenSignal = signal<boolean>(false);
 export const copiedHexSignal = signal<string | null>(null);
-export const undoStackSignal = signal<Record<number, string>[]>([]);
+export const undoStackSignal = signal<UndoHistoryItem[]>([]);
 export const isDragOverSignal = signal<boolean>(false);
 export const zoomScaleSignal = signal<number>(1);
 
@@ -156,8 +156,19 @@ export function handleToggleSound() {
   soundEffects.enabled = next;
   }
 
-export function pushUndoState(paintedRegionsState: Record<number, string>) {
-  undoStackSignal.set([...undoStackSignal.get(), { ...paintedRegionsState }]);
+export function pushUndoState(
+  paintedRegionsState: Record<number, string>,
+  colorStats?: UsedColorStat[]
+) {
+  const current = currentArtworkSignal.get();
+  const stats = colorStats || current?.colorStats;
+  undoStackSignal.set([
+    ...undoStackSignal.get(),
+    {
+      paintedRegionsState: { ...paintedRegionsState },
+      colorStats: stats ? stats.map((s) => ({ ...s, color: { ...s.color } })) : undefined,
+    },
+  ]);
 }
 
 export function handleDeleteSwatchColor(color: PaletteColor) {
@@ -177,8 +188,8 @@ export function handleDeleteSwatchColor(color: PaletteColor) {
     return;
   }
 
-  // Push current painted state to undo stack before modifying
-  pushUndoState(currentPainted);
+  // Push current painted state and current colorStats to undo stack before modifying
+  pushUndoState(currentPainted, current.colorStats);
 
   // Unpaint any region that was painted with this color
   const newPaintedState: Record<number, string> = {};
@@ -220,9 +231,10 @@ export function handleUndo() {
   const newStack = stack.slice(0, stack.length - 1);
   undoStackSignal.set(newStack);
 
-  const updatedArtwork = {
+  const updatedArtwork: ProcessedArtwork = {
     ...current,
-    paintedRegionsState: previousState,
+    paintedRegionsState: previousState.paintedRegionsState,
+    colorStats: previousState.colorStats ? previousState.colorStats : current.colorStats,
     modifiedAt: Date.now(),
   };
 
