@@ -2,7 +2,7 @@ import { ProcessedArtwork, UsedColorStat, PaletteColor } from "../types";
 import { generateDynamicPalette, ColorQuantizer, getPerceptualColorDistance } from "./colorUtils";
 
 export const MIN_SIZE_PX = 400;
-export const MAX_SIZE_PX = 3200;
+export const MAX_SIZE_PX = 1200;
 
 // Base values designed for an 800px image, will be scaled relative to the actual image area
 export const BASE_ISLAND_AREA = 32;
@@ -50,31 +50,14 @@ export function calculateTargetDimensions(
  */
 function applyBilateralFilter(
   srcPixels: Uint8ClampedArray | Uint8Array,
+  dstPixels: Uint8ClampedArray,
+  tempPixels: Float32Array,
   width: number,
   height: number,
-  spatialSigma = 2.0,
-  rangeSigma = 45.0,
-  radius = 3
-): Uint8ClampedArray {
-  const r = Math.max(1, Math.round(radius));
-  const tempPixels = new Float32Array(srcPixels.length);
-  const dstPixels = new Uint8ClampedArray(srcPixels.length);
-
-  const twoSpatialSigmaSq = 2 * Math.max(0.1, spatialSigma) * Math.max(0.1, spatialSigma);
-  const twoRangeSigmaSq = 2 * Math.max(0.1, rangeSigma) * Math.max(0.1, rangeSigma);
-
-  // Precompute spatial weights (1D)
-  const spatialWeights = new Float32Array(r * 2 + 1);
-  for (let d = -r; d <= r; d++) {
-    spatialWeights[d + r] = Math.exp(-(d * d) / twoSpatialSigmaSq);
-  }
-
-  // Precompute range weights (max dist sq is 255^2 * 3 = 195075)
-  const rangeWeights = new Float32Array(195076);
-  for (let i = 0; i <= 195075; i++) {
-    rangeWeights[i] = Math.exp(-i / twoRangeSigmaSq);
-  }
-
+  r: number,
+  spatialWeights: Float32Array,
+  rangeWeights: Float32Array
+) {
   // Horizontal pass
   for (let y = 0; y < height; y++) {
     const rowOffset = y * width;
@@ -157,8 +140,6 @@ function applyBilateralFilter(
       dstPixels[idx + 3] = cA;
     }
   }
-
-  return dstPixels;
 }
 
 /**
@@ -166,20 +147,19 @@ function applyBilateralFilter(
  */
 function applyMajoritySmoothing(
   colorIndices: Int16Array,
+  copyIndices: Int16Array,
   width: number,
   height: number,
-  radius: number = 1
+  r: number,
+  counts: Uint16Array
 ) {
-  const r = Math.max(1, Math.round(radius));
-  const copy = new Int16Array(colorIndices);
-  // Max palette size is 129 (128 colors + transparent)
-  const counts = new Uint16Array(256); 
+  copyIndices.set(colorIndices);
 
   for (let y = r; y < height - r; y++) {
     const rowIdx = y * width;
     for (let x = r; x < width - r; x++) {
       const idx = rowIdx + x;
-      const centerVal = copy[idx];
+      const centerVal = copyIndices[idx];
       
       let maxCount = 0;
       let dominantVal = centerVal;
@@ -187,7 +167,7 @@ function applyMajoritySmoothing(
       for (let dy = -r; dy <= r; dy++) {
         const nRow = (y + dy) * width;
         for (let dx = -r; dx <= r; dx++) {
-          const nVal = copy[nRow + (x + dx)];
+          const nVal = copyIndices[nRow + (x + dx)];
           const c = counts[nVal] + 1;
           counts[nVal] = c;
           if (c > maxCount) {
@@ -203,7 +183,7 @@ function applyMajoritySmoothing(
       for (let dy = -r; dy <= r; dy++) {
         const nRow = (y + dy) * width;
         for (let dx = -r; dx <= r; dx++) {
-          counts[copy[nRow + (x + dx)]] = 0;
+          counts[copyIndices[nRow + (x + dx)]] = 0;
         }
       }
     }
@@ -401,22 +381,45 @@ export async function processImageToCartoonPalette(
   const sizeRatio = Math.max(width, height) / 800;
   
   // High contrast and color grouping with larger radius Bilateral Filter
-  let smoothedPixels = rawPixels;
   const passCount = 4;
   const filterRadius = Math.max(2, Math.round(3 * sizeRatio));
   const spatialSigma = filterRadius * 0.8;
   const rangeSigma = 45; // High range sigma aggressively flattens small color variations
 
+  const r = Math.max(1, Math.round(filterRadius));
+  const twoSpatialSigmaSq = 2 * Math.max(0.1, spatialSigma) * Math.max(0.1, spatialSigma);
+  const twoRangeSigmaSq = 2 * Math.max(0.1, rangeSigma) * Math.max(0.1, rangeSigma);
+
+  const spatialWeights = new Float32Array(r * 2 + 1);
+  for (let d = -r; d <= r; d++) {
+    spatialWeights[d + r] = Math.exp(-(d * d) / twoSpatialSigmaSq);
+  }
+
+  const rangeWeights = new Float32Array(195076);
+  for (let i = 0; i <= 195075; i++) {
+    rangeWeights[i] = Math.exp(-i / twoRangeSigmaSq);
+  }
+
+  let currentPixels: Uint8ClampedArray | Uint8Array = rawPixels;
+  let nextPixels = new Uint8ClampedArray(rawPixels.length);
+  const tempPixels = new Float32Array(rawPixels.length);
+
   for (let i = 0; i < passCount; i++) {
-    smoothedPixels = applyBilateralFilter(
-      smoothedPixels,
+    applyBilateralFilter(
+      currentPixels,
+      nextPixels,
+      tempPixels,
       width,
       height,
-      spatialSigma,
-      rangeSigma,
-      filterRadius
+      r,
+      spatialWeights,
+      rangeWeights
     );
+    const t = currentPixels;
+    currentPixels = nextPixels;
+    nextPixels = (t === rawPixels) ? new Uint8ClampedArray(rawPixels.length) : (t as any);
   }
+  const smoothedPixels = currentPixels;
   
   // Generate Dynamic Palette allowing up to 128 colors
   const generatedColors = generateDynamicPalette(smoothedPixels, 128);
@@ -438,8 +441,12 @@ export async function processImageToCartoonPalette(
   // Majority Smoothing to round jaggies and thin strips
   const smoothingPasses = 3;
   const smoothingRadius = Math.max(1, Math.round(2 * sizeRatio));
+  const sr = Math.max(1, Math.round(smoothingRadius));
+  const copyIndices = new Int16Array(colorIndices.length);
+  const countsBuffer = new Uint16Array(256);
+  
   for (let i = 0; i < smoothingPasses; i++) {
-    applyMajoritySmoothing(colorIndices, width, height, smoothingRadius);
+    applyMajoritySmoothing(colorIndices, copyIndices, width, height, sr, countsBuffer);
   }
 
   // Island Pruning: Definition of 'tiny' scales with image size squared
@@ -549,7 +556,7 @@ export async function processImageToCartoonPalette(
     modifiedAt: Date.now(),
     colorStats,
     totalPixels,
-    regionMapData: Array.from(regionMap),
+    regionMapData: regionMap,
     regionExpectedColors,
   };
 }

@@ -29,6 +29,6 @@ export interface ProcessedArtwork {
   totalPixels: number;
   paintedRegionsState?: Record<number, string>;
   paintedCanvasDataUrl?: string;
-  regionMapData?: number[];
+  regionMapData?: Int32Array | number[];
   regionExpectedColors?: Record<number, string>;
 }
