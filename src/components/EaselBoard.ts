@@ -62,6 +62,7 @@ export class EaselBoard extends SignalElement {
   private lastPaintedStateStr = "";
   private lastBorderPaintedStateStr = "";
   private lastTargetHex: string | null = null;
+  private lastZoomScale = 1;
   private borderOverlayCanvas: HTMLCanvasElement | null = null;
   private borderOverlayCtx: CanvasRenderingContext2D | null = null;
 
@@ -634,9 +635,12 @@ export class EaselBoard extends SignalElement {
     const cacheableTargetHex = targetHex || "none";
     const paintedState = currentArtwork.paintedRegionsState || {};
 
+    const currentZoom = zoomScaleSignal.get();
+
     if (
       this.lastTargetHex !== cacheableTargetHex ||
-      this.lastBorderPaintedStateStr !== currentPaintedStateStr
+      this.lastBorderPaintedStateStr !== currentPaintedStateStr ||
+      this.lastZoomScale !== currentZoom
     ) {
       this.borderOverlayCtx.clearRect(0, 0, w, h);
       if (this.regionBorderPixels && targetHex && targetHex !== "#00000000") {
@@ -645,7 +649,7 @@ export class EaselBoard extends SignalElement {
         const overlayPixels = overlayImgData.data;
         let hasVisibleBorders = false;
 
-        const borderThickness = Math.max(1, Math.round(w / 400));
+        const borderThickness = Math.max(1, Math.round(w / 400 / zoomScaleSignal.get()));
         const offsetStart = -Math.floor((borderThickness - 1) / 2);
         const offsetEnd = Math.ceil((borderThickness - 1) / 2);
         
@@ -712,6 +716,7 @@ export class EaselBoard extends SignalElement {
       }
       this.lastTargetHex = cacheableTargetHex;
       this.lastBorderPaintedStateStr = currentPaintedStateStr;
+      this.lastZoomScale = currentZoom;
     }
 
     // Draw the cached border overlay
@@ -721,7 +726,7 @@ export class EaselBoard extends SignalElement {
     if (this.hoveredRegionId !== null && this.regionBorderPixels) {
       const borderIndices = this.regionBorderPixels.get(this.hoveredRegionId);
       if (borderIndices && borderIndices.length > 0) {
-        const borderThickness = Math.max(1, Math.round(w / 400));
+        const borderThickness = Math.max(1, Math.round(w / 400 / zoomScaleSignal.get()));
         const offsetStart = -Math.floor((borderThickness - 1) / 2);
         
         if (targetHex && targetHex !== "#00000000") {
@@ -1563,6 +1568,7 @@ export class EaselBoard extends SignalElement {
     const currentArtworkId = currentArtwork?.id || null;
     activeHighlightColorSignal.get(); // Track active color to trigger updates
     draggedColorSignal.get(); // Track dragged color to trigger updates
+    zoomScaleSignal.get(); // Track zoom scale to trigger redraw
     if (currentArtworkId !== this.lastArtworkId) {
       this.lastArtworkId = currentArtworkId;
       this.scale = 1;
