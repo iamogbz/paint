@@ -459,6 +459,7 @@ export class EaselBoard extends SignalElement {
         const targetHexUpper = targetHex.toUpperCase();
         const overlayImgData = this.borderOverlayCtx.createImageData(w, h);
         const overlayPixels = overlayImgData.data;
+        const paintedState = currentArtwork.paintedRegionsState || {};
 
         let hasVisibleBorders = false;
         for (let i = 0; i < w * h; i++) {
@@ -472,11 +473,34 @@ export class EaselBoard extends SignalElement {
               expectedColor &&
               expectedColor.startsWith(targetHexUpper.substring(0, 7))
             ) {
-              const pxIdx = i * 4;
-              overlayPixels[pxIdx] = targetRGBA[0];
-              overlayPixels[pxIdx + 1] = targetRGBA[1];
-              overlayPixels[pxIdx + 2] = targetRGBA[2];
-              overlayPixels[pxIdx + 3] = 128; // 50% partially transparent colored guide border
+              const paintedColor = paintedState[regionId];
+              const isFilledDifferent =
+                paintedColor &&
+                !paintedColor.toUpperCase().startsWith(targetHexUpper.substring(0, 7));
+
+              if (isFilledDifferent) {
+                const x = i % w;
+                const y = Math.floor(i / w);
+                for (let dy = -1; dy <= 1; dy++) {
+                  for (let dx = -1; dx <= 1; dx++) {
+                    const nx = x + dx;
+                    const ny = y + dy;
+                    if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
+                      const pxIdx = (ny * w + nx) * 4;
+                      overlayPixels[pxIdx] = targetRGBA[0];
+                      overlayPixels[pxIdx + 1] = targetRGBA[1];
+                      overlayPixels[pxIdx + 2] = targetRGBA[2];
+                      overlayPixels[pxIdx + 3] = 128;
+                    }
+                  }
+                }
+              } else {
+                const pxIdx = i * 4;
+                overlayPixels[pxIdx] = targetRGBA[0];
+                overlayPixels[pxIdx + 1] = targetRGBA[1];
+                overlayPixels[pxIdx + 2] = targetRGBA[2];
+                overlayPixels[pxIdx + 3] = 128; // 50% partially transparent colored guide border
+              }
               hasVisibleBorders = true;
             }
           }
