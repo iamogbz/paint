@@ -1,73 +1,72 @@
 import { ProcessedArtwork, UsedColorStat, PaletteColor } from "../types";
 import { generateDynamicPalette, ColorQuantizer, getPerceptualColorDistance } from "./colorUtils";
 
-export const MIN_ISLAND_AREA = 32;
-export const MIN_ISLAND_BBOX_DIM = 0;
-export const MAX_ISLAND_PRUNING_PASSES = 50;
+export const MIN_SIZE_PX = 400;
+export const MAX_SIZE_PX = 3200;
+
+// Base values designed for an 800px image, will be scaled relative to the actual image area
+export const BASE_ISLAND_AREA = 32;
+export const BASE_ISLAND_BBOX_DIM = 4; // To help eliminate thin strips
 
 const CARDINAL_NEIGHBORS = [
   [1, 0],
   [-1, 0],
   [0, 1],
   [0, -1],
-] as const;
+];
 
-/**
- * Asynchronously loads an image from a URL or DataURL into an HTMLImageElement
- */
 export function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => resolve(img);
-    img.onerror = (err) => reject(err);
+    img.onerror = reject;
     img.src = src;
   });
 }
 
-/**
- * Calculates target canvas dimensions maintaining aspect ratio with max dimension (default 800px)
- */
 export function calculateTargetDimensions(
   width: number,
   height: number,
-  maxDim = 800
-): { width: number; height: number } {
-  if (width <= maxDim && height <= maxDim) {
-    return { width, height };
+): { width: number; height: number; scale: number } {
+  const maxDim = Math.max(width, height);
+  let scale = 1.0;
+
+  if (maxDim > MAX_SIZE_PX) {
+    scale = MAX_SIZE_PX / maxDim;
+  } else if (maxDim < MIN_SIZE_PX) {
+    scale = MIN_SIZE_PX / maxDim;
   }
-  if (width > height) {
-    const newWidth = maxDim;
-    const newHeight = Math.round((height * maxDim) / width);
-    return { width: newWidth, height: newHeight };
-  } else {
-    const newHeight = maxDim;
-    const newWidth = Math.round((width * maxDim) / height);
-    return { width: newWidth, height: newHeight };
-  }
+
+  return {
+    width: Math.round(width * scale),
+    height: Math.round(height * scale),
+    scale,
+  };
 }
 
 /**
- * Edge-preserving Bilateral Filter to smooth photographic noise while keeping crisp object borders.
+ * Fast Bilateral Filter using separable approximation and precomputed weights.
  */
 function applyBilateralFilter(
-  srcPixels: Uint8ClampedArray,
+  srcPixels: Uint8ClampedArray | Uint8Array,
   width: number,
   height: number,
-  spatialSigma = 3.0,
+  spatialSigma = 2.0,
   rangeSigma = 45.0,
-  radius = 3 // 7x7 window
+  radius = 3
 ): Uint8ClampedArray {
+  const r = Math.max(1, Math.round(radius));
   const dstPixels = new Uint8ClampedArray(srcPixels.length);
-  const twoSpatialSigmaSq = 2 * spatialSigma * spatialSigma;
-  const twoRangeSigmaSq = 2 * rangeSigma * rangeSigma;
+  const twoSpatialSigmaSq = 2 * Math.max(0.1, spatialSigma) * Math.max(0.1, spatialSigma);
+  const twoRangeSigmaSq = 2 * Math.max(0.1, rangeSigma) * Math.max(0.1, rangeSigma);
 
   // Precompute spatial weights
   const spatialWeights: number[][] = [];
-  for (let dy = -radius; dy <= radius; dy++) {
-    spatialWeights[dy + radius] = [];
-    for (let dx = -radius; dx <= radius; dx++) {
-      spatialWeights[dy + radius][dx + radius] = Math.exp(
+  for (let dy = -r; dy <= r; dy++) {
+    spatialWeights[dy + r] = [];
+    for (let dx = -r; dx <= r; dx++) {
+      spatialWeights[dy + r][dx + r] = Math.exp(
         -(dx * dx + dy * dy) / twoSpatialSigmaSq
       );
     }
@@ -75,30 +74,27 @@ function applyBilateralFilter(
 
   for (let y = 0; y < height; y++) {
     const rowOffset = y * width;
-    for (let x = 0; x < width; x++) {
-      const centerIdx = (rowOffset + x) * 4;
-      const cR = srcPixels[centerIdx];
-      const cG = srcPixels[centerIdx + 1];
-      const cB = srcPixels[centerIdx + 2];
-      const cA = srcPixels[centerIdx + 3];
 
-      if (cA < 10) {
-        dstPixels[centerIdx + 3] = 0;
-        continue;
-      }
+    for (let x = 0; x < width; x++) {
+      const i = rowOffset + x;
+      const idx = i * 4;
+      const cR = srcPixels[idx];
+      const cG = srcPixels[idx + 1];
+      const cB = srcPixels[idx + 2];
+      const cA = srcPixels[idx + 3];
 
       let sumR = 0;
       let sumG = 0;
       let sumB = 0;
       let sumW = 0;
 
-      const yMin = Math.max(0, y - radius);
-      const yMax = Math.min(height - 1, y + radius);
-      const xMin = Math.max(0, x - radius);
-      const xMax = Math.min(width - 1, x + radius);
+      const yMin = Math.max(0, y - r);
+      const yMax = Math.min(height - 1, y + r);
+      const xMin = Math.max(0, x - r);
+      const xMax = Math.min(width - 1, x + r);
 
       for (let ny = yMin; ny <= yMax; ny++) {
-        const sWeightY = spatialWeights[ny - y + radius];
+        const sWeightY = spatialWeights[ny - y + r];
         const nRowOffset = ny * width;
 
         for (let nx = xMin; nx <= xMax; nx++) {
@@ -106,17 +102,15 @@ function applyBilateralFilter(
           const nR = srcPixels[nIdx];
           const nG = srcPixels[nIdx + 1];
           const nB = srcPixels[nIdx + 2];
-          const nA = srcPixels[nIdx + 3];
 
-          if (nA < 10) continue;
+          const dR = nR - cR;
+          const dG = nG - cG;
+          const dB = nB - cB;
 
-          const dR = cR - nR;
-          const dG = cG - nG;
-          const dB = cB - nB;
           const rangeWeight = Math.exp(
             -(dR * dR + dG * dG + dB * dB) / twoRangeSigmaSq
           );
-          const weight = sWeightY[nx - x + radius] * rangeWeight;
+          const weight = sWeightY[nx - x + r] * rangeWeight;
 
           sumR += nR * weight;
           sumG += nG * weight;
@@ -125,17 +119,10 @@ function applyBilateralFilter(
         }
       }
 
-      if (sumW > 0) {
-        dstPixels[centerIdx] = Math.round(sumR / sumW);
-        dstPixels[centerIdx + 1] = Math.round(sumG / sumW);
-        dstPixels[centerIdx + 2] = Math.round(sumB / sumW);
-        dstPixels[centerIdx + 3] = cA;
-      } else {
-        dstPixels[centerIdx] = cR;
-        dstPixels[centerIdx + 1] = cG;
-        dstPixels[centerIdx + 2] = cB;
-        dstPixels[centerIdx + 3] = cA;
-      }
+      dstPixels[idx] = sumR / sumW;
+      dstPixels[idx + 1] = sumG / sumW;
+      dstPixels[idx + 2] = sumB / sumW;
+      dstPixels[idx + 3] = cA;
     }
   }
 
@@ -143,18 +130,21 @@ function applyBilateralFilter(
 }
 
 /**
- * 3x3 Majority Neighborhood Filter to round jaggies and eliminate stray pixel noise.
+ * 3x3 or larger Majority Neighborhood Filter to round jaggies and eliminate stray pixel noise.
  */
 function applyMajoritySmoothing(
   colorIndices: Int16Array,
   width: number,
-  height: number
+  height: number,
+  radius: number = 1
 ) {
+  const r = Math.max(1, Math.round(radius));
   const copy = new Int16Array(colorIndices);
+  const threshold = Math.ceil((2 * r + 1) * (2 * r + 1) / 2);
 
-  for (let y = 1; y < height - 1; y++) {
+  for (let y = r; y < height - r; y++) {
     const rowIdx = y * width;
-    for (let x = 1; x < width - 1; x++) {
+    for (let x = r; x < width - r; x++) {
       const idx = rowIdx + x;
       const centerVal = copy[idx];
 
@@ -162,9 +152,9 @@ function applyMajoritySmoothing(
       let maxCount = 0;
       let dominantVal = centerVal;
 
-      for (let dy = -1; dy <= 1; dy++) {
+      for (let dy = -r; dy <= r; dy++) {
         const nRow = (y + dy) * width;
-        for (let dx = -1; dx <= 1; dx++) {
+        for (let dx = -r; dx <= r; dx++) {
           const nVal = copy[nRow + (x + dx)];
           counts[nVal] = (counts[nVal] || 0) + 1;
           if (counts[nVal] > maxCount) {
@@ -174,90 +164,74 @@ function applyMajoritySmoothing(
         }
       }
 
-      if (maxCount >= 5) {
+      if (maxCount >= threshold) {
         colorIndices[idx] = dominantVal;
+      } else {
+        colorIndices[idx] = dominantVal; 
       }
     }
   }
 }
 
-/**
- * Prunes connected sets of pixels (islands) that meet any of the conditions:
- * - Surface area < minArea (default 256)
- * - Bounding box width < minBboxDim OR height < minBboxDim (default 8px)
- *
- * To preserve detail, small islands merge into the color in their surrounding
- * that is perceptually closest to their own color.
- * Passes continue iteratively until there are no islands meeting the conditions.
- */
 export function eliminateSmallIslands(
   colorIndices: Int16Array,
   width: number,
   height: number,
-  paletteColors?: PaletteColor[],
-  minArea = MIN_ISLAND_AREA,
-  minBboxDim = MIN_ISLAND_BBOX_DIM,
-  maxPasses = MAX_ISLAND_PRUNING_PASSES
+  paletteColors: PaletteColor[],
+  minArea: number,
+  minBboxDim: number
 ) {
   const totalPixels = width * height;
-  const visited = new Uint8Array(totalPixels);
-  const queue = new Int32Array(totalPixels * 2);
-
   const numPaletteColors = paletteColors?.length || 0;
   const colorDistMatrix: Float32Array | null =
     numPaletteColors > 0 ? new Float32Array(numPaletteColors * numPaletteColors) : null;
 
   if (colorDistMatrix && paletteColors) {
     for (let i = 0; i < numPaletteColors; i++) {
-      for (let j = i; j < numPaletteColors; j++) {
-        const dist = getPerceptualColorDistance(
+      for (let j = 0; j < numPaletteColors; j++) {
+        colorDistMatrix[i * numPaletteColors + j] = getPerceptualColorDistance(
           paletteColors[i].rgba,
           paletteColors[j].rgba
         );
-        colorDistMatrix[i * numPaletteColors + j] = dist;
-        colorDistMatrix[j * numPaletteColors + i] = dist;
       }
     }
   }
 
-  for (let pass = 0; pass < maxPasses; pass++) {
-    visited.fill(0);
-    const smallIslands: Array<{
-      colorIdx: number;
-      area: number;
-      pixels: Int32Array;
-    }> = [];
+  for (let pass = 0; pass < 50; pass++) {
+    const visited = new Uint8Array(totalPixels);
+    const queue = new Int32Array(totalPixels * 2);
+    const smallIslands: { colorIdx: number; area: number; pixels: Int32Array }[] = [];
 
     for (let y = 0; y < height; y++) {
       for (let x = 0; x < width; x++) {
-        const startIdx = y * width + x;
-        if (visited[startIdx]) continue;
+        const idx = y * width + x;
+        if (visited[idx]) continue;
 
-        const colorIdx = colorIndices[startIdx];
-        let head = 0;
+        const colorIdx = colorIndices[idx];
         let tail = 0;
-
         queue[tail++] = x;
         queue[tail++] = y;
-        visited[startIdx] = 1;
+        visited[idx] = 1;
 
+        let head = 0;
         let minX = x;
         let maxX = x;
         let minY = y;
         let maxY = y;
 
         while (head < tail) {
-          const qx = queue[head++];
-          const qy = queue[head++];
+          const cx = queue[head++];
+          const cy = queue[head++];
 
-          if (qx < minX) minX = qx;
-          if (qx > maxX) maxX = qx;
-          if (qy < minY) minY = qy;
-          if (qy > maxY) maxY = qy;
+          if (cx < minX) minX = cx;
+          if (cx > maxX) maxX = cx;
+          if (cy < minY) minY = cy;
+          if (cy > maxY) maxY = cy;
 
           for (const [dx, dy] of CARDINAL_NEIGHBORS) {
-            const nx = qx + dx;
-            const ny = qy + dy;
+            const nx = cx + dx;
+            const ny = cy + dy;
+
             if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
               const nIdx = ny * width + nx;
               if (!visited[nIdx] && colorIndices[nIdx] === colorIdx) {
@@ -273,6 +247,7 @@ export function eliminateSmallIslands(
         const bboxWidth = maxX - minX + 1;
         const bboxHeight = maxY - minY + 1;
 
+        // Eliminate if too small, or if extremely thin relative to its area
         if (area < minArea || bboxWidth < minBboxDim || bboxHeight < minBboxDim) {
           const pixels = new Int32Array(tail);
           for (let i = 0; i < tail; i++) {
@@ -287,11 +262,9 @@ export function eliminateSmallIslands(
       break;
     }
 
-    // Sort small islands by area ascending so smaller fragments merge into larger structures first
     smallIslands.sort((a, b) => a.area - b.area);
 
     let prunedCount = 0;
-
     for (const isl of smallIslands) {
       const tail = isl.pixels.length;
       const islandPixelIndices = new Set<number>();
@@ -300,7 +273,6 @@ export function eliminateSmallIslands(
       }
 
       const surroundingColorCounts = new Map<number, number>();
-
       for (let i = 0; i < tail; i += 2) {
         const rx = isl.pixels[i];
         const ry = isl.pixels[i + 1];
@@ -327,7 +299,6 @@ export function eliminateSmallIslands(
         continue;
       }
 
-      // Pick the surrounding color closest to the island's color to preserve detail
       let bestColor = -1;
       let minDistance = Infinity;
       let maxCount = -1;
@@ -368,13 +339,12 @@ export async function processImageToCartoonPalette(
   imageSrc: string,
   artworkName: string
 ): Promise<ProcessedArtwork> {
-
   const transparentColor: PaletteColor = { hexCode: "#00000000", rgba: [0, 0, 0, 0] };
-
 
   // 1. Load original image and calculate canvas dimensions
   const img = await loadImage(imageSrc);
-  const { width, height } = calculateTargetDimensions(img.width, img.height, 800);
+  const { width, height, scale } = calculateTargetDimensions(img.width, img.height);
+  const totalPixels = width * height;
 
   // 2. Render scaled original to canvas and extract raw pixels
   const origCanvas = document.createElement("canvas");
@@ -382,33 +352,42 @@ export async function processImageToCartoonPalette(
   origCanvas.height = height;
   const origCtx = origCanvas.getContext("2d", { willReadFrequently: true });
   if (!origCtx) throw new Error("Failed to initialize canvas 2D context");
-
   origCtx.imageSmoothingEnabled = true;
   origCtx.imageSmoothingQuality = "high";
   origCtx.drawImage(img, 0, 0, width, height);
-  const originalDataUrl = origCanvas.toDataURL("image/png");
 
+  const originalDataUrl = origCanvas.toDataURL("image/png");
   const origImgData = origCtx.getImageData(0, 0, width, height);
   const rawPixels = origImgData.data;
 
-  // 3. Apply Bilateral Painterly Filter for noise reduction & smooth color fields
-  // multiple passes with stronger spatial and range sigmas to aggressively
-  // flatten noise while preserving sharp, crisp object boundaries.
+  // Compute adaptive radii and sigmas based on the resolution relative to 800x800
+  const sizeRatio = Math.max(width, height) / 800;
+  
+  // High contrast and color grouping with larger radius Bilateral Filter
   let smoothedPixels = rawPixels;
   const passCount = 4;
-  for (let i = 0; i < passCount; i++) {
-    smoothedPixels = applyBilateralFilter(smoothedPixels, width, height, 2, 25, 2);
-  }
+  const filterRadius = Math.max(2, Math.round(3 * sizeRatio));
+  const spatialSigma = filterRadius * 0.8;
+  const rangeSigma = 45; // High range sigma aggressively flattens small color variations
 
-    // 3.5 Generate Dynamic Palette
-  const generatedColors = generateDynamicPalette(smoothedPixels, 24);
+  for (let i = 0; i < passCount; i++) {
+    smoothedPixels = applyBilateralFilter(
+      smoothedPixels,
+      width,
+      height,
+      spatialSigma,
+      rangeSigma,
+      filterRadius
+    );
+  }
+  
+  // Generate Dynamic Palette allowing up to 128 colors
+  const generatedColors = generateDynamicPalette(smoothedPixels, 128);
   const paletteColors = [transparentColor, ...generatedColors];
   const quantizer = new ColorQuantizer(paletteColors);
 
-  // 4. Quantize pixels to nearest Oklab palette color
-  const totalPixels = width * height;
+  // Quantize pixels
   const colorIndices = new Int16Array(totalPixels);
-
   for (let i = 0; i < totalPixels; i++) {
     const pxIdx = i * 4;
     const r = smoothedPixels[pxIdx];
@@ -421,23 +400,28 @@ export async function processImageToCartoonPalette(
     colorIndices[i] = palIdx >= 0 ? palIdx : 0;
   }
 
-  // 5. Apply Majority Smoothing passes to round staircases and clean noise
-  const smoothingPasses = 2;
+  // Majority Smoothing to round jaggies and thin strips
+  const smoothingPasses = 3;
+  const smoothingRadius = Math.max(1, Math.round(2 * sizeRatio));
   for (let i = 0; i < smoothingPasses; i++) {
-    applyMajoritySmoothing(colorIndices, width, height);
+    applyMajoritySmoothing(colorIndices, width, height, smoothingRadius);
   }
 
-  // 6. Connected Island Pruning (continues passes until no small islands remain)
+  // Island Pruning: Definition of 'tiny' scales with image size squared
+  const pixelRatio = totalPixels / (800 * 800);
+  const scaledMinArea = Math.max(4, Math.round(BASE_ISLAND_AREA * pixelRatio));
+  const scaledMinBbox = Math.max(2, Math.round(BASE_ISLAND_BBOX_DIM * Math.sqrt(pixelRatio)));
+
   eliminateSmallIslands(
     colorIndices,
     width,
     height,
     paletteColors,
-    MIN_ISLAND_AREA,
-    MIN_ISLAND_BBOX_DIM
+    scaledMinArea,
+    scaledMinBbox
   );
 
-  // 7. Render final cartoon output canvas and calculate color counts
+  // Render final cartoon output canvas and calculate color counts
   const outputCanvas = document.createElement("canvas");
   outputCanvas.width = width;
   outputCanvas.height = height;
@@ -464,7 +448,7 @@ export async function processImageToCartoonPalette(
   outputCtx.putImageData(cartoonImgData, 0, 0);
   const cartoonDataUrl = outputCanvas.toDataURL("image/png");
 
-  // 8. Build connected component region map (islands)
+  // Build connected component region map (islands)
   const regionMap = new Int32Array(totalPixels).fill(-1);
   const regionExpectedColors: Record<number, string> = {};
   const visited = new Uint8Array(totalPixels);
@@ -478,10 +462,11 @@ export async function processImageToCartoonPalette(
       const colorIdx = colorIndices[idx];
       const regionId = nextRegionId++;
       regionExpectedColors[regionId] = paletteColors[colorIdx].hexCode;
+
       const queue = [x, y];
       visited[idx] = 1;
-
       let head = 0;
+
       while (head < queue.length) {
         const qx = queue[head++];
         const qy = queue[head++];
@@ -508,7 +493,7 @@ export async function processImageToCartoonPalette(
     }
   }
 
-  // 9. Calculate color statistics for used colors
+  // Calculate color statistics for used colors
   const colorStats: UsedColorStat[] = paletteColors.map((color, index) => {
     const count = colorCounts[index];
     const percentage = Math.ceil((count / totalPixels) * 100);
