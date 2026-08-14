@@ -27,6 +27,7 @@ import {
   iconPaintBucket,
 } from "./icons";
 import { BASE_BRUSH_RADIUS, transparentImgCss } from "./constants";
+import { getOppositeHueRGBA } from "../utils/colorUtils";
 
 @customElement("easel-board")
 export class EaselBoard extends SignalElement {
@@ -479,25 +480,27 @@ export class EaselBoard extends SignalElement {
     let bgR = 255;
     let bgG = 255;
     let bgB = 255;
+    let bgA = 255;
 
     if (this.offscreenPixelsData) {
       const idx = (y * this.artworkWidth + x) * 4;
       bgR = this.offscreenPixelsData.data[idx];
       bgG = this.offscreenPixelsData.data[idx + 1];
       bgB = this.offscreenPixelsData.data[idx + 2];
+      bgA = this.offscreenPixelsData.data[idx + 3];
     } else if (this.regionMapData) {
       const rId = this.regionMapData[y * this.artworkWidth + x];
       const pColor = rId >= 0 ? paintedState[rId] : undefined;
       if (pColor) {
-        const [r, g, b] = this.parseColorToRGBA(pColor);
+        const [r, g, b, a = 255] = this.parseColorToRGBA(pColor);
         bgR = r;
         bgG = g;
         bgB = b;
+        bgA = a;
       }
     }
 
-    const lum = 0.299 * bgR + 0.587 * bgG + 0.114 * bgB;
-    return lum > 128 ? [0, 0, 0, 255] : [255, 255, 255, 255];
+    return getOppositeHueRGBA(bgR, bgG, bgB, bgA);
   }
 
   private drawArtboardCanvas() {

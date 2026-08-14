@@ -292,3 +292,109 @@ export class ColorQuantizer {
     return closestColor;
   }
 }
+
+const oppositeHueCache = new Map<number, [number, number, number, number]>();
+
+/**
+ * Calculates the opposite hue color with high contrast against the input RGBA color.
+ * For achromatic pixels (black, white, grays), returns contrasting solid black or white.
+ * For chromatic pixels, rotates the hue by 180° with vivid saturation and contrast-adjusted lightness.
+ */
+export function getOppositeHueRGBA(
+  r: number,
+  g: number,
+  b: number,
+  a: number = 255
+): [number, number, number, number] {
+  if (a < 10) {
+    return [0, 0, 0, 255];
+  }
+
+  const rInt = Math.max(0, Math.min(255, Math.round(r)));
+  const gInt = Math.max(0, Math.min(255, Math.round(g)));
+  const bInt = Math.max(0, Math.min(255, Math.round(b)));
+  const key = (rInt << 16) | (gInt << 8) | bInt;
+
+  const cached = oppositeHueCache.get(key);
+  if (cached) {
+    return cached;
+  }
+
+  const rNorm = rInt / 255;
+  const gNorm = gInt / 255;
+  const bNorm = bInt / 255;
+  const max = Math.max(rNorm, gNorm, bNorm);
+  const min = Math.min(rNorm, gNorm, bNorm);
+  const delta = max - min;
+  const l = (max + min) / 2;
+
+  // Achromatic (grayscale / neutral white / black / low saturation)
+  if (delta < 0.06) {
+    const result: [number, number, number, number] =
+      l > 0.5 ? [0, 0, 0, 255] : [255, 255, 255, 255];
+    oppositeHueCache.set(key, result);
+    return result;
+  }
+
+  // Calculate Hue in [0, 360)
+  let h = 0;
+  if (max === rNorm) {
+    h = ((gNorm - bNorm) / delta + (gNorm < bNorm ? 6 : 0)) / 6;
+  } else if (max === gNorm) {
+    h = ((bNorm - rNorm) / delta + 2) / 6;
+  } else {
+    h = ((rNorm - gNorm) / delta + 4) / 6;
+  }
+
+  const hDeg = h * 360;
+  const oppH = (hDeg + 180) % 360;
+  const s = l > 0.5 ? delta / (2 - max - min) : delta / (max + min);
+  const oppS = Math.max(0.85, Math.min(1.0, s));
+  const oppL = l > 0.5 ? 0.35 : 0.70;
+
+  // Convert HSL back to RGB
+  const c = (1 - Math.abs(2 * oppL - 1)) * oppS;
+  const x = c * (1 - Math.abs(((oppH / 60) % 2) - 1));
+  const m = oppL - c / 2;
+
+  let rPrime = 0;
+  let gPrime = 0;
+  let bPrime = 0;
+
+  if (oppH < 60) {
+    rPrime = c;
+    gPrime = x;
+    bPrime = 0;
+  } else if (oppH < 120) {
+    rPrime = x;
+    gPrime = c;
+    bPrime = 0;
+  } else if (oppH < 180) {
+    rPrime = 0;
+    gPrime = c;
+    bPrime = x;
+  } else if (oppH < 240) {
+    rPrime = 0;
+    gPrime = x;
+    bPrime = c;
+  } else if (oppH < 300) {
+    rPrime = x;
+    gPrime = 0;
+    bPrime = c;
+  } else {
+    rPrime = c;
+    gPrime = 0;
+    bPrime = x;
+  }
+
+  const result: [number, number, number, number] = [
+    Math.max(0, Math.min(255, Math.round((rPrime + m) * 255))),
+    Math.max(0, Math.min(255, Math.round((gPrime + m) * 255))),
+    Math.max(0, Math.min(255, Math.round((bPrime + m) * 255))),
+    255,
+  ];
+
+  oppositeHueCache.set(key, result);
+  return result;
+}
+
