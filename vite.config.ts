@@ -55,7 +55,7 @@ export default defineConfig(() => {
         registerType: 'autoUpdate',
         devOptions: { enabled: true },
         manifestFilename: 'manifest.json',
-        includeAssets: ['favicon.svg'],
+        includeAssets: ['favicon.png'],
         manifest: {
           name: 'PAINT by COLOURS',
           short_name: 'PAINT',
@@ -65,9 +65,9 @@ export default defineConfig(() => {
           display: 'standalone',
           icons: [
             {
-              src: 'favicon.svg',
+              src: 'favicon.png',
               sizes: '192x192 512x512 any',
-              type: 'image/svg+xml'
+              type: 'image/png'
             }
           ]
         }
