@@ -1,5 +1,16 @@
 import { ProcessedArtwork, UsedColorStat, PaletteColor } from "../types";
-import { generateDynamicPalette, ColorQuantizer, getPerceptualColorDistance } from "./colorUtils";
+import { generateDynamicPalette, ColorQuantizer } from "./colorUtils";
+
+export const MIN_ISLAND_AREA = 256;
+export const MIN_ISLAND_BBOX_DIM = 8;
+export const MAX_ISLAND_PRUNING_PASSES = 50;
+
+const CARDINAL_NEIGHBORS = [
+  [1, 0],
+  [-1, 0],
+  [0, 1],
+  [0, -1],
+] as const;
 
 /**
  * Asynchronously loads an image from a URL or DataURL into an HTMLImageElement
@@ -171,202 +182,183 @@ function applyMajoritySmoothing(
 }
 
 /**
- * Remaps rare/isolated palette colors (< 0.25% of total image) to the closest frequent color in the artwork.
+ * Prunes connected sets of pixels (islands) that meet any of the conditions:
+ * - Surface area < minArea (default 256)
+ * - Bounding box width < minBboxDim OR height < minBboxDim (default 8px)
+ *
+ * Pixels in pruned islands are replaced with their neighbors in equal amounts
+ * in all directions using multi-source BFS inward propagation from the perimeter.
+ * Passes continue iteratively until there are no islands meeting the conditions.
  */
-function removeRareColors(
-  colorIndices: Int16Array,
-  totalPixels: number,
-  paletteColors: PaletteColor[],
-  minRatio = 0.0025
-) {
-  const threshold = Math.round(totalPixels * minRatio);
-  const transparentIdx = 0;
-
-  const counts = new Array(paletteColors.length).fill(0);
-  for (let i = 0; i < colorIndices.length; i++) {
-    counts[colorIndices[i]]++;
-  }
-
-  const rareIndices: number[] = [];
-  const frequentIndices: number[] = [];
-
-  for (let i = 0; i < paletteColors.length; i++) {
-    if (i === transparentIdx) continue;
-    if (counts[i] > 0) {
-      if (counts[i] < threshold) {
-        rareIndices.push(i);
-      } else {
-        frequentIndices.push(i);
-      }
-    }
-  }
-
-  if (rareIndices.length === 0 || frequentIndices.length === 0) return;
-
-  const remapTable = new Map<number, number>();
-  for (const rareIdx of rareIndices) {
-    const rareColor = paletteColors[rareIdx];
-    let bestFrequent = frequentIndices[0];
-    let minD = Infinity;
-
-    for (const freqIdx of frequentIndices) {
-      const freqColor = paletteColors[freqIdx];
-      const d = getPerceptualColorDistance(rareColor.rgba, freqColor.rgba);
-      if (d < minD) {
-        minD = d;
-        bestFrequent = freqIdx;
-      }
-    }
-    remapTable.set(rareIdx, bestFrequent);
-  }
-
-  for (let i = 0; i < colorIndices.length; i++) {
-    const remapped = remapTable.get(colorIndices[i]);
-    if (remapped !== undefined) {
-      colorIndices[i] = remapped;
-    }
-  }
-}
-
-/**
- * Eliminates small isolated regions (islands) by merging them into their dominant neighboring color.
- */
-function eliminateSmallIslands(
+export function eliminateSmallIslands(
   colorIndices: Int16Array,
   width: number,
   height: number,
-  minRegionSize: number
+  minArea = MIN_ISLAND_AREA,
+  minBboxDim = MIN_ISLAND_BBOX_DIM,
+  maxPasses = MAX_ISLAND_PRUNING_PASSES
 ) {
   const totalPixels = width * height;
   const visited = new Uint8Array(totalPixels);
   const queue = new Int32Array(totalPixels * 2);
 
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const startIdx = y * width + x;
-      if (visited[startIdx]) continue;
+  for (let pass = 0; pass < maxPasses; pass++) {
+    visited.fill(0);
+    const smallIslands: Array<{
+      colorIdx: number;
+      area: number;
+      pixels: Int32Array;
+    }> = [];
 
-      const colorIdx = colorIndices[startIdx];
-      let head = 0;
-      let tail = 0;
+    for (let y = 0; y < height; y++) {
+      for (let x = 0; x < width; x++) {
+        const startIdx = y * width + x;
+        if (visited[startIdx]) continue;
 
-      queue[tail++] = x;
-      queue[tail++] = y;
-      visited[startIdx] = 1;
+        const colorIdx = colorIndices[startIdx];
+        let head = 0;
+        let tail = 0;
 
-      while (head < tail) {
-        const qx = queue[head++];
-        const qy = queue[head++];
+        queue[tail++] = x;
+        queue[tail++] = y;
+        visited[startIdx] = 1;
 
-        const neighbors = [
-          [qx + 1, qy],
-          [qx - 1, qy],
-          [qx, qy + 1],
-          [qx, qy - 1],
-        ];
+        let minX = x;
+        let maxX = x;
+        let minY = y;
+        let maxY = y;
 
-        for (const [nx, ny] of neighbors) {
-          if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-            const nIdx = ny * width + nx;
-            if (!visited[nIdx] && colorIndices[nIdx] === colorIdx) {
-              visited[nIdx] = 1;
-              queue[tail++] = nx;
-              queue[tail++] = ny;
+        while (head < tail) {
+          const qx = queue[head++];
+          const qy = queue[head++];
+
+          if (qx < minX) minX = qx;
+          if (qx > maxX) maxX = qx;
+          if (qy < minY) minY = qy;
+          if (qy > maxY) maxY = qy;
+
+          for (const [dx, dy] of CARDINAL_NEIGHBORS) {
+            const nx = qx + dx;
+            const ny = qy + dy;
+            if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+              const nIdx = ny * width + nx;
+              if (!visited[nIdx] && colorIndices[nIdx] === colorIdx) {
+                visited[nIdx] = 1;
+                queue[tail++] = nx;
+                queue[tail++] = ny;
+              }
             }
           }
         }
+
+        const area = tail / 2;
+        const bboxWidth = maxX - minX + 1;
+        const bboxHeight = maxY - minY + 1;
+
+        if (area < minArea || bboxWidth < minBboxDim || bboxHeight < minBboxDim) {
+          const pixels = new Int32Array(tail);
+          for (let i = 0; i < tail; i++) {
+            pixels[i] = queue[i];
+          }
+          smallIslands.push({ colorIdx, area, pixels });
+        }
+      }
+    }
+
+    if (smallIslands.length === 0) {
+      break;
+    }
+
+    // Sort small islands by area ascending so smaller fragments merge into larger structures first
+    smallIslands.sort((a, b) => a.area - b.area);
+
+    let prunedCount = 0;
+
+    for (const isl of smallIslands) {
+      const tail = isl.pixels.length;
+      const islandPixelIndices = new Set<number>();
+      for (let i = 0; i < tail; i += 2) {
+        islandPixelIndices.add(isl.pixels[i + 1] * width + isl.pixels[i]);
       }
 
-      const regionSize = tail / 2;
-      if (regionSize < minRegionSize) {
-        const neighborCounts = new Map<number, number>();
-        let maxCount = 0;
-        let dominantNeighbor = -1;
+      const assignedColor = new Map<number, number>();
+      const dist = new Map<number, number>();
+      const bfsQueue: number[] = [];
 
-        for (let i = 0; i < tail; i += 2) {
-          const rx = queue[i];
-          const ry = queue[i + 1];
-          const neighbors = [
-            [rx + 1, ry],
-            [rx - 1, ry],
-            [rx, ry + 1],
-            [rx, ry - 1],
-            [rx + 1, ry + 1],
-            [rx - 1, ry - 1],
-            [rx - 1, ry + 1],
-            [rx + 1, ry - 1]
-          ];
-          for (const [nx, ny] of neighbors) {
-            if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-              const nIdx = ny * width + nx;
-              const nColor = colorIndices[nIdx];
-              if (nColor !== colorIdx) {
-                const count = (neighborCounts.get(nColor) || 0) + 1;
-                neighborCounts.set(nColor, count);
-                if (count > maxCount) {
-                  maxCount = count;
-                  dominantNeighbor = nColor;
+      for (let i = 0; i < tail; i += 2) {
+        const rx = isl.pixels[i];
+        const ry = isl.pixels[i + 1];
+        const rIdx = ry * width + rx;
+
+        const neighborColorCounts = new Map<number, number>();
+        let maxCount = 0;
+        let dominantExtColor = -1;
+
+        for (const [dx, dy] of CARDINAL_NEIGHBORS) {
+          const nx = rx + dx;
+          const ny = ry + dy;
+          if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+            const nIdx = ny * width + nx;
+            if (!islandPixelIndices.has(nIdx)) {
+              const extColor = colorIndices[nIdx];
+              if (extColor !== isl.colorIdx) {
+                const c = (neighborColorCounts.get(extColor) || 0) + 1;
+                neighborColorCounts.set(extColor, c);
+                if (c > maxCount) {
+                  maxCount = c;
+                  dominantExtColor = extColor;
                 }
               }
             }
           }
         }
 
-        if (dominantNeighbor !== -1) {
-          for (let i = 0; i < tail; i += 2) {
-            const rx = queue[i];
-            const ry = queue[i + 1];
-            colorIndices[ry * width + rx] = dominantNeighbor;
+        if (dominantExtColor !== -1) {
+          assignedColor.set(rIdx, dominantExtColor);
+          dist.set(rIdx, 1);
+          bfsQueue.push(rx, ry);
+        }
+      }
+
+      // Multi-source BFS inward propagation in equal amounts in all directions
+      let bfsHead = 0;
+      while (bfsHead < bfsQueue.length) {
+        const bx = bfsQueue[bfsHead++];
+        const by = bfsQueue[bfsHead++];
+        const bIdx = by * width + bx;
+        const bDist = dist.get(bIdx)!;
+        const bColor = assignedColor.get(bIdx)!;
+
+        for (const [dx, dy] of CARDINAL_NEIGHBORS) {
+          const nx = bx + dx;
+          const ny = by + dy;
+          if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+            const nIdx = ny * width + nx;
+            if (islandPixelIndices.has(nIdx) && !dist.has(nIdx)) {
+              dist.set(nIdx, bDist + 1);
+              assignedColor.set(nIdx, bColor);
+              bfsQueue.push(nx, ny);
+            }
+          }
+        }
+      }
+
+      if (assignedColor.size > 0) {
+        prunedCount++;
+        for (let i = 0; i < tail; i += 2) {
+          const rx = isl.pixels[i];
+          const ry = isl.pixels[i + 1];
+          const pIdx = ry * width + rx;
+          const newColor = assignedColor.get(pIdx);
+          if (newColor !== undefined) {
+            colorIndices[pIdx] = newColor;
           }
         }
       }
     }
-  }
-}
 
-/**
- * Main Image Processing Pipeline:
- * Takes original image source, scales to max 800px, applies bilateral painterly smoothing,
- * Oklab palette quantization, majority curve smoothing, and color statistics computation.
- */
-
-/**
- * Applies a mode filter (most frequent color in neighborhood) to remove thin lines and noise.
- */
-function applyModeFilter(
-  colorIndices: Int16Array,
-  width: number,
-  height: number,
-  radius: number
-) {
-  const copy = new Int16Array(colorIndices);
-
-  for (let y = 0; y < height; y++) {
-    for (let x = 0; x < width; x++) {
-      const idx = y * width + x;
-
-      const counts = new Map<number, number>();
-      let maxCount = 0;
-      let dominantVal = copy[idx];
-
-      const minY = Math.max(0, y - radius);
-      const maxY = Math.min(height - 1, y + radius);
-      const minX = Math.max(0, x - radius);
-      const maxX = Math.min(width - 1, x + radius);
-
-      for (let ny = minY; ny <= maxY; ny++) {
-        const nRow = ny * width;
-        for (let nx = minX; nx <= maxX; nx++) {
-          const nVal = copy[nRow + nx];
-          const c = (counts.get(nVal) || 0) + 1;
-          counts.set(nVal, c);
-          if (c > maxCount) {
-            maxCount = c;
-            dominantVal = nVal;
-          }
-        }
-      }
-      colorIndices[idx] = dominantVal;
+    if (prunedCount === 0) {
+      break;
     }
   }
 }
@@ -428,24 +420,20 @@ export async function processImageToCartoonPalette(
     colorIndices[i] = palIdx >= 0 ? palIdx : 0;
   }
 
-  // 5. Apply Mode Filter to remove thin lines and strips
-  // Increased radius from 2 to 3 to aggressively eliminate stray noise lines
-  applyModeFilter(colorIndices, width, height, 3);
-
-  // 5b. Apply Majority Smoothing passes to round staircases and clean noise
-  // Increased passes to 10 for crisper and more uniform curved edges
-  const smoothingPasses = 10;
+  // 5. Apply Majority Smoothing passes to round staircases and clean noise
+  const smoothingPasses = 2;
   for (let i = 0; i < smoothingPasses; i++) {
     applyMajoritySmoothing(colorIndices, width, height);
   }
 
-  // 6. Clean up rare isolated micro-colors
-  // Increased ratio to 0.005 to swallow slightly larger unwanted noise patches globally
-  removeRareColors(colorIndices, totalPixels, paletteColors, 0.005);
-
-  // 6b. Eliminate small isolated islands (noise) under a specific pixel threshold
-  // Increased from 50 to 150 to ensure we have no tiny unpaintable color dots
-  eliminateSmallIslands(colorIndices, width, height, 150);
+  // 6. Connected Island Pruning (continues passes until no small islands remain)
+  eliminateSmallIslands(
+    colorIndices,
+    width,
+    height,
+    MIN_ISLAND_AREA,
+    MIN_ISLAND_BBOX_DIM
+  );
 
   // 7. Render final cartoon output canvas and calculate color counts
   const outputCanvas = document.createElement("canvas");

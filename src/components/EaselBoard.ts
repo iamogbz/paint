@@ -248,6 +248,7 @@ export class EaselBoard extends SignalElement {
           this.lastPaintedStateStr = artwork.modifiedAt
             ? artwork.modifiedAt.toString()
             : "0";
+          this.lastBorderPaintedStateStr = "";
           this.drawArtboardCanvas();
         }
       };
@@ -406,36 +407,56 @@ export class EaselBoard extends SignalElement {
     const isBorder = new Uint8Array(totalPixels);
     const regionBorderSets = new Map<number, Set<number>>();
 
-    for (let y = 0; y < h; y++) {
-      for (let x = 0; x < w; x++) {
-        const idx = y * w + x;
-        const r1 = this.regionMapData[idx];
-        if (r1 < 0) continue;
+    const addSurrounding = (rInner: number, outerIdx: number) => {
+      let s = regionBorderSets.get(rInner);
+      if (!s) {
+        s = new Set<number>();
+        regionBorderSets.set(rInner, s);
+      }
+      s.add(outerIdx);
+      isBorder[outerIdx] = 1;
+    };
 
-        if (!regionBorderSets.has(r1)) {
-          regionBorderSets.set(r1, new Set<number>());
+    for (let y = 0; y < h; y++) {
+      const rowOffset = y * w;
+      for (let x = 0; x < w; x++) {
+        const idx = rowOffset + x;
+        const rCurrent = this.regionMapData[idx];
+        if (rCurrent < 0) continue;
+
+        // Right neighbor
+        if (x + 1 < w) {
+          const rRight = this.regionMapData[idx + 1];
+          if (rRight >= 0 && rRight !== rCurrent) {
+            addSurrounding(rCurrent, idx + 1);
+            addSurrounding(rRight, idx);
+          }
         }
 
-        const rRight = x + 1 < w ? this.regionMapData[idx + 1] : -1;
-        const rDown = y + 1 < h ? this.regionMapData[idx + w] : -1;
-
-        if ((rRight >= 0 && rRight !== r1) || (rDown >= 0 && rDown !== r1)) {
-          isBorder[idx] = 1;
-          regionBorderSets.get(r1)?.add(idx);
-
-          if (rRight >= 0 && rRight !== r1) {
-            const idxRight = idx + 1;
-            isBorder[idxRight] = 1;
-            if (!regionBorderSets.has(rRight))
-              regionBorderSets.set(rRight, new Set<number>());
-            regionBorderSets.get(rRight)?.add(idxRight);
+        // Down neighbor
+        if (y + 1 < h) {
+          const rDown = this.regionMapData[idx + w];
+          if (rDown >= 0 && rDown !== rCurrent) {
+            addSurrounding(rCurrent, idx + w);
+            addSurrounding(rDown, idx);
           }
-          if (rDown >= 0 && rDown !== r1) {
-            const idxDown = idx + w;
-            isBorder[idxDown] = 1;
-            if (!regionBorderSets.has(rDown))
-              regionBorderSets.set(rDown, new Set<number>());
-            regionBorderSets.get(rDown)?.add(idxDown);
+        }
+
+        // Down-Right diagonal neighbor
+        if (x + 1 < w && y + 1 < h) {
+          const rDownRight = this.regionMapData[idx + w + 1];
+          if (rDownRight >= 0 && rDownRight !== rCurrent) {
+            addSurrounding(rCurrent, idx + w + 1);
+            addSurrounding(rDownRight, idx);
+          }
+        }
+
+        // Down-Left diagonal neighbor
+        if (x > 0 && y + 1 < h) {
+          const rDownLeft = this.regionMapData[idx + w - 1];
+          if (rDownLeft >= 0 && rDownLeft !== rCurrent) {
+            addSurrounding(rCurrent, idx + w - 1);
+            addSurrounding(rDownLeft, idx);
           }
         }
       }
@@ -448,6 +469,35 @@ export class EaselBoard extends SignalElement {
 
     this.isBorderPixel = isBorder;
     this.regionBorderPixels = regionBorderPixels;
+  }
+
+  private getContrastingOutlineRGBA(
+    x: number,
+    y: number,
+    paintedState: Record<number, string>
+  ): [number, number, number, number] {
+    let bgR = 255;
+    let bgG = 255;
+    let bgB = 255;
+
+    if (this.offscreenPixelsData) {
+      const idx = (y * this.artworkWidth + x) * 4;
+      bgR = this.offscreenPixelsData.data[idx];
+      bgG = this.offscreenPixelsData.data[idx + 1];
+      bgB = this.offscreenPixelsData.data[idx + 2];
+    } else if (this.regionMapData) {
+      const rId = this.regionMapData[y * this.artworkWidth + x];
+      const pColor = rId >= 0 ? paintedState[rId] : undefined;
+      if (pColor) {
+        const [r, g, b] = this.parseColorToRGBA(pColor);
+        bgR = r;
+        bgG = g;
+        bgB = b;
+      }
+    }
+
+    const lum = 0.299 * bgR + 0.587 * bgG + 0.114 * bgB;
+    return lum > 128 ? [0, 0, 0, 255] : [255, 255, 255, 255];
   }
 
   private drawArtboardCanvas() {
@@ -510,6 +560,7 @@ export class EaselBoard extends SignalElement {
               h
             );
             this.lastPaintedStateStr = currentPaintedStateStr;
+            this.lastBorderPaintedStateStr = "";
             this.drawArtboardCanvas();
           }
         };
@@ -550,7 +601,7 @@ export class EaselBoard extends SignalElement {
     destCtx.fillRect(0, 0, w, h);
     destCtx.drawImage(this.offscreenCanvas, 0, 0);
 
-    // 3. SEPARATE DISPLAY OVERLAY PASS: Render contrasting island guide borders on screen context
+    // 3. SEPARATE DISPLAY OVERLAY PASS: Render contrasting island guide borders surrounding regions
     const activeColor = activeHighlightColorSignal.get();
     const draggedColorHex = draggedColorSignal.get();
     const targetHex = draggedColorHex || activeColor?.hexCode;
@@ -562,85 +613,48 @@ export class EaselBoard extends SignalElement {
       this.lastBorderPaintedStateStr !== currentPaintedStateStr
     ) {
       this.borderOverlayCtx.clearRect(0, 0, w, h);
-      if (this.isBorderPixel && targetHex && targetHex !== "#00000000") {
+      if (this.regionBorderPixels && targetHex && targetHex !== "#00000000") {
         const targetHexUpper = targetHex.toUpperCase();
         const overlayImgData = this.borderOverlayCtx.createImageData(w, h);
         const overlayPixels = overlayImgData.data;
-
-        // Function to determine contrasting outline RGBA for any pixel position
-        const getContrastingOutlineRGBA = (
-          pxX: number,
-          pxY: number
-        ): [number, number, number, number] => {
-          const rId = this.regionMapData![pxY * w + pxX];
-          const pColor = paintedState[rId];
-          let bgR = 255;
-          let bgG = 255;
-          let bgB = 255;
-          if (pColor) {
-            const [r, g, b] = this.parseColorToRGBA(pColor);
-            bgR = r;
-            bgG = g;
-            bgB = b;
-          }
-          const lum = 0.299 * bgR + 0.587 * bgG + 0.114 * bgB;
-          if (lum > 128) {
-            return [0, 0, 0, 190];
-          } else {
-            return [255, 255, 255, 220];
-          }
-        };
-
         let hasVisibleBorders = false;
-        for (let i = 0; i < w * h; i++) {
-          if (this.isBorderPixel[i] === 1) {
-            const regionId = this.regionMapData[i];
-            const expectedColor =
-              this.regionExpectedColors.get(regionId) ||
-              currentArtwork.regionExpectedColors?.[regionId];
 
-            if (
-              expectedColor &&
-              expectedColor.startsWith(targetHexUpper.substring(0, 7))
-            ) {
-              const paintedColor = paintedState[regionId];
-              const isFilledDifferent =
-                paintedColor &&
-                !paintedColor
-                  .toUpperCase()
-                  .startsWith(targetHexUpper.substring(0, 7));
+        for (const [
+          regionId,
+          borderIndices,
+        ] of this.regionBorderPixels.entries()) {
+          const expectedColor =
+            this.regionExpectedColors.get(regionId) ||
+            currentArtwork.regionExpectedColors?.[regionId];
 
-              if (isFilledDifferent) {
-                const x = i % w;
-                const y = Math.floor(i / w);
-                for (let dy = -1; dy <= 1; dy++) {
-                  for (let dx = -1; dx <= 1; dx++) {
-                    const nx = x + dx;
-                    const ny = y + dy;
-                    if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
-                      const pxIdx = (ny * w + nx) * 4;
-                      const [cR, cG, cB, cA] = getContrastingOutlineRGBA(
-                        nx,
-                        ny
-                      );
-                      overlayPixels[pxIdx] = cR;
-                      overlayPixels[pxIdx + 1] = cG;
-                      overlayPixels[pxIdx + 2] = cB;
-                      overlayPixels[pxIdx + 3] = cA;
-                    }
-                  }
-                }
-              } else {
-                const pxIdx = i * 4;
-                const x = i % w;
-                const y = Math.floor(i / w);
-                const [cR, cG, cB, cA] = getContrastingOutlineRGBA(x, y);
-                overlayPixels[pxIdx] = cR;
-                overlayPixels[pxIdx + 1] = cG;
-                overlayPixels[pxIdx + 2] = cB;
-                overlayPixels[pxIdx + 3] = cA;
+          if (
+            expectedColor &&
+            expectedColor.startsWith(targetHexUpper.substring(0, 7))
+          ) {
+            const paintedColor = paintedState[regionId];
+            const isCompleted =
+              paintedColor &&
+              paintedColor
+                .toUpperCase()
+                .startsWith(targetHexUpper.substring(0, 7));
+
+            if (!isCompleted) {
+              for (let k = 0; k < borderIndices.length; k++) {
+                const pIdx = borderIndices[k];
+                const px = pIdx % w;
+                const py = Math.floor(pIdx / w);
+                const [cR, cG, cB, cA] = this.getContrastingOutlineRGBA(
+                  px,
+                  py,
+                  paintedState
+                );
+                const outIdx = pIdx * 4;
+                overlayPixels[outIdx] = cR;
+                overlayPixels[outIdx + 1] = cG;
+                overlayPixels[outIdx + 2] = cB;
+                overlayPixels[outIdx + 3] = cA;
+                hasVisibleBorders = true;
               }
-              hasVisibleBorders = true;
             }
           }
         }
@@ -656,51 +670,30 @@ export class EaselBoard extends SignalElement {
     // Draw the cached border overlay
     destCtx.drawImage(this.borderOverlayCanvas, 0, 0);
 
-    // 4. Hover Highlight Pass: draw active hover region outline overlay in selected color
+    // 4. Hover Highlight Pass: draw active hover region outline overlay in the color of the current selection
     if (this.hoveredRegionId !== null && this.regionBorderPixels) {
       const borderIndices = this.regionBorderPixels.get(this.hoveredRegionId);
       if (borderIndices && borderIndices.length > 0) {
         if (targetHex && targetHex !== "#00000000") {
-          const targetRGBARaw = this.parseColorToRGBA(targetHex);
-          destCtx.fillStyle = `rgba(${targetRGBARaw[0]}, ${targetRGBARaw[1]}, ${targetRGBARaw[2]}, 1.0)`;
-        } else {
-          destCtx.fillStyle = "rgba(0, 0, 0, 1.0)";
-        }
-
-        const expectedColor =
-          this.regionExpectedColors.get(this.hoveredRegionId) ||
-          currentArtwork.regionExpectedColors?.[this.hoveredRegionId];
-        const targetHexUpper = targetHex ? targetHex.toUpperCase() : "";
-        const paintedColor = paintedState[this.hoveredRegionId];
-        const isFilledDifferent =
-          targetHex &&
-          expectedColor &&
-          expectedColor.startsWith(targetHexUpper.substring(0, 7)) &&
-          paintedColor &&
-          !paintedColor
-            .toUpperCase()
-            .startsWith(targetHexUpper.substring(0, 7));
-
-        if (isFilledDifferent) {
+          const [r, g, b] = this.parseColorToRGBA(targetHex);
+          destCtx.fillStyle = `rgba(${r}, ${g}, ${b}, 1.0)`;
           for (let k = 0; k < borderIndices.length; k++) {
             const pIdx = borderIndices[k];
             const bx = pIdx % w;
             const by = Math.floor(pIdx / w);
-            for (let dy = -1; dy <= 1; dy++) {
-              for (let dx = -1; dx <= 1; dx++) {
-                const nx = bx + dx;
-                const ny = by + dy;
-                if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
-                  destCtx.fillRect(nx, ny, 1, 1);
-                }
-              }
-            }
+            destCtx.fillRect(bx, by, 1, 1);
           }
         } else {
           for (let k = 0; k < borderIndices.length; k++) {
             const pIdx = borderIndices[k];
             const bx = pIdx % w;
             const by = Math.floor(pIdx / w);
+            const [cR, cG, cB, cA] = this.getContrastingOutlineRGBA(
+              bx,
+              by,
+              paintedState
+            );
+            destCtx.fillStyle = `rgba(${cR}, ${cG}, ${cB}, ${cA / 255})`;
             destCtx.fillRect(bx, by, 1, 1);
           }
         }
@@ -768,6 +761,8 @@ export class EaselBoard extends SignalElement {
     };
 
     soundEffects.playPop();
+    this.lastPaintedStateStr = updatedArtwork.modifiedAt.toString();
+    this.lastBorderPaintedStateStr = "";
     handleSelectArtwork(updatedArtwork);
     this.drawArtboardCanvas();
   }
@@ -841,6 +836,7 @@ export class EaselBoard extends SignalElement {
     if (changed) {
       this.hasPaintedInCurrentStroke = true;
       this.offscreenCtx.putImageData(this.offscreenPixelsData, 0, 0);
+      this.lastBorderPaintedStateStr = "";
       this.drawArtboardCanvas();
     }
   }
@@ -1040,7 +1036,10 @@ export class EaselBoard extends SignalElement {
               paintedCanvasDataUrl,
               modifiedAt: Date.now(),
             };
+            this.lastPaintedStateStr = updatedArtwork.modifiedAt.toString();
+            this.lastBorderPaintedStateStr = "";
             handleSelectArtwork(updatedArtwork);
+            this.drawArtboardCanvas();
           }
         }
       }
