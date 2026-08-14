@@ -401,9 +401,11 @@ export async function processImageToCartoonPalette(
   // 3. Apply Bilateral Painterly Filter for noise reduction & smooth color fields
   // Three passes with stronger spatial and range sigmas to aggressively flatten noise
   // while preserving sharp, crisp object boundaries.
-  let smoothedPixels = applyBilateralFilter(rawPixels, width, height, 4.0, 50.0, 4);
-  smoothedPixels = applyBilateralFilter(smoothedPixels, width, height, 4.0, 50.0, 4);
-  smoothedPixels = applyBilateralFilter(smoothedPixels, width, height, 4.0, 50.0, 4);
+  let smoothedPixels = rawPixels;
+  const passCount = 3;
+  for (let i = 0; i < passCount; i++) {
+    smoothedPixels = applyBilateralFilter(smoothedPixels, width, height, 4.0, 50.0, 4);
+  }
 
     // 3.5 Generate Dynamic Palette
   const generatedColors = generateDynamicPalette(smoothedPixels, 24);

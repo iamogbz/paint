@@ -6,6 +6,7 @@ import {
   iconFolderOpen,
   iconDownload,
   iconZoomIn,
+  iconZoomOut,
   iconMove,
   iconRotateCcw,
   iconPaintbrush,
@@ -16,11 +17,10 @@ import {
   iconX,
   iconSparkles,
   iconPaintBucket,
-iconZoomOut,
 } from "./icons";
 
 // Dev Note: Keep these instructions updated as features are added/removed/modified.
-// If you add a new control button, assign it a slide here.
+// If you add or modify a control button or interaction, update the tour slides accordingly.
 
 @customElement("app-tour")
 export class AppTour extends SignalElement {
@@ -30,64 +30,89 @@ export class AppTour extends SignalElement {
   private steps = [
     {
       title: "Welcome to PAINT by COLOURS!",
-      description: "Let's take a quick tour of the controls so you can start painting your masterpiece.",
+      description:
+        "Transform any photo into a vibrant paint-by-numbers canvas, or paint today's curated Daily Challenge. Let's take a quick tour of the features!",
       icon: iconPaintBucket(48, "#E63946"),
     },
     {
       title: "Starting a Painting",
-      description: "When you launch the app, you can either upload your own photo to generate a custom canvas, or start the Daily Challenge directly from the easel.",
+      description:
+        "Upload any photo from your device via click or drag-and-drop to automatically generate a custom canvas and palette, or jump straight into the Daily Challenge.",
       icon: iconImage(48, "#2A9D8F"),
     },
     {
-      title: "Your Gallery & Saving",
-      description: html`Click the yellow Gallery icon to view existing paintings, change their names, or start a new one. Click the green Save icon to download your painting to your device.`,
-      icon: html`
-        ${iconFolderOpen(48, "#F4A261")}
-        ${iconDownload(24, "#2A9D8F")}`,
-    },
-    {
       title: "Navigating the Canvas",
-      description: "Use the Zoom in/out buttons, scroll wheel or pinch to zoom on your device. To pan around, start dragging in a direction from the Pan button or simply click and drag the canvas directly.",
+      description:
+        "Zoom smoothly from 50% to 800% using the Zoom buttons, mouse scroll wheel, or pinch gestures. Pan around freely by dragging directly on the canvas or dragging from the center Pan button.",
       icon: html`
-      ${iconZoomOut(12, "#000000")}
-      ${iconMove(48, "#000000")}
-      ${iconZoomIn(12, "#000000")}
+        <div style="display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+          ${iconZoomOut(20, "#000000")}
+          ${iconMove(44, "#000000")}
+          ${iconZoomIn(20, "#000000")}
+        </div>
       `,
     },
     {
-      title: "Applying Paint",
-      description: "Select a color from the palette and tap on the canvas. You can also drag the selected color swatch directly onto a region! Just click the color again to deselect and the eraser is selected by default.",
+      title: "Painting & Smart Guides",
+      description:
+        "Select a color swatch and tap a region to fill it, or drag the color swatch directly onto the canvas! High-contrast outlines guide you to matching regions, with 3× thicker borders highlighting misplaced colors.",
       icon: iconPaintbrush(48, "#E63946"),
     },
     {
-      title: "Color Modes",
-      description: "Toggle between the Palette, which shows only the colors needed for this specific painting, and the Paint Bucket button (allows using any color).",
-      icon: iconPalette(48, "#E63946"),
-    },
-    {
-      title: "Track Your Progress",
-      description: "Each color swatch shows your progress in number of regions painted. Once a color is fully painted, a checkmark will appear on its swatch. However this is just a guide, you are the artist!",
+      title: "Color Palette & Progress",
+      description:
+        "The palette arranges colors by frequency. Each swatch shows real-time progress counters (painted vs. total regions) and receives a completion checkmark once 100% filled. Tap any swatch to copy its HEX code.",
       icon: iconCheck(48, "#2A9D8F"),
     },
     {
-      title: "Fixing Mistakes",
-      description: "Made a mistake? No worries! Just click the Undo button to revert your last stroke and try again.",
+      title: "Custom Colours & Picker",
+      description:
+        "Want to add your own colors? Tap the Picker swatch to open the 360° Color Wheel, adjust brightness, or input custom HEX codes. Added custom swatches can be removed anytime with the trash button.",
+      icon: iconPalette(48, "#8338EC"),
+    },
+    {
+      title: "Fixing Mistakes & Eraser",
+      description:
+        "Made a mistake? Click the Undo button to step backward through your recent strokes. You can also use the Eraser swatch (or click the active color to deselect) to clear regions back to white.",
       icon: iconRotateCcw(48, "#000000"),
     },
     {
-      title: "Enjoy!",
-      description: "Looking forward to your next masterpiece! Share it with your friends and maybe they can make their own too.",
+      title: "Gallery & High-Res Save",
+      description:
+        "Click the yellow Gallery icon to browse saved paintings, rename them, switch active artwork, or delete old ones. Click the green Save button anytime to download a crisp, clean PNG of your painting.",
+      icon: html`
+        <div style="display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
+          ${iconFolderOpen(40, "#F4A261")}
+          ${iconDownload(28, "#2A9D8F")}
+        </div>
+      `,
+    },
+    {
+      title: "Ready, Set, Paint!",
+      description:
+        "Unleash your creativity, relax, and bring your artworks to life one color at a time. Have fun painting your masterpiece!",
       icon: iconSparkles(48, "#2A9D8F"),
     },
   ];
 
+  private handleOpenTour = () => {
+    this.currentStep = 0;
+    this.isVisible = true;
+  };
+
   connectedCallback() {
     super.connectedCallback();
+    window.addEventListener("open-tour-guide", this.handleOpenTour);
     if (!localStorage.getItem("tour-completed")) {
       setTimeout(() => {
         this.isVisible = true;
       }, 500);
     }
+  }
+
+  disconnectedCallback() {
+    window.removeEventListener("open-tour-guide", this.handleOpenTour);
+    super.disconnectedCallback();
   }
 
   private nextStep() {
@@ -101,6 +126,12 @@ export class AppTour extends SignalElement {
   private prevStep() {
     if (this.currentStep > 0) {
       this.currentStep--;
+    }
+  }
+
+  private goToStep(stepIndex: number) {
+    if (stepIndex >= 0 && stepIndex < this.steps.length) {
+      this.currentStep = stepIndex;
     }
   }
 
@@ -140,6 +171,7 @@ export class AppTour extends SignalElement {
       alignItems: "center",
       textAlign: "center" as const,
       position: "relative" as const,
+      boxSizing: "border-box" as const,
     };
 
     const closeBtnStyle = {
@@ -177,6 +209,8 @@ export class AppTour extends SignalElement {
       display: "flex",
       gap: "0.5rem",
       alignItems: "center",
+      flexWrap: "wrap" as const,
+      justifyContent: "center",
     };
 
     return html`
@@ -203,19 +237,25 @@ export class AppTour extends SignalElement {
               @click=${this.prevStep} 
               style=${this.renderStyleObject(navBtnStyle(this.currentStep === 0))}
               ?disabled=${this.currentStep === 0}
+              title="Previous"
             >
               ${iconChevronLeft(24, "#000000")}
             </button>
             
             <div style=${this.renderStyleObject(progressDotsStyle)}>
               ${this.steps.map((_, i) => html`
-                <div style="width: 8px; height: 8px; border-radius: 50%; background-color: ${i === this.currentStep ? "#E63946" : "#D1D5DB"}; border: 1px solid ${i === this.currentStep ? "#000000" : "transparent"};"></div>
+                <button
+                  @click=${() => this.goToStep(i)}
+                  style="width: 10px; height: 10px; border-radius: 50%; background-color: ${i === this.currentStep ? "#E63946" : "#D1D5DB"}; border: 1.5px solid ${i === this.currentStep ? "#000000" : "rgba(0,0,0,0.15)"}; padding: 0; cursor: pointer; transition: all 0.15s ease;"
+                  title="Go to step ${i + 1}"
+                ></button>
               `)}
             </div>
             
             <button 
               @click=${this.nextStep} 
               style=${this.renderStyleObject(navBtnStyle(false))}
+              title="Next"
             >
               ${this.currentStep === this.steps.length - 1 ? iconCheck(24, "#000000") : iconChevronRight(24, "#000000")}
             </button>
@@ -240,4 +280,5 @@ export class AppTour extends SignalElement {
       .join(" ");
   }
 }
+
 
