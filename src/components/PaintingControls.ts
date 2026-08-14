@@ -738,7 +738,7 @@ export class PaintingControls extends SignalElement {
                   <span
                     style="font-size: 0.6875rem; font-weight: 900; color: #3D2314; margin-top: 0.375rem; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; line-height: 1.2;"
                   >
-                    Pick
+                    Picker
                   </span>
                 </button>
               </div>

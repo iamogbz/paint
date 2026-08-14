@@ -399,8 +399,11 @@ export async function processImageToCartoonPalette(
   const rawPixels = origImgData.data;
 
   // 3. Apply Bilateral Painterly Filter for noise reduction & smooth color fields
-  let smoothedPixels = applyBilateralFilter(rawPixels, width, height, 3.0, 45.0, 3);
-  smoothedPixels = applyBilateralFilter(smoothedPixels, width, height, 3.0, 45.0, 3);
+  // Three passes with stronger spatial and range sigmas to aggressively flatten noise
+  // while preserving sharp, crisp object boundaries.
+  let smoothedPixels = applyBilateralFilter(rawPixels, width, height, 4.0, 50.0, 4);
+  smoothedPixels = applyBilateralFilter(smoothedPixels, width, height, 4.0, 50.0, 4);
+  smoothedPixels = applyBilateralFilter(smoothedPixels, width, height, 4.0, 50.0, 4);
 
     // 3.5 Generate Dynamic Palette
   const generatedColors = generateDynamicPalette(smoothedPixels, 24);
@@ -424,19 +427,23 @@ export async function processImageToCartoonPalette(
   }
 
   // 5. Apply Mode Filter to remove thin lines and strips
-  applyModeFilter(colorIndices, width, height, 2);
+  // Increased radius from 2 to 3 to aggressively eliminate stray noise lines
+  applyModeFilter(colorIndices, width, height, 3);
 
   // 5b. Apply Majority Smoothing passes to round staircases and clean noise
-  const smoothingPasses = 5;
+  // Increased passes to 10 for crisper and more uniform curved edges
+  const smoothingPasses = 10;
   for (let i = 0; i < smoothingPasses; i++) {
     applyMajoritySmoothing(colorIndices, width, height);
   }
 
   // 6. Clean up rare isolated micro-colors
-  removeRareColors(colorIndices, totalPixels, paletteColors, 0.0025);
+  // Increased ratio to 0.005 to swallow slightly larger unwanted noise patches globally
+  removeRareColors(colorIndices, totalPixels, paletteColors, 0.005);
 
-  // 6b. Eliminate small isolated islands (noise) under 50 pixels
-  eliminateSmallIslands(colorIndices, width, height, 50);
+  // 6b. Eliminate small isolated islands (noise) under a specific pixel threshold
+  // Increased from 50 to 150 to ensure we have no tiny unpaintable color dots
+  eliminateSmallIslands(colorIndices, width, height, 150);
 
   // 7. Render final cartoon output canvas and calculate color counts
   const outputCanvas = document.createElement("canvas");
