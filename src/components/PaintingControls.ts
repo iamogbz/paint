@@ -16,7 +16,6 @@ import {
   handleUndo,
 } from "../state/store";
 import {
-  iconPalette,
   iconPaintBucket,
   iconPaintbrush,
   iconCheck,
@@ -26,6 +25,7 @@ import {
   iconZoomOut,
   iconRotateCcw,
   iconMove,
+  iconTrash2,
 } from "./icons";
 import { transparentImgCss } from "./constants";
 import { soundEffects } from "../utils/soundEffects";
@@ -537,15 +537,10 @@ export class PaintingControls extends SignalElement {
               <div style=${this.renderStyleObject(scrollRowStyle)}>
                 ${allColors.map((color) => {
                   const colorStatus = expectedColorStatus.get(color.hexCode);
+                  const isCoreColor = colorStatus?.total > 0;
                   const isFullyPainted = colorStatus
-                    ? colorStatus.total > 0 &&
-                      colorStatus.total === colorStatus.painted
+                    ? isCoreColor && colorStatus.total === colorStatus.painted
                     : false;
-
-                  let progressLabel = "♾️";
-                  if (colorStatus && colorStatus.total > 0) {
-                    progressLabel = `${colorStatus.painted}/${colorStatus.total}`;
-                  }
 
                   const isSelected = activeColor?.hexCode === color.hexCode;
                   const isCopied = copiedHex === color.hexCode;
@@ -624,11 +619,34 @@ export class PaintingControls extends SignalElement {
 
                       <!-- Color Label/Progress -->
                       <span
-                        style="font-size: 0.6875rem; font-weight: 900; color: #3D2314; margin-top: 0.375rem; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; line-height: 1.2;"
+                        @click=${(e: MouseEvent) => {
+                          if (isCoreColor) return;
+                          alert(
+                            "TODO: delete color from swatch. Any region that has been painted with this color becomes unpainted. This is an undoable action."
+                          );
+                        }}
+                        style="font-size: 0.6875rem;
+                          font-weight: 900;
+                          color: #3D2314;
+                          padding: 0.375rem;
+                          text-align: center;
+                          white-space: nowrap;
+                          overflow: hidden;
+                          text-overflow: ellipsis;
+                          width: 100%;
+                          line-height: 1.2;
+                          display: inline-flex;
+                          border-radius: 100%;
+                          justify-content: center;
+                          pointer-events: ${isSelected ? "auto" : "none"};"
                       >
                         ${color.hexCode === "#00000000"
                           ? "Eraser"
-                          : progressLabel}
+                          : isCoreColor
+                          ? `${colorStatus.painted}/${colorStatus.total}`
+                          : isSelected
+                          ? iconTrash2(12, "#E63946")
+                          : "♾️"}
                       </span>
                     </button>
                   `;
