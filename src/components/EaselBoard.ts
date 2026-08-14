@@ -25,7 +25,12 @@ import {
   iconUpload,
   iconPaintBucket,
 } from "./icons";
-import { BASE_BRUSH_RADIUS, transparentImgCss } from "./constants";
+import {
+  BASE_IMAGE_SIZE,
+  BASE_GUIDE_THICKNESS,
+  BASE_BRUSH_RADIUS,
+  transparentImgCss,
+} from "./constants";
 import { getOppositeHueRGBA } from "../utils/colorUtils";
 
 @customElement("easel-board")
@@ -633,6 +638,8 @@ export class EaselBoard extends SignalElement {
     const targetHex = draggedColorHex || activeColor?.hexCode;
     const cacheableTargetHex = targetHex || "none";
     const paintedState = currentArtwork.paintedRegionsState || {};
+    const imageScale = Math.max(w, h) / BASE_IMAGE_SIZE;
+    const guideThickness = Math.max(1, Math.round(BASE_GUIDE_THICKNESS * imageScale));
 
     if (
       this.lastTargetHex !== cacheableTargetHex ||
@@ -644,6 +651,7 @@ export class EaselBoard extends SignalElement {
         const overlayImgData = this.borderOverlayCtx.createImageData(w, h);
         const overlayPixels = overlayImgData.data;
         let hasVisibleBorders = false;
+        const halfThick = Math.floor(guideThickness / 2);
 
         for (const [
           regionId,
@@ -665,21 +673,49 @@ export class EaselBoard extends SignalElement {
                 .startsWith(targetHexUpper.substring(0, 7));
 
             if (!isCompleted) {
-              for (let k = 0; k < borderIndices.length; k++) {
-                const pIdx = borderIndices[k];
-                const px = pIdx % w;
-                const py = Math.floor(pIdx / w);
-                const [cR, cG, cB, cA] = this.getContrastingOutlineRGBA(
-                  px,
-                  py,
-                  paintedState
-                );
-                const outIdx = pIdx * 4;
-                overlayPixels[outIdx] = cR;
-                overlayPixels[outIdx + 1] = cG;
-                overlayPixels[outIdx + 2] = cB;
-                overlayPixels[outIdx + 3] = cA;
-                hasVisibleBorders = true;
+              if (guideThickness <= 1) {
+                for (let k = 0; k < borderIndices.length; k++) {
+                  const pIdx = borderIndices[k];
+                  const px = pIdx % w;
+                  const py = Math.floor(pIdx / w);
+                  const [cR, cG, cB, cA] = this.getContrastingOutlineRGBA(
+                    px,
+                    py,
+                    paintedState
+                  );
+                  const outIdx = pIdx * 4;
+                  overlayPixels[outIdx] = cR;
+                  overlayPixels[outIdx + 1] = cG;
+                  overlayPixels[outIdx + 2] = cB;
+                  overlayPixels[outIdx + 3] = cA;
+                  hasVisibleBorders = true;
+                }
+              } else {
+                for (let k = 0; k < borderIndices.length; k++) {
+                  const pIdx = borderIndices[k];
+                  const px = pIdx % w;
+                  const py = Math.floor(pIdx / w);
+                  const [cR, cG, cB, cA] = this.getContrastingOutlineRGBA(
+                    px,
+                    py,
+                    paintedState
+                  );
+                  for (let dy = -halfThick; dy < guideThickness - halfThick; dy++) {
+                    const ny = py + dy;
+                    if (ny < 0 || ny >= h) continue;
+                    const rowOffset = ny * w;
+                    for (let dx = -halfThick; dx < guideThickness - halfThick; dx++) {
+                      const nx = px + dx;
+                      if (nx < 0 || nx >= w) continue;
+                      const outIdx = (rowOffset + nx) * 4;
+                      overlayPixels[outIdx] = cR;
+                      overlayPixels[outIdx + 1] = cG;
+                      overlayPixels[outIdx + 2] = cB;
+                      overlayPixels[outIdx + 3] = cA;
+                    }
+                  }
+                  hasVisibleBorders = true;
+                }
               }
             }
           }
@@ -700,6 +736,7 @@ export class EaselBoard extends SignalElement {
     if (this.hoveredRegionId !== null && this.regionBorderPixels) {
       const borderIndices = this.regionBorderPixels.get(this.hoveredRegionId);
       if (borderIndices && borderIndices.length > 0) {
+        const halfThick = Math.floor(guideThickness / 2);
         if (targetHex && targetHex !== "#00000000") {
           const [r, g, b] = this.parseColorToRGBA(targetHex);
           destCtx.fillStyle = `rgba(${r}, ${g}, ${b}, 1.0)`;
@@ -707,7 +744,12 @@ export class EaselBoard extends SignalElement {
             const pIdx = borderIndices[k];
             const bx = pIdx % w;
             const by = Math.floor(pIdx / w);
-            destCtx.fillRect(bx, by, 1, 1);
+            destCtx.fillRect(
+              bx - halfThick,
+              by - halfThick,
+              guideThickness,
+              guideThickness
+            );
           }
         } else {
           for (let k = 0; k < borderIndices.length; k++) {
@@ -720,7 +762,12 @@ export class EaselBoard extends SignalElement {
               paintedState
             );
             destCtx.fillStyle = `rgba(${cR}, ${cG}, ${cB}, ${cA / 255})`;
-            destCtx.fillRect(bx, by, 1, 1);
+            destCtx.fillRect(
+              bx - halfThick,
+              by - halfThick,
+              guideThickness,
+              guideThickness
+            );
           }
         }
       }
@@ -838,9 +885,10 @@ export class EaselBoard extends SignalElement {
     }
     const pixels = this.offscreenPixelsData.data;
 
-    // Brush at scale 1.0 covers 20px radius from touch center.
-    // Affected pixels scale to canvas zoom size (scaleX is image px per screen px).
-    const r = Math.max(1, BASE_BRUSH_RADIUS * scaleX);
+    // Brush at scale 1.0 covers 20px radius from touch center on 800px base image.
+    // Affected pixels scale to image resolution and canvas zoom size (scaleX is image px per screen px).
+    const imageScale = Math.max(w, h) / BASE_IMAGE_SIZE;
+    const r = Math.max(1, BASE_BRUSH_RADIUS * imageScale * scaleX);
     const rSquared = r * r;
     const minX = Math.max(0, Math.floor(centerImgX - r));
     const maxX = Math.min(w - 1, Math.ceil(centerImgX + r));

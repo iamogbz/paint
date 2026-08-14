@@ -1,5 +1,6 @@
 import { ProcessedArtwork, UsedColorStat, PaletteColor } from "../types";
 import { generateDynamicPalette, ColorQuantizer, getPerceptualColorDistance } from "./colorUtils";
+import { BASE_IMAGE_SIZE } from "../components/constants";
 
 export const MIN_ISLAND_AREA = 32;
 export const MIN_ISLAND_BBOX_DIM = 0;
@@ -31,7 +32,7 @@ export function loadImage(src: string): Promise<HTMLImageElement> {
 export function calculateTargetDimensions(
   width: number,
   height: number,
-  maxDim = 800
+  maxDim = BASE_IMAGE_SIZE
 ): { width: number; height: number } {
   if (width <= maxDim && height <= maxDim) {
     return { width, height };
@@ -143,18 +144,22 @@ function applyBilateralFilter(
 }
 
 /**
- * 3x3 Majority Neighborhood Filter to round jaggies and eliminate stray pixel noise.
+ * Majority Neighborhood Filter to round jaggies and eliminate stray pixel noise.
  */
 function applyMajoritySmoothing(
   colorIndices: Int16Array,
   width: number,
-  height: number
+  height: number,
+  radius = 1
 ) {
+  if (radius < 1) radius = 1;
   const copy = new Int16Array(colorIndices);
+  const windowArea = (2 * radius + 1) * (2 * radius + 1);
+  const threshold = Math.ceil(windowArea * (5 / 9));
 
-  for (let y = 1; y < height - 1; y++) {
+  for (let y = radius; y < height - radius; y++) {
     const rowIdx = y * width;
-    for (let x = 1; x < width - 1; x++) {
+    for (let x = radius; x < width - radius; x++) {
       const idx = rowIdx + x;
       const centerVal = copy[idx];
 
@@ -162,9 +167,9 @@ function applyMajoritySmoothing(
       let maxCount = 0;
       let dominantVal = centerVal;
 
-      for (let dy = -1; dy <= 1; dy++) {
+      for (let dy = -radius; dy <= radius; dy++) {
         const nRow = (y + dy) * width;
-        for (let dx = -1; dx <= 1; dx++) {
+        for (let dx = -radius; dx <= radius; dx++) {
           const nVal = copy[nRow + (x + dx)];
           counts[nVal] = (counts[nVal] || 0) + 1;
           if (counts[nVal] > maxCount) {
@@ -174,7 +179,7 @@ function applyMajoritySmoothing(
         }
       }
 
-      if (maxCount >= 5) {
+      if (maxCount >= threshold) {
         colorIndices[idx] = dominantVal;
       }
     }
@@ -374,7 +379,7 @@ export async function processImageToCartoonPalette(
 
   // 1. Load original image and calculate canvas dimensions
   const img = await loadImage(imageSrc);
-  const { width, height } = calculateTargetDimensions(img.width, img.height, 800);
+  const { width, height } = calculateTargetDimensions(img.width, img.height, BASE_IMAGE_SIZE);
 
   // 2. Render scaled original to canvas and extract raw pixels
   const origCanvas = document.createElement("canvas");
@@ -391,16 +396,28 @@ export async function processImageToCartoonPalette(
   const origImgData = origCtx.getImageData(0, 0, width, height);
   const rawPixels = origImgData.data;
 
+  const imageScale = Math.max(width, height) / BASE_IMAGE_SIZE;
+  const areaScale = (width * height) / (BASE_IMAGE_SIZE * BASE_IMAGE_SIZE);
+
   // 3. Apply Bilateral Painterly Filter for noise reduction & smooth color fields
   // multiple passes with stronger spatial and range sigmas to aggressively
   // flatten noise while preserving sharp, crisp object boundaries.
   let smoothedPixels = rawPixels;
   const passCount = 4;
+  const spatialSigma = Math.max(1.0, 2.0 * imageScale);
+  const filterRadius = Math.max(1, Math.round(2 * imageScale));
   for (let i = 0; i < passCount; i++) {
-    smoothedPixels = applyBilateralFilter(smoothedPixels, width, height, 2, 25, 2);
+    smoothedPixels = applyBilateralFilter(
+      smoothedPixels,
+      width,
+      height,
+      spatialSigma,
+      25,
+      filterRadius
+    );
   }
 
-    // 3.5 Generate Dynamic Palette
+  // 3.5 Generate Dynamic Palette
   const generatedColors = generateDynamicPalette(smoothedPixels, 24);
   const paletteColors = [transparentColor, ...generatedColors];
   const quantizer = new ColorQuantizer(paletteColors);
@@ -423,18 +440,21 @@ export async function processImageToCartoonPalette(
 
   // 5. Apply Majority Smoothing passes to round staircases and clean noise
   const smoothingPasses = 2;
+  const smoothingRadius = Math.max(1, Math.round(1 * imageScale));
   for (let i = 0; i < smoothingPasses; i++) {
-    applyMajoritySmoothing(colorIndices, width, height);
+    applyMajoritySmoothing(colorIndices, width, height, smoothingRadius);
   }
 
   // 6. Connected Island Pruning (continues passes until no small islands remain)
+  const scaledMinIslandArea = Math.max(1, Math.round(MIN_ISLAND_AREA * areaScale));
+  const scaledMinIslandBboxDim = Math.round(MIN_ISLAND_BBOX_DIM * imageScale);
   eliminateSmallIslands(
     colorIndices,
     width,
     height,
     paletteColors,
-    MIN_ISLAND_AREA,
-    MIN_ISLAND_BBOX_DIM
+    scaledMinIslandArea,
+    scaledMinIslandBboxDim
   );
 
   // 7. Render final cartoon output canvas and calculate color counts
