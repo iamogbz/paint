@@ -239,64 +239,62 @@ export class EaselBoard extends SignalElement {
     }
     if (!this.offscreenCtx) return;
 
-    if (artwork.paintedCanvasDataUrl) {
-      const img = new Image();
-      img.onload = () => {
-        if (this.offscreenCtx) {
-          this.offscreenCtx.clearRect(0, 0, w, h);
-          this.offscreenCtx.drawImage(img, 0, 0);
-          this.offscreenPixelsData = this.offscreenCtx.getImageData(0, 0, w, h);
-          this.lastPaintedStateStr = artwork.modifiedAt
-            ? artwork.modifiedAt.toString()
-            : "0";
-          this.lastBorderPaintedStateStr = "";
-          this.drawArtboardCanvas();
+    if (!this.offscreenPixelsData || this.offscreenPixelsData.width !== w || this.offscreenPixelsData.height !== h) {
+      this.offscreenPixelsData = this.offscreenCtx.createImageData(w, h);
+    }
+    const imgData = this.offscreenPixelsData;
+    const pixels = imgData.data;
+    const paintedState = artwork.paintedRegionsState || {};
+    const totalPixels = w * h;
+    
+    // Precompute region colors for lightning-fast iteration
+    const regionColorCache = new Map<number, [number, number, number, number]>();
+    const expectedColorCache = new Map<number, [number, number, number, number]>();
+
+    for (let i = 0; i < totalPixels; i++) {
+      const pxIdx = i * 4;
+      const regionId = this.regionMapData ? this.regionMapData[i] : -1;
+      const paintedColor = regionId >= 0 ? paintedState[regionId] : undefined;
+
+      if (paintedColor) {
+        let rgba = regionColorCache.get(regionId);
+        if (!rgba) {
+          rgba = this.parseColorToRGBA(paintedColor);
+          regionColorCache.set(regionId, rgba);
         }
-      };
-      img.src = artwork.paintedCanvasDataUrl;
-    } else {
-      const imgData = this.offscreenCtx.createImageData(w, h);
-      const pixels = imgData.data;
-      const paintedState = artwork.paintedRegionsState || {};
-      const totalPixels = w * h;
-
-      for (let i = 0; i < totalPixels; i++) {
-        const pxIdx = i * 4;
-        const regionId = this.regionMapData ? this.regionMapData[i] : -1;
-        const paintedColor = regionId >= 0 ? paintedState[regionId] : undefined;
-
-        if (paintedColor) {
-          const rgba = this.parseColorToRGBA(paintedColor);
-          pixels[pxIdx] = rgba[0];
-          pixels[pxIdx + 1] = rgba[1];
-          pixels[pxIdx + 2] = rgba[2];
-          pixels[pxIdx + 3] = rgba[3];
-        } else {
+        pixels[pxIdx] = rgba[0];
+        pixels[pxIdx + 1] = rgba[1];
+        pixels[pxIdx + 2] = rgba[2];
+        pixels[pxIdx + 3] = rgba[3];
+      } else {
+        let expectedRgba = expectedColorCache.get(regionId);
+        if (!expectedRgba) {
           const expected =
             regionId >= 0
               ? this.regionExpectedColors.get(regionId) ||
                 artwork.regionExpectedColors?.[regionId]
               : undefined;
+          
           if (expected === "#00000000") {
-            pixels[pxIdx] = 0;
-            pixels[pxIdx + 1] = 0;
-            pixels[pxIdx + 2] = 0;
-            pixels[pxIdx + 3] = 0;
+            expectedRgba = [0, 0, 0, 0];
           } else {
-            pixels[pxIdx] = 255;
-            pixels[pxIdx + 1] = 255;
-            pixels[pxIdx + 2] = 255;
-            pixels[pxIdx + 3] = 255;
+            expectedRgba = [255, 255, 255, 255];
           }
+          expectedColorCache.set(regionId, expectedRgba);
         }
+        pixels[pxIdx] = expectedRgba[0];
+        pixels[pxIdx + 1] = expectedRgba[1];
+        pixels[pxIdx + 2] = expectedRgba[2];
+        pixels[pxIdx + 3] = expectedRgba[3];
       }
-
-      this.offscreenCtx.putImageData(imgData, 0, 0);
-      this.offscreenPixelsData = imgData;
-      this.lastPaintedStateStr = artwork.modifiedAt
-        ? artwork.modifiedAt.toString()
-        : "0";
     }
+    this.offscreenCtx.putImageData(imgData, 0, 0);
+    this.offscreenPixelsData = imgData;
+    this.lastPaintedStateStr = artwork.modifiedAt
+      ? artwork.modifiedAt.toString()
+      : "0";
+    this.lastBorderPaintedStateStr = "";
+    this.drawArtboardCanvas();
   }
 
   private extractColorsFromImage(artwork: ProcessedArtwork, onComplete?: () => void) {
@@ -576,65 +574,8 @@ export class EaselBoard extends SignalElement {
       this.lastPaintedStateStr !== currentPaintedStateStr &&
       !this.isBrushPainting
     ) {
-      if (currentArtwork.paintedCanvasDataUrl) {
-        const img = new Image();
-        img.onload = () => {
-          if (this.offscreenCtx) {
-            this.offscreenCtx.clearRect(0, 0, w, h);
-            this.offscreenCtx.drawImage(img, 0, 0);
-            this.offscreenPixelsData = this.offscreenCtx.getImageData(
-              0,
-              0,
-              w,
-              h
-            );
-            this.lastPaintedStateStr = currentPaintedStateStr;
-            this.lastBorderPaintedStateStr = "";
-            this.drawArtboardCanvas();
-          }
-        };
-        img.src = currentArtwork.paintedCanvasDataUrl;
-      } else {
-        const imgData = this.offscreenCtx.createImageData(w, h);
-        const pixels = imgData.data;
-        const paintedState = currentArtwork.paintedRegionsState || {};
-
-        for (let i = 0; i < w * h; i++) {
-          const pxIdx = i * 4;
-          const regionId = this.regionMapData[i];
-          const paintedColor =
-            regionId >= 0 ? paintedState[regionId] : undefined;
-
-          if (paintedColor) {
-            const rgba = this.parseColorToRGBA(paintedColor);
-            pixels[pxIdx] = rgba[0];
-            pixels[pxIdx + 1] = rgba[1];
-            pixels[pxIdx + 2] = rgba[2];
-            pixels[pxIdx + 3] = rgba[3];
-          } else {
-            const expected =
-              regionId >= 0
-                ? this.regionExpectedColors.get(regionId) ||
-                  currentArtwork.regionExpectedColors?.[regionId]
-                : undefined;
-            if (expected === "#00000000") {
-              pixels[pxIdx] = 0;
-              pixels[pxIdx + 1] = 0;
-              pixels[pxIdx + 2] = 0;
-              pixels[pxIdx + 3] = 0;
-            } else {
-              pixels[pxIdx] = 255;
-              pixels[pxIdx + 1] = 255;
-              pixels[pxIdx + 2] = 255;
-              pixels[pxIdx + 3] = 255;
-            }
-          }
-        }
-
-        this.offscreenCtx.putImageData(imgData, 0, 0);
-        this.offscreenPixelsData = imgData;
-        this.lastPaintedStateStr = currentPaintedStateStr;
-      }
+      this.initOffscreenCanvas(currentArtwork);
+      return;
     }
 
     // 2. Draw base paint canvas onto screen context
@@ -797,8 +738,8 @@ export class EaselBoard extends SignalElement {
     };
     pushUndoState(
       currentPainted,
-      currentArtwork.colorStats,
-      currentArtwork.paintedCanvasDataUrl
+      currentArtwork.colorStats
+
     );
 
     const targetRGBA = this.parseColorToRGBA(colorHex);
@@ -822,11 +763,9 @@ export class EaselBoard extends SignalElement {
 
     currentPainted[regionId] = colorHex;
 
-    const paintedCanvasDataUrl = this.offscreenCanvas.toDataURL("image/png");
     const updatedArtwork: ProcessedArtwork = {
       ...currentArtwork,
       paintedRegionsState: currentPainted,
-      paintedCanvasDataUrl,
       modifiedAt: Date.now(),
     };
 
@@ -993,8 +932,8 @@ export class EaselBoard extends SignalElement {
     };
     pushUndoState(
       currentPainted,
-      currentArtwork.colorStats,
-      currentArtwork.paintedCanvasDataUrl
+      currentArtwork.colorStats
+
     );
 
     this.applyBrushStamp(imgX, imgY, scaleX);
@@ -1084,8 +1023,6 @@ export class EaselBoard extends SignalElement {
           soundEffects.playPop();
           const currentArtwork = currentArtworkSignal.get();
           if (currentArtwork) {
-            const paintedCanvasDataUrl =
-              this.offscreenCanvas.toDataURL("image/png");
             const currentPainted = {
               ...(currentArtwork.paintedRegionsState || {}),
             };
@@ -1096,7 +1033,6 @@ export class EaselBoard extends SignalElement {
             const updatedArtwork: ProcessedArtwork = {
               ...currentArtwork,
               paintedRegionsState: currentPainted,
-              paintedCanvasDataUrl,
               modifiedAt: Date.now(),
             };
             this.lastPaintedStateStr = updatedArtwork.modifiedAt.toString();
