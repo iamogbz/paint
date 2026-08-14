@@ -619,7 +619,7 @@ export class PaintingControls extends SignalElement {
 
                       <!-- Color Label/Progress -->
                       <span
-                        @click=${(e: MouseEvent) => {
+                        @pointerdown=${(e: PointerEvent) => {
                           if (isCoreColor) return;
                           alert(
                             "TODO: delete color from swatch. Any region that has been painted with this color becomes unpainted. This is an undoable action."
