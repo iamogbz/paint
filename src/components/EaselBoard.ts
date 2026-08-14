@@ -1668,18 +1668,18 @@ export class EaselBoard extends SignalElement {
                         style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;"
                       >
                         <div
-                          style="position: relative; width: 5rem; height: 5rem; margin-bottom: 1rem; display: flex; align-items: center; justify-content: center;"
+                          style="position: relative; width: 2rem; height: 2rem; display: flex; border-radius: 100%; 
+                          align-items: center; animation: hue-loop 3s linear infinite; justify-content: center;"
                         >
-                          ${iconLoader2(64, "#FFD166")}
                           <div style="position: absolute;">
-                            ${iconSparkles(32, "#FFD166")}
+                            ${iconSparkles(32, "#AA3311")}
                           </div>
                         </div>
-                        <h3
-                          style="font-size: 1.25rem; font-weight: 900; color: #3D2314; margin: 0 0 0.25rem 0; font-style: italic;"
+                        <span
+                          style="font-size: 1.25rem; font-weight: 900; color: #3D2314; margin-bottom: 1.5rem; font-style: italic;"
                         >
-                          Preparing Canvas..
-                        </h3>
+                          Preparing Canvas...
+                        </span>
                         <p
                           style="font-size: 0.75rem; font-weight: 700; color: #4A2810; text-transform: uppercase; margin: 0;"
                         >
