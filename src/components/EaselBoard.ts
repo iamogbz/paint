@@ -686,6 +686,15 @@ export class EaselBoard extends SignalElement {
                 .startsWith(targetHexUpper.substring(0, 7));
 
             if (!isCompleted) {
+              const isWrongColor =
+                paintedColor &&
+                paintedColor !== "#00000000" &&
+                paintedColor.toUpperCase() !== "#FFFFFF" &&
+                paintedColor.toUpperCase() !== "#FFFFFFFF";
+              const currentThickness = isWrongColor ? borderThickness * 3 : borderThickness;
+              const currentOffsetStart = -Math.floor((currentThickness - 1) / 2);
+              const currentOffsetEnd = Math.ceil((currentThickness - 1) / 2);
+
               for (let k = 0; k < borderIndices.length; k++) {
                 const pIdx = borderIndices[k];
                 const px = pIdx % w;
@@ -696,15 +705,15 @@ export class EaselBoard extends SignalElement {
                   paintedState
                 );
                 
-                if (borderThickness === 1) {
+                if (currentThickness === 1) {
                   const outIdx = pIdx * 4;
                   overlayPixels[outIdx] = cR;
                   overlayPixels[outIdx + 1] = cG;
                   overlayPixels[outIdx + 2] = cB;
                   overlayPixels[outIdx + 3] = cA;
                 } else {
-                  for (let dy = offsetStart; dy <= offsetEnd; dy++) {
-                    for (let dx = offsetStart; dx <= offsetEnd; dx++) {
+                  for (let dy = currentOffsetStart; dy <= currentOffsetEnd; dy++) {
+                    for (let dx = currentOffsetStart; dx <= currentOffsetEnd; dx++) {
                       const nx = px + dx;
                       const ny = py + dy;
                       if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
