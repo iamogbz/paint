@@ -34,6 +34,7 @@ export class EaselBoard extends SignalElement {
   private panX = 0;
   private panY = 0;
   private isDragging = false;
+  private zoomAnimationEndTime = 0;
   private isPinching = false;
   private initialPinchDist = 0;
   private initialScale = 1;
@@ -1281,8 +1282,9 @@ export class EaselBoard extends SignalElement {
     const el = this.querySelector("#easel-transform-element") as HTMLElement;
     if (el) {
       el.style.transform = `translate3d(${this.panX}px, ${this.panY}px, 0px) scale(${this.scale})`;
+      const isAnimating = Date.now() < this.zoomAnimationEndTime;
       el.style.transition =
-        this.isDragging || this.isPinching
+        (!isAnimating && (this.isDragging || this.isPinching))
           ? "none"
           : "transform 0.15s cubic-bezier(0.2, 0, 0, 1)";
     }
@@ -1355,6 +1357,7 @@ export class EaselBoard extends SignalElement {
   private handleZoomSet = (e: Event) => {
     const scale = (e as CustomEvent).detail.scale;
     if (scale !== undefined) {
+      this.zoomAnimationEndTime = Date.now() + 200;
       this.setScale(scale);
     }
   };
@@ -1370,10 +1373,12 @@ export class EaselBoard extends SignalElement {
   };
 
   private zoomIn = () => {
+    this.zoomAnimationEndTime = Date.now() + 200;
     this.setScale(this.scale * 1.4);
   };
 
   private zoomOut = () => {
+    this.zoomAnimationEndTime = Date.now() + 200;
     this.setScale(this.scale / 1.4);
   };
 
@@ -1413,10 +1418,11 @@ export class EaselBoard extends SignalElement {
       const now = Date.now();
       if (now - this.lastTapTime < 300) {
         this.hasDragged = true;
+        this.zoomAnimationEndTime = Date.now() + 200;
         if (this.scale > 1.2) {
-          this.setScale(1);
+          this.setScaleAtPoint(1, e.touches[0].clientX, e.touches[0].clientY);
         } else {
-          this.setScale(2.5);
+          this.setScaleAtPoint(2.5, e.touches[0].clientX, e.touches[0].clientY);
         }
         this.lastTapTime = 0;
       } else {
@@ -1502,6 +1508,25 @@ export class EaselBoard extends SignalElement {
       this.isDragging = false;
       return;
     }
+
+    const now = Date.now();
+    if (e.pointerType === "mouse") {
+      if (now - this.lastTapTime < 300) {
+        this.hasDragged = true;
+        this.zoomAnimationEndTime = Date.now() + 200;
+        if (this.scale > 1.2) {
+          this.setScaleAtPoint(1, e.clientX, e.clientY);
+        } else {
+          this.setScaleAtPoint(2.5, e.clientX, e.clientY);
+        }
+        this.lastTapTime = 0;
+        this.isDragging = false;
+        return;
+      } else {
+        this.lastTapTime = now;
+      }
+    }
+
     this.pointerDownX = e.clientX;
     this.pointerDownY = e.clientY;
     this.hasDragged = false;
