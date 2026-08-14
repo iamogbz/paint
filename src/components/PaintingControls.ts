@@ -532,9 +532,10 @@ export class PaintingControls extends SignalElement {
                   >
                     ${iconRotateCcw(18, "#000000")}
                   </button>
+                  <!-- Fill (Paint Bucket) Mode Button -->
                   <button
+                    id="fill-mode-btn"
                     @click=${() => {
-                      // TODO: reenable canvas drag to pan when fill mode is active
                       isBrushModeSignal.set(false);
                     }}
                     style=${this.renderStyleObject({
@@ -553,14 +554,15 @@ export class PaintingControls extends SignalElement {
                       padding: "0",
                       transition: "transform 0.15s ease, box-shadow 0.15s ease",
                     })}
-                    title="All Colours"
+                    title="Fill Mode"
                   >
                     ${iconPaintBucket(18, isBrushMode ? "#000000" : "#FFFFFF")}
                   </button>
+                  <!-- Brush Mode Button -->
                   <button
+                    id="brush-mode-btn"
                     @click=${() => {
                       isBrushModeSignal.set(true);
-                      // TODO: disable canvas drag to pan when brush mode is active
                     }}
                     style=${this.renderStyleObject({
                       width: "36px",
@@ -568,7 +570,9 @@ export class PaintingControls extends SignalElement {
                       borderRadius: "50%",
                       backgroundColor: isBrushMode ? "#000000" : "#FFFFFF",
                       border: "2.5px solid #000000",
-                      boxShadow: "2px 2px 0px 0px #E63946",
+                      boxShadow: `2px 2px 0px 0px ${
+                        isBrushMode ? "#E63946" : "#000000"
+                      }`,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",

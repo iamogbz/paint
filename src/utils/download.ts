@@ -2,6 +2,10 @@ import { ProcessedArtwork } from "../types";
 import { soundEffects } from "./soundEffects";
 
 export function exportArtworkCleanDataUrl(artwork: ProcessedArtwork): string {
+  if (artwork.paintedCanvasDataUrl) {
+    return artwork.paintedCanvasDataUrl;
+  }
+
   const w = artwork.width;
   const h = artwork.height;
   const canvas = document.createElement("canvas");

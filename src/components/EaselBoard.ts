@@ -14,6 +14,7 @@ import {
   draggedColorSignal,
   pushUndoState,
   footerStyleSignal,
+  isBrushModeSignal,
 } from "../state/store";
 import { ProcessedArtwork } from "../types";
 import { getDailyChallenge } from "../data/dailyChallenge";
@@ -25,7 +26,7 @@ import {
   iconUpload,
   iconPaintBucket,
 } from "./icons";
-import { transparentImgCss } from "./constants";
+import { BASE_BRUSH_RADIUS, transparentImgCss } from "./constants";
 
 @customElement("easel-board")
 export class EaselBoard extends SignalElement {
@@ -58,11 +59,19 @@ export class EaselBoard extends SignalElement {
   private artworkHeight = 0;
   private offscreenCanvas: HTMLCanvasElement | null = null;
   private offscreenCtx: CanvasRenderingContext2D | null = null;
+  private offscreenPixelsData: ImageData | null = null;
   private lastPaintedStateStr = "";
   private lastBorderPaintedStateStr = "";
   private lastTargetHex: string | null = null;
   private borderOverlayCanvas: HTMLCanvasElement | null = null;
   private borderOverlayCtx: CanvasRenderingContext2D | null = null;
+
+  // Brush Painting State
+  private isBrushPainting = false;
+  private brushTargetRegionId: number | null = null;
+  private brushLastImgX = 0;
+  private brushLastImgY = 0;
+  private hasPaintedInCurrentStroke = false;
 
   public triggerFilePicker = () => {
     const input = document.getElementById(
@@ -86,9 +95,17 @@ export class EaselBoard extends SignalElement {
 
   private handleBlur = () => {
     this.pointerDownOnCanvas = false;
+    if (this.isBrushPainting) {
+      this.isBrushPainting = false;
+      this.brushTargetRegionId = null;
+    }
   };
 
   private handleRedrawArtboard = () => {
+    const currentArtwork = currentArtworkSignal.get();
+    if (currentArtwork) {
+      this.initOffscreenCanvas(currentArtwork);
+    }
     this.lastPaintedStateStr = "";
     this.lastTargetHex = null;
     this.lastBorderPaintedStateStr = "";
@@ -154,6 +171,10 @@ export class EaselBoard extends SignalElement {
     this.artworkWidth = artwork.width;
     this.artworkHeight = artwork.height;
     this.regionExpectedColors.clear();
+    this.lastPaintedStateStr = "";
+    this.lastBorderPaintedStateStr = "";
+    this.lastTargetHex = null;
+    this.offscreenPixelsData = null;
 
     if (artwork.regionExpectedColors) {
       for (const [regionId, hex] of Object.entries(
@@ -163,6 +184,11 @@ export class EaselBoard extends SignalElement {
       }
     }
 
+    const onMapReady = () => {
+      this.initOffscreenCanvas(artwork);
+      this.drawArtboardCanvas();
+    };
+
     if (
       artwork.regionMapData &&
       artwork.regionMapData.length === artwork.width * artwork.height
@@ -170,11 +196,10 @@ export class EaselBoard extends SignalElement {
       this.regionMapData = new Int32Array(artwork.regionMapData);
       this.computeBorderMap(artwork.width, artwork.height);
 
-      // If we didn't have regionExpectedColors but we had regionMapData, we must extract colors from image
       if (!artwork.regionExpectedColors) {
-        this.extractColorsFromImage(artwork);
+        this.extractColorsFromImage(artwork, onMapReady);
       } else {
-        this.drawArtboardCanvas();
+        onMapReady();
       }
     } else {
       const img = new Image();
@@ -191,13 +216,76 @@ export class EaselBoard extends SignalElement {
 
         this.buildRegionMapFromImageData(srcData);
         this.computeBorderMap(artwork.width, artwork.height);
-        this.drawArtboardCanvas();
+        onMapReady();
       };
       img.src = artwork.cartoonDataUrl;
     }
   }
 
-  private extractColorsFromImage(artwork: ProcessedArtwork) {
+  private initOffscreenCanvas(artwork: ProcessedArtwork) {
+    const w = artwork.width;
+    const h = artwork.height;
+    if (
+      !this.offscreenCanvas ||
+      this.offscreenCanvas.width !== w ||
+      this.offscreenCanvas.height !== h
+    ) {
+      this.offscreenCanvas = document.createElement("canvas");
+      this.offscreenCanvas.width = w;
+      this.offscreenCanvas.height = h;
+      this.offscreenCtx = this.offscreenCanvas.getContext("2d", {
+        willReadFrequently: true,
+      });
+    }
+    if (!this.offscreenCtx) return;
+
+    if (artwork.paintedCanvasDataUrl) {
+      const img = new Image();
+      img.onload = () => {
+        if (this.offscreenCtx) {
+          this.offscreenCtx.drawImage(img, 0, 0);
+          this.offscreenPixelsData = this.offscreenCtx.getImageData(0, 0, w, h);
+          this.lastPaintedStateStr = artwork.modifiedAt
+            ? artwork.modifiedAt.toString()
+            : "0";
+          this.drawArtboardCanvas();
+        }
+      };
+      img.src = artwork.paintedCanvasDataUrl;
+    } else {
+      const imgData = this.offscreenCtx.createImageData(w, h);
+      const pixels = imgData.data;
+      const paintedState = artwork.paintedRegionsState || {};
+      const totalPixels = w * h;
+
+      for (let i = 0; i < totalPixels; i++) {
+        const pxIdx = i * 4;
+        const regionId = this.regionMapData ? this.regionMapData[i] : -1;
+        const paintedColor = regionId >= 0 ? paintedState[regionId] : undefined;
+
+        if (paintedColor) {
+          const rgba = this.parseColorToRGBA(paintedColor);
+          pixels[pxIdx] = rgba[0];
+          pixels[pxIdx + 1] = rgba[1];
+          pixels[pxIdx + 2] = rgba[2];
+          pixels[pxIdx + 3] = rgba[3];
+        } else {
+          pixels[pxIdx] = 255;
+          pixels[pxIdx + 1] = 255;
+          pixels[pxIdx + 2] = 255;
+          pixels[pxIdx + 3] = 255;
+        }
+      }
+
+      this.offscreenCtx.putImageData(imgData, 0, 0);
+      this.offscreenPixelsData = imgData;
+      this.lastPaintedStateStr = artwork.modifiedAt
+        ? artwork.modifiedAt.toString()
+        : "0";
+    }
+  }
+
+  private extractColorsFromImage(artwork: ProcessedArtwork, onComplete?: () => void) {
     const img = new Image();
     img.crossOrigin = "anonymous";
     img.onload = () => {
@@ -231,7 +319,11 @@ export class EaselBoard extends SignalElement {
           }
         }
       }
-      this.drawArtboardCanvas();
+      if (onComplete) {
+        onComplete();
+      } else {
+        this.drawArtboardCanvas();
+      }
     };
     img.src = artwork.cartoonDataUrl;
   }
@@ -380,13 +472,7 @@ export class EaselBoard extends SignalElement {
       this.offscreenCanvas.width !== w ||
       this.offscreenCanvas.height !== h
     ) {
-      this.offscreenCanvas = document.createElement("canvas");
-      this.offscreenCanvas.width = w;
-      this.offscreenCanvas.height = h;
-      this.offscreenCtx = this.offscreenCanvas.getContext("2d", {
-        willReadFrequently: true,
-      });
-      this.lastPaintedStateStr = "";
+      this.initOffscreenCanvas(currentArtwork);
     }
 
     if (
@@ -401,39 +487,62 @@ export class EaselBoard extends SignalElement {
       this.lastTargetHex = null;
     }
 
-    if (!this.offscreenCtx || !this.borderOverlayCtx) return;
+    if (!this.offscreenCtx || !this.borderOverlayCtx || !this.offscreenCanvas)
+      return;
 
-    // 1. Render PURE PAINT CANVAS PIXELS (no borders or darkening embedded in image data!)
+    // 1. Check if painted canvas changed from external source
     const currentPaintedStateStr = currentArtwork.modifiedAt
       ? currentArtwork.modifiedAt.toString()
       : "0";
-    if (this.lastPaintedStateStr !== currentPaintedStateStr) {
-      const imgData = this.offscreenCtx.createImageData(w, h);
-      const pixels = imgData.data;
-      const paintedState = currentArtwork.paintedRegionsState || {};
+    if (
+      this.lastPaintedStateStr !== currentPaintedStateStr &&
+      !this.isBrushPainting
+    ) {
+      if (currentArtwork.paintedCanvasDataUrl) {
+        const img = new Image();
+        img.onload = () => {
+          if (this.offscreenCtx) {
+            this.offscreenCtx.drawImage(img, 0, 0);
+            this.offscreenPixelsData = this.offscreenCtx.getImageData(
+              0,
+              0,
+              w,
+              h
+            );
+            this.lastPaintedStateStr = currentPaintedStateStr;
+            this.drawArtboardCanvas();
+          }
+        };
+        img.src = currentArtwork.paintedCanvasDataUrl;
+      } else {
+        const imgData = this.offscreenCtx.createImageData(w, h);
+        const pixels = imgData.data;
+        const paintedState = currentArtwork.paintedRegionsState || {};
 
-      for (let i = 0; i < w * h; i++) {
-        const pxIdx = i * 4;
-        const regionId = this.regionMapData[i];
-        const paintedColor = paintedState[regionId];
+        for (let i = 0; i < w * h; i++) {
+          const pxIdx = i * 4;
+          const regionId = this.regionMapData[i];
+          const paintedColor =
+            regionId >= 0 ? paintedState[regionId] : undefined;
 
-        if (paintedColor) {
-          const rgba = this.parseColorToRGBA(paintedColor);
-          pixels[pxIdx] = rgba[0];
-          pixels[pxIdx + 1] = rgba[1];
-          pixels[pxIdx + 2] = rgba[2];
-          pixels[pxIdx + 3] = rgba[3];
-        } else {
-          // Unpainted island starts as clean white
-          pixels[pxIdx] = 255;
-          pixels[pxIdx + 1] = 255;
-          pixels[pxIdx + 2] = 255;
-          pixels[pxIdx + 3] = 255;
+          if (paintedColor) {
+            const rgba = this.parseColorToRGBA(paintedColor);
+            pixels[pxIdx] = rgba[0];
+            pixels[pxIdx + 1] = rgba[1];
+            pixels[pxIdx + 2] = rgba[2];
+            pixels[pxIdx + 3] = rgba[3];
+          } else {
+            pixels[pxIdx] = 255;
+            pixels[pxIdx + 1] = 255;
+            pixels[pxIdx + 2] = 255;
+            pixels[pxIdx + 3] = 255;
+          }
         }
-      }
 
-      this.offscreenCtx.putImageData(imgData, 0, 0);
-      this.lastPaintedStateStr = currentPaintedStateStr;
+        this.offscreenCtx.putImageData(imgData, 0, 0);
+        this.offscreenPixelsData = imgData;
+        this.lastPaintedStateStr = currentPaintedStateStr;
+      }
     }
 
     // 2. Draw base paint canvas onto screen context
@@ -453,11 +562,7 @@ export class EaselBoard extends SignalElement {
       this.lastBorderPaintedStateStr !== currentPaintedStateStr
     ) {
       this.borderOverlayCtx.clearRect(0, 0, w, h);
-      if (
-        this.isBorderPixel &&
-        targetHex &&
-        targetHex !== "#00000000"
-      ) {
+      if (this.isBorderPixel && targetHex && targetHex !== "#00000000") {
         const targetHexUpper = targetHex.toUpperCase();
         const overlayImgData = this.borderOverlayCtx.createImageData(w, h);
         const overlayPixels = overlayImgData.data;
@@ -479,8 +584,6 @@ export class EaselBoard extends SignalElement {
             bgB = b;
           }
           const lum = 0.299 * bgR + 0.587 * bgG + 0.114 * bgB;
-          // If surrounding space is light (lum > 128), use dark outline.
-          // If surrounding space is dark (lum <= 128), use light outline.
           if (lum > 128) {
             return [0, 0, 0, 190];
           } else {
@@ -503,7 +606,9 @@ export class EaselBoard extends SignalElement {
               const paintedColor = paintedState[regionId];
               const isFilledDifferent =
                 paintedColor &&
-                !paintedColor.toUpperCase().startsWith(targetHexUpper.substring(0, 7));
+                !paintedColor
+                  .toUpperCase()
+                  .startsWith(targetHexUpper.substring(0, 7));
 
               if (isFilledDifferent) {
                 const x = i % w;
@@ -514,7 +619,10 @@ export class EaselBoard extends SignalElement {
                     const ny = y + dy;
                     if (nx >= 0 && nx < w && ny >= 0 && ny < h) {
                       const pxIdx = (ny * w + nx) * 4;
-                      const [cR, cG, cB, cA] = getContrastingOutlineRGBA(nx, ny);
+                      const [cR, cG, cB, cA] = getContrastingOutlineRGBA(
+                        nx,
+                        ny
+                      );
                       overlayPixels[pxIdx] = cR;
                       overlayPixels[pxIdx + 1] = cG;
                       overlayPixels[pxIdx + 2] = cB;
@@ -569,7 +677,9 @@ export class EaselBoard extends SignalElement {
           expectedColor &&
           expectedColor.startsWith(targetHexUpper.substring(0, 7)) &&
           paintedColor &&
-          !paintedColor.toUpperCase().startsWith(targetHexUpper.substring(0, 7));
+          !paintedColor
+            .toUpperCase()
+            .startsWith(targetHexUpper.substring(0, 7));
 
         if (isFilledDifferent) {
           for (let k = 0; k < borderIndices.length; k++) {
@@ -598,22 +708,141 @@ export class EaselBoard extends SignalElement {
     }
   }
 
-  private getDarkenedRGB(
-    r: number,
-    g: number,
-    b: number
-  ): [number, number, number] {
-    const luminance = 0.299 * r + 0.587 * g + 0.114 * b;
-    if (luminance > 127.5) {
-      // 50% of 255
-      const scale = 127.5 / luminance;
-      return [
-        Math.floor(r * scale),
-        Math.floor(g * scale),
-        Math.floor(b * scale),
-      ];
+  private fillRegion(regionId: number, colorHex: string) {
+    const currentArtwork = currentArtworkSignal.get();
+    if (
+      !currentArtwork ||
+      !this.regionMapData ||
+      !this.offscreenCtx ||
+      !this.offscreenCanvas
+    )
+      return;
+
+    const w = this.artworkWidth;
+    const h = this.artworkHeight;
+    const totalPixels = w * h;
+
+    const currentPainted = {
+      ...(currentArtwork.paintedRegionsState || {}),
+    };
+    pushUndoState(
+      currentPainted,
+      currentArtwork.colorStats,
+      currentArtwork.paintedCanvasDataUrl
+    );
+
+    const isEraser = colorHex === "#00000000";
+    const targetRGBA = isEraser
+      ? ([255, 255, 255, 255] as const)
+      : this.parseColorToRGBA(colorHex);
+
+    if (!this.offscreenPixelsData) {
+      this.offscreenPixelsData = this.offscreenCtx.getImageData(0, 0, w, h);
     }
-    return [r, g, b];
+    const pixels = this.offscreenPixelsData.data;
+
+    for (let i = 0; i < totalPixels; i++) {
+      if (this.regionMapData[i] === regionId) {
+        const pxIdx = i * 4;
+        pixels[pxIdx] = targetRGBA[0];
+        pixels[pxIdx + 1] = targetRGBA[1];
+        pixels[pxIdx + 2] = targetRGBA[2];
+        pixels[pxIdx + 3] = targetRGBA[3];
+      }
+    }
+
+    this.offscreenCtx.putImageData(this.offscreenPixelsData, 0, 0);
+
+    if (isEraser) {
+      delete currentPainted[regionId];
+    } else {
+      currentPainted[regionId] = colorHex;
+    }
+
+    const paintedCanvasDataUrl = this.offscreenCanvas.toDataURL("image/png");
+    const updatedArtwork: ProcessedArtwork = {
+      ...currentArtwork,
+      paintedRegionsState: currentPainted,
+      paintedCanvasDataUrl,
+      modifiedAt: Date.now(),
+    };
+
+    soundEffects.playPop();
+    handleSelectArtwork(updatedArtwork);
+    this.drawArtboardCanvas();
+  }
+
+  private applyBrushStamp(
+    centerImgX: number,
+    centerImgY: number,
+    scaleX: number
+  ) {
+    if (
+      !this.regionMapData ||
+      !this.offscreenCtx ||
+      this.brushTargetRegionId === null
+    )
+      return;
+    const currentArtwork = currentArtworkSignal.get();
+    if (!currentArtwork) return;
+
+    const activeColor = activeHighlightColorSignal.get();
+    if (!activeColor) return;
+
+    const w = this.artworkWidth;
+    const h = this.artworkHeight;
+    const isEraser = activeColor.hexCode === "#00000000";
+    const targetRGBA = isEraser
+      ? ([255, 255, 255, 255] as const)
+      : this.parseColorToRGBA(activeColor.hexCode);
+
+    if (!this.offscreenPixelsData) {
+      this.offscreenPixelsData = this.offscreenCtx.getImageData(0, 0, w, h);
+    }
+    const pixels = this.offscreenPixelsData.data;
+
+    // Brush at scale 1.0 covers 20px radius from touch center.
+    // Affected pixels scale to canvas zoom size (scaleX is image px per screen px).
+    const r = Math.max(1, BASE_BRUSH_RADIUS * scaleX);
+    const rSquared = r * r;
+    const minX = Math.max(0, Math.floor(centerImgX - r));
+    const maxX = Math.min(w - 1, Math.ceil(centerImgX + r));
+    const minY = Math.max(0, Math.floor(centerImgY - r));
+    const maxY = Math.min(h - 1, Math.ceil(centerImgY + r));
+
+    let changed = false;
+    for (let y = minY; y <= maxY; y++) {
+      const dy = y - centerImgY;
+      const dySquared = dy * dy;
+      const rowOffset = y * w;
+      for (let x = minX; x <= maxX; x++) {
+        const dx = x - centerImgX;
+        if (dx * dx + dySquared <= rSquared) {
+          const idx = rowOffset + x;
+          if (this.regionMapData[idx] === this.brushTargetRegionId) {
+            const pxIdx = idx * 4;
+            if (
+              pixels[pxIdx] !== targetRGBA[0] ||
+              pixels[pxIdx + 1] !== targetRGBA[1] ||
+              pixels[pxIdx + 2] !== targetRGBA[2] ||
+              pixels[pxIdx + 3] !== targetRGBA[3]
+            ) {
+              pixels[pxIdx] = targetRGBA[0];
+              pixels[pxIdx + 1] = targetRGBA[1];
+              pixels[pxIdx + 2] = targetRGBA[2];
+              pixels[pxIdx + 3] = targetRGBA[3];
+              changed = true;
+            }
+          }
+        }
+      }
+    }
+
+    if (changed) {
+      this.hasPaintedInCurrentStroke = true;
+      this.offscreenCtx.putImageData(this.offscreenPixelsData, 0, 0);
+      this.drawArtboardCanvas();
+    }
   }
 
   private parseColorToRGBA(colorStr: string): [number, number, number, number] {
@@ -650,79 +879,101 @@ export class EaselBoard extends SignalElement {
     }
   };
 
-  private handleCanvasPointerUp = (e: PointerEvent) => {
+  private handleCanvasPointerDown = (e: PointerEvent) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
-    if (!this.pointerDownOnCanvas) return;
-
-    // Always reset the pointer down state so we don't accidentally paint on subsequent clicks
-    // that were swallowed during the pointerdown phase (e.g. dismissing overlays).
-    this.pointerDownOnCanvas = false;
-
-    if (this.hasDragged) {
-      return;
-    }
-    if (draggedColorSignal.get()) {
-      return;
-    }
-    if (!this.regionMapData) return;
+    if (!isWindowFocusedSignal.get()) return;
+    if (!this.regionMapData || !this.offscreenCtx) return;
     const currentArtwork = currentArtworkSignal.get();
     if (!currentArtwork) return;
+
+    const isBrushMode = isBrushModeSignal.get();
+    if (!isBrushMode) {
+      return;
+    }
 
     const canvas = e.currentTarget as HTMLCanvasElement;
     const rect = canvas.getBoundingClientRect();
     const scaleX = canvas.width / rect.width;
     const scaleY = canvas.height / rect.height;
-    const clickX = Math.floor((e.clientX - rect.left) * scaleX);
-    const clickY = Math.floor((e.clientY - rect.top) * scaleY);
+    const imgX = Math.floor((e.clientX - rect.left) * scaleX);
+    const imgY = Math.floor((e.clientY - rect.top) * scaleY);
 
-    if (
-      clickX >= 0 &&
-      clickX < canvas.width &&
-      clickY >= 0 &&
-      clickY < canvas.height
-    ) {
-      const pixelIdx = clickY * canvas.width + clickX;
-      const regionId = this.regionMapData[pixelIdx];
-      if (regionId !== undefined && regionId >= 0) {
-        let activeColor = activeHighlightColorSignal.get();
-        if (!activeColor) {
-          // If no color selected yet, default to first palette color
-          const defaultColor = currentArtwork.colorStats[0]?.color;
-          if (defaultColor) {
-            activeHighlightColorSignal.set(defaultColor);
-            activeColor = defaultColor;
-          }
-        }
+    if (imgX < 0 || imgX >= canvas.width || imgY < 0 || imgY >= canvas.height)
+      return;
 
-        if (activeColor) {
-          const currentPainted = {
-            ...(currentArtwork.paintedRegionsState || {}),
-          };
+    const pixelIdx = imgY * canvas.width + imgX;
+    const regionId = this.regionMapData[pixelIdx];
+    if (regionId === undefined || regionId < 0) return;
 
-          pushUndoState(currentPainted);
-          if (activeColor.hexCode === "#00000000") {
-            // Eraser mode
-            delete currentPainted[regionId];
-            soundEffects.playPop();
-          } else {
-            // Paint or replace existing region color
-            currentPainted[regionId] = activeColor.hexCode;
-            soundEffects.playPop();
-          }
-
-          const updatedArtwork: ProcessedArtwork = {
-            ...currentArtwork,
-            paintedRegionsState: currentPainted,
-            modifiedAt: Date.now(),
-          };
-          handleSelectArtwork(updatedArtwork);
-          this.drawArtboardCanvas();
-        }
+    let activeColor = activeHighlightColorSignal.get();
+    if (!activeColor) {
+      const defaultColor = currentArtwork.colorStats[0]?.color;
+      if (defaultColor) {
+        activeHighlightColorSignal.set(defaultColor);
+        activeColor = defaultColor;
       }
     }
+    if (!activeColor) return;
+
+    try {
+      canvas.setPointerCapture(e.pointerId);
+    } catch (_) {}
+
+    this.isBrushPainting = true;
+    this.brushTargetRegionId = regionId;
+    this.brushLastImgX = imgX;
+    this.brushLastImgY = imgY;
+    this.hasPaintedInCurrentStroke = false;
+
+    const currentPainted = {
+      ...(currentArtwork.paintedRegionsState || {}),
+    };
+    pushUndoState(
+      currentPainted,
+      currentArtwork.colorStats,
+      currentArtwork.paintedCanvasDataUrl
+    );
+
+    this.applyBrushStamp(imgX, imgY, scaleX);
   };
 
-  private handleCanvasMouseMove = (e: MouseEvent) => {
+  private handleCanvasPointerMove = (e: PointerEvent) => {
+    const isBrushMode = isBrushModeSignal.get();
+    if (
+      isBrushMode &&
+      this.isBrushPainting &&
+      this.brushTargetRegionId !== null
+    ) {
+      const canvas = e.currentTarget as HTMLCanvasElement;
+      const rect = canvas.getBoundingClientRect();
+      const scaleX = canvas.width / rect.width;
+      const scaleY = canvas.height / rect.height;
+      const currImgX = Math.floor((e.clientX - rect.left) * scaleX);
+      const currImgY = Math.floor((e.clientY - rect.top) * scaleY);
+
+      const dist = Math.hypot(
+        currImgX - this.brushLastImgX,
+        currImgY - this.brushLastImgY
+      );
+      const r = Math.max(1, BASE_BRUSH_RADIUS * scaleX);
+      const stepSize = Math.max(1, r / 3);
+      const steps = Math.max(1, Math.ceil(dist / stepSize));
+
+      for (let s = 1; s <= steps; s++) {
+        const interpX =
+          this.brushLastImgX +
+          (currImgX - this.brushLastImgX) * (s / steps);
+        const interpY =
+          this.brushLastImgY +
+          (currImgY - this.brushLastImgY) * (s / steps);
+        this.applyBrushStamp(interpX, interpY, scaleX);
+      }
+
+      this.brushLastImgX = currImgX;
+      this.brushLastImgY = currImgY;
+      return;
+    }
+
     if (e.buttons === 0 && this.isDragging) {
       this.isDragging = false;
       this.hasDragged = false;
@@ -748,6 +999,108 @@ export class EaselBoard extends SignalElement {
       this.hoveredRegionId = null;
       this.drawArtboardCanvas();
     }
+  };
+
+  private handleCanvasPointerUp = (e: PointerEvent) => {
+    if (e.pointerType === "mouse" && e.button !== 0) return;
+    const isBrushMode = isBrushModeSignal.get();
+
+    if (isBrushMode) {
+      if (this.isBrushPainting) {
+        try {
+          (e.currentTarget as HTMLCanvasElement).releasePointerCapture(
+            e.pointerId
+          );
+        } catch (_) {}
+
+        this.isBrushPainting = false;
+        const targetRegion = this.brushTargetRegionId;
+        this.brushTargetRegionId = null;
+
+        if (this.hasPaintedInCurrentStroke && this.offscreenCanvas) {
+          soundEffects.playPop();
+          const currentArtwork = currentArtworkSignal.get();
+          if (currentArtwork) {
+            const paintedCanvasDataUrl =
+              this.offscreenCanvas.toDataURL("image/png");
+            const currentPainted = {
+              ...(currentArtwork.paintedRegionsState || {}),
+            };
+            const activeColor = activeHighlightColorSignal.get();
+            if (activeColor && targetRegion !== null) {
+              if (activeColor.hexCode === "#00000000") {
+                delete currentPainted[targetRegion];
+              } else {
+                currentPainted[targetRegion] = activeColor.hexCode;
+              }
+            }
+            const updatedArtwork: ProcessedArtwork = {
+              ...currentArtwork,
+              paintedRegionsState: currentPainted,
+              paintedCanvasDataUrl,
+              modifiedAt: Date.now(),
+            };
+            handleSelectArtwork(updatedArtwork);
+          }
+        }
+      }
+      return;
+    }
+
+    // FILL MODE: Tap to fill
+    if (!this.pointerDownOnCanvas) return;
+    this.pointerDownOnCanvas = false;
+
+    if (this.hasDragged || draggedColorSignal.get()) {
+      return;
+    }
+    if (!this.regionMapData) return;
+    const currentArtwork = currentArtworkSignal.get();
+    if (!currentArtwork) return;
+
+    const canvas = e.currentTarget as HTMLCanvasElement;
+    const rect = canvas.getBoundingClientRect();
+    const scaleX = canvas.width / rect.width;
+    const scaleY = canvas.height / rect.height;
+    const clickX = Math.floor((e.clientX - rect.left) * scaleX);
+    const clickY = Math.floor((e.clientY - rect.top) * scaleY);
+
+    if (
+      clickX >= 0 &&
+      clickX < canvas.width &&
+      clickY >= 0 &&
+      clickY < canvas.height
+    ) {
+      const pixelIdx = clickY * canvas.width + clickX;
+      const regionId = this.regionMapData[pixelIdx];
+      if (regionId !== undefined && regionId >= 0) {
+        let activeColor = activeHighlightColorSignal.get();
+        if (!activeColor) {
+          const defaultColor = currentArtwork.colorStats[0]?.color;
+          if (defaultColor) {
+            activeHighlightColorSignal.set(defaultColor);
+            activeColor = defaultColor;
+          }
+        }
+
+        if (activeColor) {
+          this.fillRegion(regionId, activeColor.hexCode);
+        }
+      }
+    }
+  };
+
+  private handleCanvasPointerCancel = (e: PointerEvent) => {
+    if (this.isBrushPainting) {
+      try {
+        (e.currentTarget as HTMLCanvasElement).releasePointerCapture(
+          e.pointerId
+        );
+      } catch (_) {}
+      this.isBrushPainting = false;
+      this.brushTargetRegionId = null;
+    }
+    this.pointerDownOnCanvas = false;
   };
 
   private handleCanvasMouseLeave = () => {
@@ -803,7 +1156,6 @@ export class EaselBoard extends SignalElement {
     const { x: clientX, y: mouseY, color } = customEvent.detail;
     const clientY = mouseY - this.dropperBufferPx;
 
-    // Clear hover effect
     if (this.hoveredRegionId !== null) {
       this.hoveredRegionId = null;
       this.drawArtboardCanvas();
@@ -832,27 +1184,8 @@ export class EaselBoard extends SignalElement {
 
       if (x >= 0 && x < canvas.width && y >= 0 && y < canvas.height) {
         const regionId = this.regionMapData[y * canvas.width + x];
-        if (regionId !== undefined && regionId >= 0) {
-          const currentPainted = {
-            ...(currentArtwork.paintedRegionsState || {}),
-          };
-          pushUndoState(currentPainted);
-
-          if (color === "#00000000") {
-            delete currentPainted[regionId];
-            soundEffects.playPop();
-          } else {
-            currentPainted[regionId] = color;
-            soundEffects.playPop();
-          }
-
-          const updatedArtwork: ProcessedArtwork = {
-            ...currentArtwork,
-            paintedRegionsState: currentPainted,
-            modifiedAt: Date.now(),
-          };
-          handleSelectArtwork(updatedArtwork);
-          this.drawArtboardCanvas();
+        if (regionId !== undefined && regionId >= 0 && color) {
+          this.fillRegion(regionId, color);
         }
       }
     }
@@ -996,6 +1329,11 @@ export class EaselBoard extends SignalElement {
       this.startPanY = this.panY;
       this.updateTransformStyle();
     } else if (e.touches.length === 1) {
+      if (isBrushModeSignal.get()) {
+        this.isPinching = false;
+        this.isDragging = false;
+        return;
+      }
       this.isPinching = false;
       this.hasDragged = false;
       this.pointerDownX = e.touches[0].clientX;
@@ -1045,18 +1383,18 @@ export class EaselBoard extends SignalElement {
       zoomScaleSignal.set(this.scale);
       this.updateTransformStyle();
     } else if (e.touches.length === 1) {
+      if (isBrushModeSignal.get()) {
+        return;
+      }
       const dx = e.touches[0].clientX - this.pointerDownX;
       const dy = e.touches[0].clientY - this.pointerDownY;
       if (Math.hypot(dx, dy) > 10) {
         this.hasDragged = true;
       }
-      if (true) {
-        // always allow pan on touch
-        e.preventDefault();
-        this.panX = this.clampPanX(this.startPanX + dx, this.scale);
-        this.panY = this.clampPanY(this.startPanY + dy, this.scale);
-        this.updateTransformStyle();
-      }
+      e.preventDefault();
+      this.panX = this.clampPanX(this.startPanX + dx, this.scale);
+      this.panY = this.clampPanY(this.startPanY + dy, this.scale);
+      this.updateTransformStyle();
     }
   };
 
@@ -1078,6 +1416,10 @@ export class EaselBoard extends SignalElement {
   private handlePointerDown = (e: PointerEvent) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
     if (this.isPinching) return;
+    if (isBrushModeSignal.get()) {
+      this.isDragging = false;
+      return;
+    }
     this.pointerDownX = e.clientX;
     this.pointerDownY = e.clientY;
     this.hasDragged = false;
@@ -1090,6 +1432,13 @@ export class EaselBoard extends SignalElement {
   };
 
   private handlePointerMove = (e: PointerEvent) => {
+    if (isBrushModeSignal.get()) {
+      if (this.isDragging) {
+        this.isDragging = false;
+        this.hasDragged = false;
+      }
+      return;
+    }
     if (e.pointerType === "mouse" && e.buttons === 0 && this.isDragging) {
       this.isDragging = false;
       this.hasDragged = false;
@@ -1103,14 +1452,11 @@ export class EaselBoard extends SignalElement {
     if (dist > 10) {
       this.hasDragged = true;
     }
-    if (true) {
-      // always allow pan
-      const dx = e.clientX - this.startTouchX;
-      const dy = e.clientY - this.startTouchY;
-      this.panX = this.clampPanX(this.startPanX + dx, this.scale);
-      this.panY = this.clampPanY(this.startPanY + dy, this.scale);
-      this.updateTransformStyle();
-    }
+    const dx = e.clientX - this.startTouchX;
+    const dy = e.clientY - this.startTouchY;
+    this.panX = this.clampPanX(this.startPanX + dx, this.scale);
+    this.panY = this.clampPanY(this.startPanY + dy, this.scale);
+    this.updateTransformStyle();
   };
 
   private handlePointerUp = () => {
@@ -1364,10 +1710,12 @@ export class EaselBoard extends SignalElement {
                         >
                           <canvas
                             id="artboard-canvas"
+                            @pointerdown=${this.handleCanvasPointerDown}
+                            @pointermove=${this.handleCanvasPointerMove}
                             @pointerup=${this.handleCanvasPointerUp}
-                            @mousemove=${this.handleCanvasMouseMove}
+                            @pointercancel=${this.handleCanvasPointerCancel}
                             @mouseleave=${this.handleCanvasMouseLeave}
-                            style="width: 100%; height: 100%; object-fit: contain; display: block; cursor: crosshair;"
+                            style="width: 100%; height: 100%; object-fit: contain; display: block; cursor: crosshair; touch-action: none;"
                           ></canvas>
                         </div>
                       </div>

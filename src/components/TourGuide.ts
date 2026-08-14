@@ -43,7 +43,7 @@ export class AppTour extends SignalElement {
     {
       title: "Navigating the Canvas",
       description:
-        "Zoom in/out using buttons, scroll wheel or pinch to zoom on your device. Pan around freely by dragging the move button or touching the canvas",
+        "Zoom in/out using buttons, scroll wheel, or pinch to zoom. Pan around freely by dragging the Move joystick or dragging the canvas in Fill Mode.",
       icon: html`
         ${iconZoomOut(18, "#000000")} ${iconMove(48, "#000000")}
         ${iconZoomIn(18, "#000000")}
@@ -52,8 +52,10 @@ export class AppTour extends SignalElement {
     {
       title: "Painting the Canvas",
       description:
-        "Select a swatch from the palette, then simply tap or drag the selected color to the canvas! Tapping a colour twice switches to the eraser.",
-      icon: iconPaintbrush(48, "#E63946"),
+        "Use Paint Bucket mode to fill entire color islands at once by tapping or dragging the color to the canvas. Switch to Brush Mode to paint inside lines, zooming in for precision!",
+      icon: html`
+        ${iconPaintBucket(32, "#000000")} ${iconPaintbrush(32, "#E63946")}
+      `,
     },
     {
       title: "Track your Progress",

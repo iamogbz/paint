@@ -13,6 +13,7 @@ export interface UsedColorStat {
 export interface UndoHistoryItem {
   paintedRegionsState: Record<number, string>;
   colorStats?: UsedColorStat[];
+  paintedCanvasDataUrl?: string;
 }
 
 export interface ProcessedArtwork {
@@ -27,6 +28,7 @@ export interface ProcessedArtwork {
   colorStats: UsedColorStat[];
   totalPixels: number;
   paintedRegionsState?: Record<number, string>;
+  paintedCanvasDataUrl?: string;
   regionMapData?: number[];
   regionExpectedColors?: Record<number, string>;
 }

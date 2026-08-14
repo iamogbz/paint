@@ -159,15 +159,23 @@ export function handleToggleSound() {
 
 export function pushUndoState(
   paintedRegionsState: Record<number, string>,
-  colorStats?: UsedColorStat[]
+  colorStats?: UsedColorStat[],
+  paintedCanvasDataUrl?: string
 ) {
   const current = currentArtworkSignal.get();
   const stats = colorStats || current?.colorStats;
+  const canvasDataUrl =
+    paintedCanvasDataUrl !== undefined
+      ? paintedCanvasDataUrl
+      : current?.paintedCanvasDataUrl;
   undoStackSignal.set([
     ...undoStackSignal.get(),
     {
       paintedRegionsState: { ...paintedRegionsState },
-      colorStats: stats ? stats.map((s) => ({ ...s, color: { ...s.color } })) : undefined,
+      colorStats: stats
+        ? stats.map((s) => ({ ...s, color: { ...s.color } }))
+        : undefined,
+      paintedCanvasDataUrl: canvasDataUrl,
     },
   ]);
 }
@@ -190,7 +198,7 @@ export function handleDeleteSwatchColor(color: PaletteColor) {
   }
 
   // Push current painted state and current colorStats to undo stack before modifying
-  pushUndoState(currentPainted, current.colorStats);
+  pushUndoState(currentPainted, current.colorStats, current.paintedCanvasDataUrl);
 
   // Unpaint any region that was painted with this color
   const newPaintedState: Record<number, string> = {};
@@ -214,6 +222,7 @@ export function handleDeleteSwatchColor(color: PaletteColor) {
     ...current,
     colorStats: newColorStats,
     paintedRegionsState: newPaintedState,
+    paintedCanvasDataUrl: undefined,
     modifiedAt: Date.now(),
   };
 
@@ -235,7 +244,10 @@ export function handleUndo() {
   const updatedArtwork: ProcessedArtwork = {
     ...current,
     paintedRegionsState: previousState.paintedRegionsState,
-    colorStats: previousState.colorStats ? previousState.colorStats : current.colorStats,
+    colorStats: previousState.colorStats
+      ? previousState.colorStats
+      : current.colorStats,
+    paintedCanvasDataUrl: previousState.paintedCanvasDataUrl,
     modifiedAt: Date.now(),
   };
 
