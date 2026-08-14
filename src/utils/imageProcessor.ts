@@ -1,5 +1,5 @@
 import { ProcessedArtwork, UsedColorStat, PaletteColor } from "../types";
-import { generateDynamicPalette, ColorQuantizer } from "./colorUtils";
+import { generateDynamicPalette, ColorQuantizer, getPerceptualColorDistance } from "./colorUtils";
 
 export const MIN_ISLAND_AREA = 256;
 export const MIN_ISLAND_BBOX_DIM = 8;
@@ -186,14 +186,15 @@ function applyMajoritySmoothing(
  * - Surface area < minArea (default 256)
  * - Bounding box width < minBboxDim OR height < minBboxDim (default 8px)
  *
- * Pixels in pruned islands are replaced with their neighbors in equal amounts
- * in all directions using multi-source BFS inward propagation from the perimeter.
+ * To preserve detail, small islands merge into the color in their surrounding
+ * that is perceptually closest to their own color.
  * Passes continue iteratively until there are no islands meeting the conditions.
  */
 export function eliminateSmallIslands(
   colorIndices: Int16Array,
   width: number,
   height: number,
+  paletteColors?: PaletteColor[],
   minArea = MIN_ISLAND_AREA,
   minBboxDim = MIN_ISLAND_BBOX_DIM,
   maxPasses = MAX_ISLAND_PRUNING_PASSES
@@ -201,6 +202,23 @@ export function eliminateSmallIslands(
   const totalPixels = width * height;
   const visited = new Uint8Array(totalPixels);
   const queue = new Int32Array(totalPixels * 2);
+
+  const numPaletteColors = paletteColors?.length || 0;
+  const colorDistMatrix: Float32Array | null =
+    numPaletteColors > 0 ? new Float32Array(numPaletteColors * numPaletteColors) : null;
+
+  if (colorDistMatrix && paletteColors) {
+    for (let i = 0; i < numPaletteColors; i++) {
+      for (let j = i; j < numPaletteColors; j++) {
+        const dist = getPerceptualColorDistance(
+          paletteColors[i].rgba,
+          paletteColors[j].rgba
+        );
+        colorDistMatrix[i * numPaletteColors + j] = dist;
+        colorDistMatrix[j * numPaletteColors + i] = dist;
+      }
+    }
+  }
 
   for (let pass = 0; pass < maxPasses; pass++) {
     visited.fill(0);
@@ -281,18 +299,11 @@ export function eliminateSmallIslands(
         islandPixelIndices.add(isl.pixels[i + 1] * width + isl.pixels[i]);
       }
 
-      const assignedColor = new Map<number, number>();
-      const dist = new Map<number, number>();
-      const bfsQueue: number[] = [];
+      const surroundingColorCounts = new Map<number, number>();
 
       for (let i = 0; i < tail; i += 2) {
         const rx = isl.pixels[i];
         const ry = isl.pixels[i + 1];
-        const rIdx = ry * width + rx;
-
-        const neighborColorCounts = new Map<number, number>();
-        let maxCount = 0;
-        let dominantExtColor = -1;
 
         for (const [dx, dy] of CARDINAL_NEIGHBORS) {
           const nx = rx + dx;
@@ -302,57 +313,47 @@ export function eliminateSmallIslands(
             if (!islandPixelIndices.has(nIdx)) {
               const extColor = colorIndices[nIdx];
               if (extColor !== isl.colorIdx) {
-                const c = (neighborColorCounts.get(extColor) || 0) + 1;
-                neighborColorCounts.set(extColor, c);
-                if (c > maxCount) {
-                  maxCount = c;
-                  dominantExtColor = extColor;
-                }
+                surroundingColorCounts.set(
+                  extColor,
+                  (surroundingColorCounts.get(extColor) || 0) + 1
+                );
               }
             }
           }
         }
+      }
 
-        if (dominantExtColor !== -1) {
-          assignedColor.set(rIdx, dominantExtColor);
-          dist.set(rIdx, 1);
-          bfsQueue.push(rx, ry);
+      if (surroundingColorCounts.size === 0) {
+        continue;
+      }
+
+      // Pick the surrounding color closest to the island's color to preserve detail
+      let bestColor = -1;
+      let minDistance = Infinity;
+      let maxCount = -1;
+
+      for (const [extColor, count] of surroundingColorCounts.entries()) {
+        let dist = 0;
+        if (colorDistMatrix && isl.colorIdx < numPaletteColors && extColor < numPaletteColors) {
+          dist = colorDistMatrix[isl.colorIdx * numPaletteColors + extColor];
+        }
+
+        if (dist < minDistance - 1e-4) {
+          minDistance = dist;
+          bestColor = extColor;
+          maxCount = count;
+        } else if (Math.abs(dist - minDistance) <= 1e-4 && count > maxCount) {
+          bestColor = extColor;
+          maxCount = count;
         }
       }
 
-      // Multi-source BFS inward propagation in equal amounts in all directions
-      let bfsHead = 0;
-      while (bfsHead < bfsQueue.length) {
-        const bx = bfsQueue[bfsHead++];
-        const by = bfsQueue[bfsHead++];
-        const bIdx = by * width + bx;
-        const bDist = dist.get(bIdx)!;
-        const bColor = assignedColor.get(bIdx)!;
-
-        for (const [dx, dy] of CARDINAL_NEIGHBORS) {
-          const nx = bx + dx;
-          const ny = by + dy;
-          if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
-            const nIdx = ny * width + nx;
-            if (islandPixelIndices.has(nIdx) && !dist.has(nIdx)) {
-              dist.set(nIdx, bDist + 1);
-              assignedColor.set(nIdx, bColor);
-              bfsQueue.push(nx, ny);
-            }
-          }
-        }
-      }
-
-      if (assignedColor.size > 0) {
+      if (bestColor !== -1) {
         prunedCount++;
         for (let i = 0; i < tail; i += 2) {
           const rx = isl.pixels[i];
           const ry = isl.pixels[i + 1];
-          const pIdx = ry * width + rx;
-          const newColor = assignedColor.get(pIdx);
-          if (newColor !== undefined) {
-            colorIndices[pIdx] = newColor;
-          }
+          colorIndices[ry * width + rx] = bestColor;
         }
       }
     }
@@ -431,6 +432,7 @@ export async function processImageToCartoonPalette(
     colorIndices,
     width,
     height,
+    paletteColors,
     MIN_ISLAND_AREA,
     MIN_ISLAND_BBOX_DIM
   );
