@@ -262,10 +262,15 @@ export class PaintingControls extends SignalElement {
         }
         const status = expectedColorStatus.get(expectedHex)!;
         status.total += 1;
+      }
+    }
 
-        const regionId = parseInt(regionIdStr, 10);
-        if (paintedRegionsState[regionId] === expectedHex) {
-          status.painted += 1;
+    if (paintedRegionsState) {
+      for (const paintedHex of Object.values(paintedRegionsState)) {
+        if (expectedColorStatus.has(paintedHex)) {
+          expectedColorStatus.get(paintedHex)!.painted += 1;
+        } else {
+          expectedColorStatus.set(paintedHex, { total: 0, painted: 1 });
         }
       }
     }
@@ -597,7 +602,7 @@ export class PaintingControls extends SignalElement {
                   const colorStatus = expectedColorStatus.get(color.hexCode);
                   const isCoreColor = colorStatus?.total > 0;
                   const isFullyPainted = colorStatus
-                    ? isCoreColor && colorStatus.total === colorStatus.painted
+                    ? isCoreColor && colorStatus.painted >= colorStatus.total
                     : false;
 
                   const isSelected = activeColor?.hexCode === color.hexCode;
