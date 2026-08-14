@@ -1,8 +1,8 @@
 import { ProcessedArtwork, UsedColorStat, PaletteColor } from "../types";
 import { generateDynamicPalette, ColorQuantizer, getPerceptualColorDistance } from "./colorUtils";
 
-export const MIN_ISLAND_AREA = 256;
-export const MIN_ISLAND_BBOX_DIM = 8;
+export const MIN_ISLAND_AREA = 32;
+export const MIN_ISLAND_BBOX_DIM = 0;
 export const MAX_ISLAND_PRUNING_PASSES = 50;
 
 const CARDINAL_NEIGHBORS = [
@@ -392,12 +392,12 @@ export async function processImageToCartoonPalette(
   const rawPixels = origImgData.data;
 
   // 3. Apply Bilateral Painterly Filter for noise reduction & smooth color fields
-  // Three passes with stronger spatial and range sigmas to aggressively flatten noise
-  // while preserving sharp, crisp object boundaries.
+  // multiple passes with stronger spatial and range sigmas to aggressively
+  // flatten noise while preserving sharp, crisp object boundaries.
   let smoothedPixels = rawPixels;
-  const passCount = 3;
+  const passCount = 4;
   for (let i = 0; i < passCount; i++) {
-    smoothedPixels = applyBilateralFilter(smoothedPixels, width, height, 4.0, 50.0, 4);
+    smoothedPixels = applyBilateralFilter(smoothedPixels, width, height, 2, 25, 2);
   }
 
     // 3.5 Generate Dynamic Palette
