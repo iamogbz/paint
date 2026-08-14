@@ -35,11 +35,19 @@ export function exportArtworkCleanDataUrl(artwork: ProcessedArtwork): string {
         pixels[pxIdx + 2] = parseInt(hex.slice(4, 6), 16) || 0;
         pixels[pxIdx + 3] = hex.length === 8 ? parseInt(hex.slice(6, 8), 16) : 255;
       } else {
-        // Unpainted island is clean white
-        pixels[pxIdx] = 255;
-        pixels[pxIdx + 1] = 255;
-        pixels[pxIdx + 2] = 255;
-        pixels[pxIdx + 3] = 255;
+        const expected = artwork.regionExpectedColors?.[regionId];
+        if (expected === "#00000000") {
+          pixels[pxIdx] = 0;
+          pixels[pxIdx + 1] = 0;
+          pixels[pxIdx + 2] = 0;
+          pixels[pxIdx + 3] = 0;
+        } else {
+          // Unpainted island is clean white
+          pixels[pxIdx] = 255;
+          pixels[pxIdx + 1] = 255;
+          pixels[pxIdx + 2] = 255;
+          pixels[pxIdx + 3] = 255;
+        }
       }
     }
     ctx.putImageData(imgData, 0, 0);

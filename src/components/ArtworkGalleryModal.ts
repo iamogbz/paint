@@ -20,6 +20,7 @@ import {
 } from "./icons";
 import { soundEffects } from "../utils/soundEffects";
 import { downloadImage, exportArtworkCleanDataUrl } from "../utils/download";
+import { transparentImgCss } from "./constants";
 
 @customElement("artwork-gallery-modal")
 export class ArtworkGalleryModal extends SignalElement {
@@ -222,7 +223,7 @@ export class ArtworkGalleryModal extends SignalElement {
                       handleSelectArtwork(art);
                       isGalleryOpenSignal.set(false);
                     }}
-                    style="width: 7rem; height: 7rem; border-radius: 18px; overflow: hidden; border: 2.5px solid rgba(0, 0, 0, 0.25); position: relative; cursor: pointer; flex-shrink: 0; background-color: rgba(0,0,0,0.05);"
+                    style="width: 7rem; height: 7rem; border-radius: 18px; overflow: hidden; border: 2.5px solid rgba(0, 0, 0, 0.25); position: relative; cursor: pointer; flex-shrink: 0; background-color: rgba(0,0,0,0.05); background-size: 0.5rem 0.5rem; background-image: ${transparentImgCss};"
                   >
                     <img
                       src="${exportArtworkCleanDataUrl(art)}"

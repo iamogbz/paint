@@ -4,7 +4,6 @@ import { SignalElement } from "../utils/SignalElement";
 import {
   isWindowFocusedSignal,
   currentArtworkSignal,
-  artworksSignal,
   isProcessingSignal,
   activeHighlightColorSignal,
   isDragOverSignal,
@@ -52,7 +51,6 @@ export class EaselBoard extends SignalElement {
   // Interactive Canvas State
   private activeArtworkId: string | null = null;
   private regionMapData: Int32Array | null = null;
-  private isBorderPixel: Uint8Array | null = null;
   private regionBorderPixels: Map<number, Int32Array> | null = null;
   private regionExpectedColors = new Map<number, string>();
   private hoveredRegionId: number | null = null;
@@ -272,10 +270,22 @@ export class EaselBoard extends SignalElement {
           pixels[pxIdx + 2] = rgba[2];
           pixels[pxIdx + 3] = rgba[3];
         } else {
-          pixels[pxIdx] = 255;
-          pixels[pxIdx + 1] = 255;
-          pixels[pxIdx + 2] = 255;
-          pixels[pxIdx + 3] = 255;
+          const expected =
+            regionId >= 0
+              ? this.regionExpectedColors.get(regionId) ||
+                artwork.regionExpectedColors?.[regionId]
+              : undefined;
+          if (expected === "#00000000") {
+            pixels[pxIdx] = 0;
+            pixels[pxIdx + 1] = 0;
+            pixels[pxIdx + 2] = 0;
+            pixels[pxIdx + 3] = 0;
+          } else {
+            pixels[pxIdx] = 255;
+            pixels[pxIdx + 1] = 255;
+            pixels[pxIdx + 2] = 255;
+            pixels[pxIdx + 3] = 255;
+          }
         }
       }
 
@@ -353,9 +363,12 @@ export class EaselBoard extends SignalElement {
 
         const regionId = nextRegionId++;
 
-        const hex = `#${r.toString(16).padStart(2, "0")}${g
-          .toString(16)
-          .padStart(2, "0")}${b.toString(16).padStart(2, "0")}FF`.toUpperCase();
+        const hex =
+          a < 10
+            ? "#00000000"
+            : `#${r.toString(16).padStart(2, "0")}${g
+                .toString(16)
+                .padStart(2, "0")}${b.toString(16).padStart(2, "0")}FF`.toUpperCase();
         this.regionExpectedColors.set(regionId, hex);
 
         const queue = [x, y];
@@ -468,7 +481,6 @@ export class EaselBoard extends SignalElement {
       regionBorderPixels.set(regId, Int32Array.from(set));
     }
 
-    this.isBorderPixel = isBorder;
     this.regionBorderPixels = regionBorderPixels;
   }
 
@@ -586,10 +598,22 @@ export class EaselBoard extends SignalElement {
             pixels[pxIdx + 2] = rgba[2];
             pixels[pxIdx + 3] = rgba[3];
           } else {
-            pixels[pxIdx] = 255;
-            pixels[pxIdx + 1] = 255;
-            pixels[pxIdx + 2] = 255;
-            pixels[pxIdx + 3] = 255;
+            const expected =
+              regionId >= 0
+                ? this.regionExpectedColors.get(regionId) ||
+                  currentArtwork.regionExpectedColors?.[regionId]
+                : undefined;
+            if (expected === "#00000000") {
+              pixels[pxIdx] = 0;
+              pixels[pxIdx + 1] = 0;
+              pixels[pxIdx + 2] = 0;
+              pixels[pxIdx + 3] = 0;
+            } else {
+              pixels[pxIdx] = 255;
+              pixels[pxIdx + 1] = 255;
+              pixels[pxIdx + 2] = 255;
+              pixels[pxIdx + 3] = 255;
+            }
           }
         }
 
@@ -600,8 +624,7 @@ export class EaselBoard extends SignalElement {
     }
 
     // 2. Draw base paint canvas onto screen context
-    destCtx.fillStyle = "#ffffff";
-    destCtx.fillRect(0, 0, w, h);
+    destCtx.clearRect(0, 0, w, h);
     destCtx.drawImage(this.offscreenCanvas, 0, 0);
 
     // 3. SEPARATE DISPLAY OVERLAY PASS: Render contrasting island guide borders surrounding regions
@@ -728,8 +751,15 @@ export class EaselBoard extends SignalElement {
     );
 
     const isEraser = colorHex === "#00000000";
+    const expected =
+      this.regionExpectedColors.get(regionId) ||
+      currentArtwork.regionExpectedColors?.[regionId];
+    const unpaintedRGBA =
+      expected === "#00000000"
+        ? ([0, 0, 0, 0] as const)
+        : ([255, 255, 255, 255] as const);
     const targetRGBA = isEraser
-      ? ([255, 255, 255, 255] as const)
+      ? unpaintedRGBA
       : this.parseColorToRGBA(colorHex);
 
     if (!this.offscreenPixelsData) {
@@ -790,8 +820,17 @@ export class EaselBoard extends SignalElement {
     const w = this.artworkWidth;
     const h = this.artworkHeight;
     const isEraser = activeColor.hexCode === "#00000000";
+    const expected =
+      this.brushTargetRegionId !== null
+        ? this.regionExpectedColors.get(this.brushTargetRegionId) ||
+          currentArtwork.regionExpectedColors?.[this.brushTargetRegionId]
+        : undefined;
+    const unpaintedRGBA =
+      expected === "#00000000"
+        ? ([0, 0, 0, 0] as const)
+        : ([255, 255, 255, 255] as const);
     const targetRGBA = isEraser
-      ? ([255, 255, 255, 255] as const)
+      ? unpaintedRGBA
       : this.parseColorToRGBA(activeColor.hexCode);
 
     if (!this.offscreenPixelsData) {
@@ -1515,6 +1554,7 @@ export class EaselBoard extends SignalElement {
     const outerContainerStyle = {
       width: "95vmin",
       maxWidth: "95vmin",
+      minHeight: "40vh",
       margin: "0 auto",
       paddingTop: "0.5rem",
       paddingBottom: "1rem",
@@ -1708,7 +1748,7 @@ export class EaselBoard extends SignalElement {
                         style="width: 100%; display: flex; flex-direction: column; align-items: center;"
                       >
                         <div
-                          style="position: relative; width: 100%; aspect-ratio: ${currentArtwork.width} / ${currentArtwork.height}; border-radius: 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; background-color: #ffffff;"
+                          style="position: relative; width: 100%; aspect-ratio: ${currentArtwork.width} / ${currentArtwork.height}; border-radius: 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; background-color: transparent;"
                         >
                           <canvas
                             id="artboard-canvas"
