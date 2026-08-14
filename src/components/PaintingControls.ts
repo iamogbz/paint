@@ -16,6 +16,7 @@ import {
   undoStackSignal,
   handleUndo,
   handleDeleteSwatchColor,
+  isBrushModeSignal,
 } from "../state/store";
 import {
   iconPaintBucket,
@@ -230,6 +231,7 @@ export class PaintingControls extends SignalElement {
     const hasArtworks = artworksSignal.get().length > 0;
     const isProcessing = isProcessingSignal.get();
     const zoomScale = zoomScaleSignal.get();
+    const isBrushMode = isBrushModeSignal.get();
 
     const showPhotoControls = Boolean(currentArtwork && !isProcessing);
 
@@ -532,15 +534,18 @@ export class PaintingControls extends SignalElement {
                   </button>
                   <button
                     @click=${() => {
-                      // TODO: reenable canvas drag to pan
+                      // TODO: reenable canvas drag to pan when fill mode is active
+                      isBrushModeSignal.set(false);
                     }}
                     style=${this.renderStyleObject({
                       width: "36px",
                       height: "36px",
                       borderRadius: "50%",
-                      backgroundColor: "#000000",
+                      backgroundColor: isBrushMode ? "#FFFFFF" : "#000000",
                       border: "2.5px solid #000000",
-                      boxShadow: "2px 2px 0px 0px #E63946",
+                      boxShadow: `2px 2px 0px 0px ${
+                        isBrushMode ? "#000000" : "#E63946"
+                      }`,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -550,7 +555,30 @@ export class PaintingControls extends SignalElement {
                     })}
                     title="All Colours"
                   >
-                    ${iconPaintBucket(18, "#FFFFFF")}
+                    ${iconPaintBucket(18, isBrushMode ? "#000000" : "#FFFFFF")}
+                  </button>
+                  <button
+                    @click=${() => {
+                      isBrushModeSignal.set(true);
+                      // TODO: disable canvas drag to pan when brush mode is active
+                    }}
+                    style=${this.renderStyleObject({
+                      width: "36px",
+                      height: "36px",
+                      borderRadius: "50%",
+                      backgroundColor: isBrushMode ? "#000000" : "#FFFFFF",
+                      border: "2.5px solid #000000",
+                      boxShadow: "2px 2px 0px 0px #E63946",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      cursor: "pointer",
+                      padding: "0",
+                      transition: "transform 0.15s ease, box-shadow 0.15s ease",
+                    })}
+                    title="Brush Mode"
+                  >
+                    ${iconPaintbrush(18, isBrushMode ? "#FFFFFF" : "#000000")}
                   </button>
                 </div>
               `
@@ -645,10 +673,12 @@ export class PaintingControls extends SignalElement {
 
                       <!-- Color Label/Progress -->
                       <span
-                        id="swatch-action-${color.hexCode.replace('#', '')}"
+                        id="swatch-action-${color.hexCode.replace("#", "")}"
                         @pointerdown=${(e: PointerEvent) => {
-                          if (isCoreColor || color.hexCode === "#00000000") return;
-                          if (e.pointerType === "mouse" && e.button !== 0) return;
+                          if (isCoreColor || color.hexCode === "#00000000")
+                            return;
+                          if (e.pointerType === "mouse" && e.button !== 0)
+                            return;
                           e.stopPropagation();
                           handleDeleteSwatchColor(color);
                         }}
@@ -665,9 +695,15 @@ export class PaintingControls extends SignalElement {
                           display: inline-flex;
                           border-radius: 100%;
                           justify-content: center;
-                          cursor: ${!isCoreColor && isSelected ? "pointer" : "inherit"};
-                          pointer-events: ${isSelected && !isCoreColor ? "auto" : "none"};"
-                        title=${!isCoreColor && isSelected ? "Delete colour swatch" : ""}
+                          cursor: ${!isCoreColor && isSelected
+                          ? "pointer"
+                          : "inherit"};
+                          pointer-events: ${isSelected && !isCoreColor
+                          ? "auto"
+                          : "none"};"
+                        title=${!isCoreColor && isSelected
+                          ? "Delete colour swatch"
+                          : ""}
                       >
                         ${color.hexCode === "#00000000"
                           ? "Eraser"

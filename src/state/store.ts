@@ -19,6 +19,7 @@ export const copiedHexSignal = signal<string | null>(null);
 export const undoStackSignal = signal<UndoHistoryItem[]>([]);
 export const isDragOverSignal = signal<boolean>(false);
 export const zoomScaleSignal = signal<number>(1);
+export const isBrushModeSignal = signal<boolean>(false);
 
 // Drag and drop colors
 export const draggedColorSignal = signal<string | null>(null);
