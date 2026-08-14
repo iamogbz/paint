@@ -517,7 +517,18 @@ export class EaselBoard extends SignalElement {
     return getOppositeHueRGBA(bgR, bgG, bgB, bgA);
   }
 
+  private drawRequested = false;
+
   private drawArtboardCanvas() {
+    if (this.drawRequested) return;
+    this.drawRequested = true;
+    requestAnimationFrame(() => {
+      this.drawRequested = false;
+      this._doDrawArtboardCanvas();
+    });
+  }
+
+  private _doDrawArtboardCanvas() {
     const canvas = this.querySelector<HTMLCanvasElement>("#artboard-canvas");
     const currentArtwork = currentArtworkSignal.get();
     if (!canvas || !currentArtwork || !this.regionMapData) return;

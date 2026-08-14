@@ -57,66 +57,98 @@ function applyBilateralFilter(
   radius = 3
 ): Uint8ClampedArray {
   const r = Math.max(1, Math.round(radius));
+  const tempPixels = new Float32Array(srcPixels.length);
   const dstPixels = new Uint8ClampedArray(srcPixels.length);
+
   const twoSpatialSigmaSq = 2 * Math.max(0.1, spatialSigma) * Math.max(0.1, spatialSigma);
   const twoRangeSigmaSq = 2 * Math.max(0.1, rangeSigma) * Math.max(0.1, rangeSigma);
 
-  // Precompute spatial weights
-  const spatialWeights: number[][] = [];
-  for (let dy = -r; dy <= r; dy++) {
-    spatialWeights[dy + r] = [];
-    for (let dx = -r; dx <= r; dx++) {
-      spatialWeights[dy + r][dx + r] = Math.exp(
-        -(dx * dx + dy * dy) / twoSpatialSigmaSq
-      );
-    }
+  // Precompute spatial weights (1D)
+  const spatialWeights = new Float32Array(r * 2 + 1);
+  for (let d = -r; d <= r; d++) {
+    spatialWeights[d + r] = Math.exp(-(d * d) / twoSpatialSigmaSq);
   }
 
+  // Precompute range weights (max dist sq is 255^2 * 3 = 195075)
+  const rangeWeights = new Float32Array(195076);
+  for (let i = 0; i <= 195075; i++) {
+    rangeWeights[i] = Math.exp(-i / twoRangeSigmaSq);
+  }
+
+  // Horizontal pass
   for (let y = 0; y < height; y++) {
     const rowOffset = y * width;
-
     for (let x = 0; x < width; x++) {
-      const i = rowOffset + x;
-      const idx = i * 4;
+      const idx = (rowOffset + x) * 4;
       const cR = srcPixels[idx];
       const cG = srcPixels[idx + 1];
       const cB = srcPixels[idx + 2];
       const cA = srcPixels[idx + 3];
 
-      let sumR = 0;
-      let sumG = 0;
-      let sumB = 0;
-      let sumW = 0;
-
-      const yMin = Math.max(0, y - r);
-      const yMax = Math.min(height - 1, y + r);
+      let sumR = 0, sumG = 0, sumB = 0, sumW = 0;
       const xMin = Math.max(0, x - r);
       const xMax = Math.min(width - 1, x + r);
 
+      for (let nx = xMin; nx <= xMax; nx++) {
+        const nIdx = (rowOffset + nx) * 4;
+        const nR = srcPixels[nIdx];
+        const nG = srcPixels[nIdx + 1];
+        const nB = srcPixels[nIdx + 2];
+
+        const dR = nR - cR;
+        const dG = nG - cG;
+        const dB = nB - cB;
+        
+        const distSq = dR * dR + dG * dG + dB * dB;
+        const weight = spatialWeights[nx - x + r] * rangeWeights[distSq];
+
+        sumR += nR * weight;
+        sumG += nG * weight;
+        sumB += nB * weight;
+        sumW += weight;
+      }
+
+      tempPixels[idx] = sumR / sumW;
+      tempPixels[idx + 1] = sumG / sumW;
+      tempPixels[idx + 2] = sumB / sumW;
+      tempPixels[idx + 3] = cA;
+    }
+  }
+
+  // Vertical pass
+  for (let y = 0; y < height; y++) {
+    const rowOffset = y * width;
+    for (let x = 0; x < width; x++) {
+      const idx = (rowOffset + x) * 4;
+      const cR = tempPixels[idx];
+      const cG = tempPixels[idx + 1];
+      const cB = tempPixels[idx + 2];
+      const cA = tempPixels[idx + 3];
+
+      let sumR = 0, sumG = 0, sumB = 0, sumW = 0;
+      const yMin = Math.max(0, y - r);
+      const yMax = Math.min(height - 1, y + r);
+
       for (let ny = yMin; ny <= yMax; ny++) {
-        const sWeightY = spatialWeights[ny - y + r];
-        const nRowOffset = ny * width;
+        const nIdx = (ny * width + x) * 4;
+        const nR = tempPixels[nIdx];
+        const nG = tempPixels[nIdx + 1];
+        const nB = tempPixels[nIdx + 2];
 
-        for (let nx = xMin; nx <= xMax; nx++) {
-          const nIdx = (nRowOffset + nx) * 4;
-          const nR = srcPixels[nIdx];
-          const nG = srcPixels[nIdx + 1];
-          const nB = srcPixels[nIdx + 2];
+        const dR = nR - cR;
+        const dG = nG - cG;
+        const dB = nB - cB;
+        
+        let distSq = Math.round(dR * dR + dG * dG + dB * dB);
+        if (distSq > 195075) distSq = 195075;
+        if (distSq < 0) distSq = 0;
 
-          const dR = nR - cR;
-          const dG = nG - cG;
-          const dB = nB - cB;
+        const weight = spatialWeights[ny - y + r] * rangeWeights[distSq];
 
-          const rangeWeight = Math.exp(
-            -(dR * dR + dG * dG + dB * dB) / twoRangeSigmaSq
-          );
-          const weight = sWeightY[nx - x + r] * rangeWeight;
-
-          sumR += nR * weight;
-          sumG += nG * weight;
-          sumB += nB * weight;
-          sumW += weight;
-        }
+        sumR += nR * weight;
+        sumG += nG * weight;
+        sumB += nB * weight;
+        sumW += weight;
       }
 
       dstPixels[idx] = sumR / sumW;
@@ -140,15 +172,15 @@ function applyMajoritySmoothing(
 ) {
   const r = Math.max(1, Math.round(radius));
   const copy = new Int16Array(colorIndices);
-  const threshold = Math.ceil((2 * r + 1) * (2 * r + 1) / 2);
+  // Max palette size is 129 (128 colors + transparent)
+  const counts = new Uint16Array(256); 
 
   for (let y = r; y < height - r; y++) {
     const rowIdx = y * width;
     for (let x = r; x < width - r; x++) {
       const idx = rowIdx + x;
       const centerVal = copy[idx];
-
-      const counts: Record<number, number> = {};
+      
       let maxCount = 0;
       let dominantVal = centerVal;
 
@@ -156,18 +188,23 @@ function applyMajoritySmoothing(
         const nRow = (y + dy) * width;
         for (let dx = -r; dx <= r; dx++) {
           const nVal = copy[nRow + (x + dx)];
-          counts[nVal] = (counts[nVal] || 0) + 1;
-          if (counts[nVal] > maxCount) {
-            maxCount = counts[nVal];
+          const c = counts[nVal] + 1;
+          counts[nVal] = c;
+          if (c > maxCount) {
+            maxCount = c;
             dominantVal = nVal;
           }
         }
       }
 
-      if (maxCount >= threshold) {
-        colorIndices[idx] = dominantVal;
-      } else {
-        colorIndices[idx] = dominantVal; 
+      colorIndices[idx] = dominantVal;
+
+      // Fast clear only the used counts
+      for (let dy = -r; dy <= r; dy++) {
+        const nRow = (y + dy) * width;
+        for (let dx = -r; dx <= r; dx++) {
+          counts[copy[nRow + (x + dx)]] = 0;
+        }
       }
     }
   }
@@ -197,7 +234,7 @@ export function eliminateSmallIslands(
     }
   }
 
-  for (let pass = 0; pass < 50; pass++) {
+  for (let pass = 0; pass < 3; pass++) {
     const visited = new Uint8Array(totalPixels);
     const queue = new Int32Array(totalPixels * 2);
     const smallIslands: { colorIdx: number; area: number; pixels: Int32Array }[] = [];
@@ -395,9 +432,7 @@ export async function processImageToCartoonPalette(
     const b = smoothedPixels[pxIdx + 2];
     const a = smoothedPixels[pxIdx + 3];
 
-    const closest = quantizer.findClosestPaletteColorFast(r, g, b, a);
-    const palIdx = paletteColors.findIndex((c) => c.hexCode === closest.hexCode);
-    colorIndices[i] = palIdx >= 0 ? palIdx : 0;
+    colorIndices[i] = quantizer.findClosestPaletteIndexFast(r, g, b, a);
   }
 
   // Majority Smoothing to round jaggies and thin strips
@@ -452,6 +487,7 @@ export async function processImageToCartoonPalette(
   const regionMap = new Int32Array(totalPixels).fill(-1);
   const regionExpectedColors: Record<number, string> = {};
   const visited = new Uint8Array(totalPixels);
+  const queue = new Int32Array(totalPixels * 2);
   let nextRegionId = 0;
 
   for (let y = 0; y < height; y++) {
@@ -463,29 +499,27 @@ export async function processImageToCartoonPalette(
       const regionId = nextRegionId++;
       regionExpectedColors[regionId] = paletteColors[colorIdx].hexCode;
 
-      const queue = [x, y];
+      let tail = 0;
+      queue[tail++] = x;
+      queue[tail++] = y;
       visited[idx] = 1;
-      let head = 0;
 
-      while (head < queue.length) {
+      let head = 0;
+      while (head < tail) {
         const qx = queue[head++];
         const qy = queue[head++];
         const qIdx = qy * width + qx;
         regionMap[qIdx] = regionId;
 
-        const neighbors = [
-          [qx + 1, qy],
-          [qx - 1, qy],
-          [qx, qy + 1],
-          [qx, qy - 1],
-        ];
-
-        for (const [nx, ny] of neighbors) {
+        for (const [dx, dy] of CARDINAL_NEIGHBORS) {
+          const nx = qx + dx;
+          const ny = qy + dy;
           if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
             const nIdx = ny * width + nx;
             if (!visited[nIdx] && colorIndices[nIdx] === colorIdx) {
               visited[nIdx] = 1;
-              queue.push(nx, ny);
+              queue[tail++] = nx;
+              queue[tail++] = ny;
             }
           }
         }

@@ -261,34 +261,39 @@ export function generateDynamicPalette(pixels: Uint8ClampedArray, maxColors: num
 
 export class ColorQuantizer {
   private palette: PaletteColor[];
-  private lookupCache: Map<number, PaletteColor>;
+  private lookupCache: Uint16Array;
+  private initialized: Uint8Array;
 
   constructor(paletteColors: PaletteColor[]) {
     this.palette = paletteColors;
-    this.lookupCache = new Map();
+    this.lookupCache = new Uint16Array(1048576);
+    this.initialized = new Uint8Array(1048576);
   }
   
-  findClosestPaletteColorFast(r: number, g: number, b: number, a: number = 255): PaletteColor {
+  findClosestPaletteIndexFast(r: number, g: number, b: number, a: number = 255): number {
     if (a < 10) {
-      return this.palette[0];
+      return 0; // Transparent
     }
     const r5 = Math.max(0, Math.min(31, r >> 3));
     const g5 = Math.max(0, Math.min(31, g >> 3));
     const b5 = Math.max(0, Math.min(31, b >> 3));
     const a5 = Math.max(0, Math.min(31, a >> 3));
     const key = (r5 << 15) | (g5 << 10) | (b5 << 5) | a5;
-    let cached = this.lookupCache.get(key);
-    if (!cached) {
-      cached = this._findClosest(r, g, b, a);
-      this.lookupCache.set(key, cached);
+    
+    if (this.initialized[key]) {
+      return this.lookupCache[key];
     }
-    return cached;
+    
+    const idx = this._findClosestIndex(r, g, b, a);
+    this.lookupCache[key] = idx;
+    this.initialized[key] = 1;
+    return idx;
   }
   
-  private _findClosest(r: number, g: number, b: number, a: number): PaletteColor {
+  private _findClosestIndex(r: number, g: number, b: number, a: number): number {
     const targetRgba: [number, number, number, number] = [r, g, b, a];
     let minDistance = Infinity;
-    let closestColor = this.palette[1] || this.palette[0];
+    let closestIndex = 1;
     const startIdx = (this.palette[0] && this.palette[0].hexCode === "#00000000") ? 1 : 0;
     
     for (let i = startIdx; i < this.palette.length; i++) {
@@ -296,10 +301,10 @@ export class ColorQuantizer {
       const dist = getPerceptualColorDistance(targetRgba, entry.rgba);
       if (dist < minDistance) {
         minDistance = dist;
-        closestColor = entry;
+        closestIndex = i;
       }
     }
-    return closestColor;
+    return closestIndex;
   }
 }
 
