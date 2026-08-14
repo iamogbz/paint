@@ -87,9 +87,16 @@ export class EaselBoard extends SignalElement {
     this.pointerDownOnCanvas = false;
   };
 
+  private handleRedrawArtboard = () => {
+    this.lastPaintedStateStr = "";
+    this.lastTargetHex = null;
+    this.drawArtboardCanvas();
+  };
+
   connectedCallback() {
     super.connectedCallback();
     window.addEventListener("blur", this.handleBlur);
+    window.addEventListener("easel-redraw-artboard", this.handleRedrawArtboard);
     window.addEventListener("easel-zoom-in", this.zoomIn);
     window.addEventListener("easel-zoom-out", this.zoomOut);
     window.addEventListener("easel-zoom-set", this.handleZoomSet);
@@ -110,6 +117,7 @@ export class EaselBoard extends SignalElement {
   disconnectedCallback() {
     super.disconnectedCallback();
     window.removeEventListener("blur", this.handleBlur);
+    window.removeEventListener("easel-redraw-artboard", this.handleRedrawArtboard);
     window.removeEventListener("pointermove", this.handlePointerMove);
     window.removeEventListener("pointerup", this.handlePointerUp);
     window.removeEventListener("pointercancel", this.handlePointerUp);

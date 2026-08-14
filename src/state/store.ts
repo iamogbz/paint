@@ -160,6 +160,56 @@ export function pushUndoState(paintedRegionsState: Record<number, string>) {
   undoStackSignal.set([...undoStackSignal.get(), { ...paintedRegionsState }]);
 }
 
+export function handleDeleteSwatchColor(color: PaletteColor) {
+  if (!color || color.hexCode === "#00000000") return;
+  const current = currentArtworkSignal.get();
+  if (!current) return;
+
+  const colorHexUpper = color.hexCode.toUpperCase();
+  const currentPainted = current.paintedRegionsState || {};
+
+  // Check if this is a core color (stat.count > 0 in original image)
+  const stat = (current.colorStats || []).find(
+    (s) => s.color.hexCode.toUpperCase() === colorHexUpper
+  );
+  if (stat && stat.count > 0) {
+    // Core color with regions in original artwork cannot be deleted
+    return;
+  }
+
+  // Push current painted state to undo stack before modifying
+  pushUndoState(currentPainted);
+
+  // Unpaint any region that was painted with this color
+  const newPaintedState: Record<number, string> = {};
+  for (const [regionIdStr, paintedHex] of Object.entries(currentPainted)) {
+    if (paintedHex.toUpperCase() !== colorHexUpper) {
+      newPaintedState[Number(regionIdStr)] = paintedHex;
+    }
+  }
+
+  // Remove the swatch from colorStats
+  const newColorStats = (current.colorStats || []).filter(
+    (s) => s.color.hexCode.toUpperCase() !== colorHexUpper
+  );
+
+  // If the active highlight color is this deleted color, deselect it
+  if (activeHighlightColorSignal.get()?.hexCode.toUpperCase() === colorHexUpper) {
+    activeHighlightColorSignal.set(null);
+  }
+
+  const updatedArtwork: ProcessedArtwork = {
+    ...current,
+    colorStats: newColorStats,
+    paintedRegionsState: newPaintedState,
+    modifiedAt: Date.now(),
+  };
+
+  handleSelectArtwork(updatedArtwork);
+  window.dispatchEvent(new CustomEvent("easel-redraw-artboard"));
+  soundEffects.playPop();
+}
+
 export function handleUndo() {
   const stack = undoStackSignal.get();
   if (stack.length === 0) return;

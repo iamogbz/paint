@@ -15,6 +15,7 @@ import {
   draggedPositionSignal,
   undoStackSignal,
   handleUndo,
+  handleDeleteSwatchColor,
 } from "../state/store";
 import {
   iconPaintBucket,
@@ -275,10 +276,9 @@ export class PaintingControls extends SignalElement {
     const regionedStats: UsedColorStat[] = [];
     const nonRegionedStats: UsedColorStat[] = [];
 
+    // use the stat count directly since painting in the image does not change this value
     for (const stat of nonTransparentStats) {
-      const status = expectedColorStatus.get(stat.color.hexCode);
-      const totalRegions = status ? status.total : (stat.count || 0);
-      if (totalRegions > 0) {
+      if (stat?.count > 0) {
         regionedStats.push(stat);
       } else {
         nonRegionedStats.push(stat);
@@ -287,8 +287,8 @@ export class PaintingControls extends SignalElement {
 
     // Sort regioned colors from highest region count to lowest
     regionedStats.sort((sa, sb) => {
-      const countA = expectedColorStatus.get(sa.color.hexCode)?.total ?? sa.count;
-      const countB = expectedColorStatus.get(sb.color.hexCode)?.total ?? sb.count;
+      const countA = sa.count;
+      const countB = sb.count;
       return countB - countA;
     });
 
@@ -645,11 +645,12 @@ export class PaintingControls extends SignalElement {
 
                       <!-- Color Label/Progress -->
                       <span
+                        id="swatch-action-${color.hexCode.replace('#', '')}"
                         @pointerdown=${(e: PointerEvent) => {
-                          if (isCoreColor) return;
-                          alert(
-                            "TODO: delete color from swatch. Any region that has been painted with this color becomes unpainted. This is an undoable action."
-                          );
+                          if (isCoreColor || color.hexCode === "#00000000") return;
+                          if (e.pointerType === "mouse" && e.button !== 0) return;
+                          e.stopPropagation();
+                          handleDeleteSwatchColor(color);
                         }}
                         style="font-size: 0.6875rem;
                           font-weight: 900;
@@ -664,7 +665,9 @@ export class PaintingControls extends SignalElement {
                           display: inline-flex;
                           border-radius: 100%;
                           justify-content: center;
-                          pointer-events: ${isSelected ? "auto" : "none"};"
+                          cursor: ${!isCoreColor && isSelected ? "pointer" : "inherit"};
+                          pointer-events: ${isSelected && !isCoreColor ? "auto" : "none"};"
+                        title=${!isCoreColor && isSelected ? "Delete colour swatch" : ""}
                       >
                         ${color.hexCode === "#00000000"
                           ? "Eraser"
