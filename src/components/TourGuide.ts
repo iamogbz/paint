@@ -31,78 +31,66 @@ export class AppTour extends SignalElement {
     {
       title: "Welcome to PAINT by COLOURS!",
       description:
-        "Transform any photo into a vibrant paint-by-numbers canvas, or paint today's curated Daily Challenge. Let's take a quick tour of the features!",
+        "Let's take a quick tour of the controls so you can start painting your masterpiece.",
       icon: iconPaintBucket(48, "#E63946"),
     },
     {
       title: "Starting a Painting",
       description:
-        "Upload any photo from your device via click or drag-and-drop to automatically generate a custom canvas and palette, or jump straight into the Daily Challenge.",
+        "Upload any photo to generate a custom paint by colours canvas, or jump straight into the Daily Challenge.",
       icon: iconImage(48, "#2A9D8F"),
     },
     {
       title: "Navigating the Canvas",
       description:
-        "Zoom smoothly from 50% to 800% using the Zoom buttons, mouse scroll wheel, or pinch gestures. Pan around freely by dragging directly on the canvas or dragging from the center Pan button.",
+        "Zoom in/out using buttons, scroll wheel or pinch to zoom on your device. Pan around freely by dragging the move button or touching the canvas",
       icon: html`
-        <div style="display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
-          ${iconZoomOut(20, "#000000")}
-          ${iconMove(44, "#000000")}
-          ${iconZoomIn(20, "#000000")}
-        </div>
+        ${iconZoomOut(18, "#000000")} ${iconMove(48, "#000000")}
+        ${iconZoomIn(18, "#000000")}
       `,
     },
     {
-      title: "Painting & Smart Guides",
+      title: "Painting the Canvas",
       description:
-        "Select a color swatch and tap a region to fill it, or drag the color swatch directly onto the canvas! High-contrast outlines guide you to matching regions, with 3× thicker borders highlighting misplaced colors.",
+        "Select a swatch from the palette, then simply tap or drag the selected color to the canvas! Tapping a colour twice switches to the eraser.",
       icon: iconPaintbrush(48, "#E63946"),
     },
     {
-      title: "Color Palette & Progress",
+      title: "Track your Progress",
       description:
-        "The palette arranges colors by frequency. Each swatch shows real-time progress counters (painted vs. total regions) and receives a completion checkmark once 100% filled. Tap any swatch to copy its HEX code.",
+        "Each color swatch shows your progress in number of regions painted. Once a color is fully painted, a checkmark will appear on its swatch. However this is just a guide, you are the artist!",
       icon: iconCheck(48, "#2A9D8F"),
     },
     {
-      title: "Custom Colours & Picker",
+      title: "Want to add Custom Colors?",
       description:
-        "Want to add your own colors? Tap the Picker swatch to open the 360° Color Wheel, adjust brightness, or input custom HEX codes. Added custom swatches can be removed anytime with the trash button.",
+        "Tap the rainbow Picker to open the Color Wheel, adjust brightness, or input HEX codes directly. Added custom swatches can be removed anytime.",
       icon: iconPalette(48, "#8338EC"),
     },
     {
-      title: "Fixing Mistakes & Eraser",
+      title: "Made a mistake?",
       description:
-        "Made a mistake? Click the Undo button to step backward through your recent strokes. You can also use the Eraser swatch (or click the active color to deselect) to clear regions back to white.",
+        "No worries! Just click the Undo button to revert your last change and try again. The eraser is also there to clear colours from the canvas.",
       icon: iconRotateCcw(48, "#000000"),
     },
     {
-      title: "Gallery & High-Res Save",
+      title: "Gallery & Saving",
       description:
-        "Click the yellow Gallery icon to browse saved paintings, rename them, switch active artwork, or delete old ones. Click the green Save button anytime to download a crisp, clean PNG of your painting.",
+        "Use the yellow Gallery icon to view existing paintings, change their names, or start a new one. Use the green Save icon to download your painting.",
       icon: html`
-        <div style="display: flex; align-items: center; justify-content: center; gap: 0.5rem;">
-          ${iconFolderOpen(40, "#F4A261")}
-          ${iconDownload(28, "#2A9D8F")}
-        </div>
+        ${iconFolderOpen(48, "#F4A261")} ${iconDownload(24, "#2A9D8F")}
       `,
     },
     {
       title: "Ready, Set, Paint!",
       description:
-        "Unleash your creativity, relax, and bring your artworks to life one color at a time. Have fun painting your masterpiece!",
+        "Looking forward to your next masterpiece! Share it with your friends and maybe they can make their own too.",
       icon: iconSparkles(48, "#2A9D8F"),
     },
   ];
 
-  private handleOpenTour = () => {
-    this.currentStep = 0;
-    this.isVisible = true;
-  };
-
   connectedCallback() {
     super.connectedCallback();
-    window.addEventListener("open-tour-guide", this.handleOpenTour);
     if (!localStorage.getItem("tour-completed")) {
       setTimeout(() => {
         this.isVisible = true;
@@ -111,27 +99,22 @@ export class AppTour extends SignalElement {
   }
 
   disconnectedCallback() {
-    window.removeEventListener("open-tour-guide", this.handleOpenTour);
     super.disconnectedCallback();
   }
 
   private nextStep() {
-    if (this.currentStep < this.steps.length - 1) {
-      this.currentStep++;
-    } else {
-      this.finishTour();
-    }
+    this.goToStep(this.currentStep + 1);
   }
 
   private prevStep() {
-    if (this.currentStep > 0) {
-      this.currentStep--;
-    }
+    this.goToStep(this.currentStep - 1);
   }
 
   private goToStep(stepIndex: number) {
     if (stepIndex >= 0 && stepIndex < this.steps.length) {
       this.currentStep = stepIndex;
+    } else if (stepIndex >= this.steps.length) {
+      this.finishTour();
     }
   }
 
@@ -216,59 +199,84 @@ export class AppTour extends SignalElement {
     return html`
       <div style=${this.renderStyleObject(overlayStyle)}>
         <div style=${this.renderStyleObject(modalStyle)}>
-          <button @click=${this.finishTour} style=${this.renderStyleObject(closeBtnStyle)} title="Skip Tour">
+          <button
+            @click=${this.finishTour}
+            style=${this.renderStyleObject(closeBtnStyle)}
+            title="Skip Tour"
+          >
             ${iconX(16, "#000000")}
           </button>
-          
-          <div style="margin-bottom: 1.5rem; display: flex; justify-content: center; align-items: center; width: 96px; height: 96px; background-color: rgba(0,0,0,0.05); border-radius: 50%; border: 3px solid rgba(0,0,0,0.1);">
+
+          <div
+            style="margin-bottom: 1.5rem; display: flex; justify-content: center; align-items: center; width: 96px; height: 96px; background-color: rgba(0,0,0,0.05); border-radius: 50%; border: 3px solid rgba(0,0,0,0.1);"
+          >
             ${currentSlide.icon}
           </div>
-          
-          <h2 style="font-family: 'Plus Jakarta Sans', sans-serif; font-size: 1.5rem; font-weight: 900; color: #3D2314; margin: 0 0 1rem 0;">
+
+          <h2
+            style="font-family: 'Plus Jakarta Sans', sans-serif; font-size: 1.5rem; font-weight: 900; color: #3D2314; margin: 0 0 1rem 0;"
+          >
             ${currentSlide.title}
           </h2>
-          
-          <p style="font-family: 'Plus Jakarta Sans', sans-serif; font-size: 1rem; color: #4A2810; font-weight: 600; line-height: 1.5; margin: 0 0 2rem 0; min-height: 4.5rem;">
+
+          <p
+            style="font-family: 'Plus Jakarta Sans', sans-serif; font-size: 1rem; color: #4A2810; font-weight: 600; line-height: 1.5; margin: 0 0 2rem 0; min-height: 4.5rem;"
+          >
             ${currentSlide.description}
           </p>
-          
-          <div style="display: flex; align-items: center; justify-content: space-between; width: 100%;">
-            <button 
-              @click=${this.prevStep} 
-              style=${this.renderStyleObject(navBtnStyle(this.currentStep === 0))}
+
+          <div
+            style="display: flex; align-items: center; justify-content: space-between; width: 100%;"
+          >
+            <button
+              @click=${this.prevStep}
+              style=${this.renderStyleObject(
+                navBtnStyle(this.currentStep === 0)
+              )}
               ?disabled=${this.currentStep === 0}
               title="Previous"
             >
               ${iconChevronLeft(24, "#000000")}
             </button>
-            
+
             <div style=${this.renderStyleObject(progressDotsStyle)}>
-              ${this.steps.map((_, i) => html`
-                <button
-                  @click=${() => this.goToStep(i)}
-                  style="width: 10px; height: 10px; border-radius: 50%; background-color: ${i === this.currentStep ? "#E63946" : "#D1D5DB"}; border: 1.5px solid ${i === this.currentStep ? "#000000" : "rgba(0,0,0,0.15)"}; padding: 0; cursor: pointer; transition: all 0.15s ease;"
-                  title="Go to step ${i + 1}"
-                ></button>
-              `)}
+              ${this.steps.map(
+                (_, i) => html`
+                  <button
+                    @click=${() => this.goToStep(i)}
+                    style="width: 10px; height: 10px; border-radius: 50%; background-color: ${i ===
+                    this.currentStep
+                      ? "#E63946"
+                      : "#D1D5DB"}; border: 1.5px solid ${i === this.currentStep
+                      ? "#000000"
+                      : "rgba(0,0,0,0.15)"}; padding: 0; cursor: pointer; transition: all 0.15s ease;"
+                    title="Go to step ${i + 1}"
+                  ></button>
+                `
+              )}
             </div>
-            
-            <button 
-              @click=${this.nextStep} 
+
+            <button
+              @click=${this.nextStep}
               style=${this.renderStyleObject(navBtnStyle(false))}
               title="Next"
             >
-              ${this.currentStep === this.steps.length - 1 ? iconCheck(24, "#000000") : iconChevronRight(24, "#000000")}
+              ${this.currentStep === this.steps.length - 1
+                ? iconCheck(24, "#000000")
+                : iconChevronRight(24, "#000000")}
             </button>
           </div>
-          
-          ${this.currentStep === this.steps.length - 1 ? html`
-            <button 
-              @click=${this.finishTour}
-              style="margin-top: 1.5rem; width: 100%; background-color: #2A9D8F; color: #FFFFFF; font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 900; padding: 0.75rem 1.5rem; border-radius: 20px; border: 3px solid #000000; box-shadow: 4px 4px 0px 0px #000000; font-size: 1rem; text-transform: uppercase; cursor: pointer; transition: all 0.15s ease;"
-            >
-              Let's Paint!
-            </button>
-          ` : ""}
+
+          ${this.currentStep === this.steps.length - 1
+            ? html`
+                <button
+                  @click=${this.finishTour}
+                  style="margin-top: 1.5rem; width: 100%; background-color: #2A9D8F; color: #FFFFFF; font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 900; padding: 0.75rem 1.5rem; border-radius: 20px; border: 3px solid #000000; box-shadow: 4px 4px 0px 0px #000000; font-size: 1rem; text-transform: uppercase; cursor: pointer; transition: all 0.15s ease;"
+                >
+                  Let's Paint!
+                </button>
+              `
+            : ""}
         </div>
       </div>
     `;
@@ -276,9 +284,10 @@ export class AppTour extends SignalElement {
 
   private renderStyleObject(styleObj: Record<string, string | number>): string {
     return Object.entries(styleObj)
-      .map(([k, v]) => `${k.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}: ${v};`)
+      .map(
+        ([k, v]) =>
+          `${k.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}: ${v};`
+      )
       .join(" ");
   }
 }
-
-

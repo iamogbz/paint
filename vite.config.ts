@@ -12,7 +12,7 @@ const getHtml = () => {
     return `<!DOCTYPE html><html><head><title>Daily Challenge Index</title><style>body { font-family: system-ui, sans-serif; padding: 2rem; background: #fff; color: #000; }</style></head><body><h1>Daily Challenges</h1><ul>${fileLinks}</ul></body></html>`;
   }
 }
-  
+
 function directoryListingPlugin() {
   const targetPath = '/daily-challenge';
   return {
@@ -20,7 +20,7 @@ function directoryListingPlugin() {
     configureServer(server) {
       server.middlewares.use((req, res, next) => {
         if (!req.url) return next();
-        
+
         // match exact or with trailing slash
         const rawUrl = req.url.split('?')[0];
         if (rawUrl === targetPath || rawUrl === targetPath + '/') {
@@ -59,7 +59,7 @@ export default defineConfig(() => {
         manifest: {
           name: 'PAINT by COLOURS',
           short_name: 'PAINT',
-          description: 'Turn your photos into smoothed 800px cartoon artworks with a strict 24-color artist palette.',
+          description: 'Unleash your creativity, relax, and bring your artworks to life one color at a time. Have fun painting your masterpiece!',
           theme_color: '#FCD5AE',
           background_color: '#FCD5AE',
           display: 'standalone',
