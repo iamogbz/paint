@@ -159,6 +159,10 @@ export function generateDynamicPalette(pixels: Uint8ClampedArray, maxColors: num
   const centroidOklabs: [number, number, number][] = [oklabs[firstIdx]];
   const minDists = new Float32Array(opaquePixels.length).fill(Infinity);
   
+  // Adaptive threshold for distinct colors (squared Oklab distance ~0.0015)
+  // Ensures we only add colors if they represent meaningful detail.
+  const MIN_DIST_SQ = 0.0015;
+  
   for (let k = 1; k < maxColors; k++) {
     let maxDist = -1;
     let nextIdx = 0;
@@ -177,17 +181,23 @@ export function generateDynamicPalette(pixels: Uint8ClampedArray, maxColors: num
         nextIdx = i;
       }
     }
+    
+    if (maxDist < MIN_DIST_SQ) {
+      break;
+    }
+    
     centroids.push(opaquePixels[nextIdx]);
     centroidOklabs.push(oklabs[nextIdx]);
   }
   
+  const actualColors = centroids.length;
   const assignments = new Int32Array(opaquePixels.length);
   for (let iter = 0; iter < 5; iter++) {
     for (let i = 0; i < opaquePixels.length; i++) {
       let bestD = Infinity;
       let bestC = 0;
       const pOk = oklabs[i];
-      for (let c = 0; c < maxColors; c++) {
+      for (let c = 0; c < actualColors; c++) {
         const cOk = centroidOklabs[c];
         const dL = pOk[0] - cOk[0];
         const da = pOk[1] - cOk[1];
@@ -198,8 +208,8 @@ export function generateDynamicPalette(pixels: Uint8ClampedArray, maxColors: num
       assignments[i] = bestC;
     }
     
-    const sums = Array.from({length: maxColors}, () => [0,0,0]);
-    const counts = new Int32Array(maxColors);
+    const sums = Array.from({length: actualColors}, () => [0,0,0]);
+    const counts = new Int32Array(actualColors);
     for (let i = 0; i < opaquePixels.length; i++) {
       const c = assignments[i];
       sums[c][0] += opaquePixels[i][0];
@@ -208,7 +218,7 @@ export function generateDynamicPalette(pixels: Uint8ClampedArray, maxColors: num
       counts[c]++;
     }
     
-    for (let c = 0; c < maxColors; c++) {
+    for (let c = 0; c < actualColors; c++) {
       if (counts[c] > 0) {
         const meanR = sums[c][0] / counts[c];
         const meanG = sums[c][1] / counts[c];
