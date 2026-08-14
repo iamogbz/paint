@@ -921,7 +921,7 @@ export class EaselBoard extends SignalElement {
   }
 
   private setScale(s: number) {
-    const newScale = Math.min(8.0, Math.max(1.0, s));
+    const newScale = Math.min(8.0, Math.max(0.5, s));
     if (newScale === 1) {
       this.scale = 1;
       this.panX = 0;
@@ -1031,7 +1031,7 @@ export class EaselBoard extends SignalElement {
       const ratio = dist / this.initialPinchDist;
       const targetScale = Math.min(
         8.0,
-        Math.max(1.0, this.initialScale * ratio)
+        Math.max(0.5, this.initialScale * ratio)
       );
 
       const midX = (t1.clientX + t2.clientX) / 2;
