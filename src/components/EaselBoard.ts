@@ -645,7 +645,7 @@ export class EaselBoard extends SignalElement {
         const overlayPixels = overlayImgData.data;
         let hasVisibleBorders = false;
 
-        const borderThickness = Math.max(1, Math.round(w / 800));
+        const borderThickness = Math.max(1, Math.round(w / 400));
         const offsetStart = -Math.floor((borderThickness - 1) / 2);
         const offsetEnd = Math.ceil((borderThickness - 1) / 2);
         
@@ -721,7 +721,7 @@ export class EaselBoard extends SignalElement {
     if (this.hoveredRegionId !== null && this.regionBorderPixels) {
       const borderIndices = this.regionBorderPixels.get(this.hoveredRegionId);
       if (borderIndices && borderIndices.length > 0) {
-        const borderThickness = Math.max(1, Math.round(w / 800));
+        const borderThickness = Math.max(1, Math.round(w / 400));
         const offsetStart = -Math.floor((borderThickness - 1) / 2);
         
         if (targetHex && targetHex !== "#00000000") {
