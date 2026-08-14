@@ -1632,7 +1632,7 @@ export class EaselBoard extends SignalElement {
           <!-- Zoom Transform Element -->
           <div
             id="easel-transform-element"
-            style="width: 100%; min-height: 40vh; display: flex; flex-direction: column; align-items: center; transform: translate3d(${this
+            style="width: 100%; display: flex; flex-direction: column; align-items: center; transform: translate3d(${this
               .panX}px, ${this.panY}px, 0px) scale(${this
               .scale}); transform-origin: center center; transition: ${this
               .isDragging || this.isPinching
@@ -1646,7 +1646,7 @@ export class EaselBoard extends SignalElement {
             <div style=${this.renderStyleObject(mainFrameStyle)}>
               <!-- Easel Canvas Display Area -->
               <div
-                style="display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; padding: 0.5rem; background-size: 0.5rem 0.5rem; background-image: ${transparentImgCss};"
+                style="display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; padding: 0.5rem; background-size: 0.5rem 0.5rem; background-image: ${transparentImgCss}; min-height: 40vh;"
               >
                 <!-- STATE 1: Processing Loader -->
                 ${isProcessing
