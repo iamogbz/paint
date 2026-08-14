@@ -12,6 +12,7 @@ import {
 import "./components/EaselBoard";
 import "./components/PaintingControls";
 import "./components/ArtworkGalleryModal";
+import "./components/RadialColorPickerModal";
 import "./components/TourGuide";
 import { transparentImgCss } from "./components/constants";
 import { iconPaintbrush } from "./components/icons";
@@ -35,6 +36,7 @@ export class PaintApp extends SignalElement {
       const isModal = path.some(
         (el) =>
           el.tagName === "ARTWORK-GALLERY-MODAL" ||
+          el.tagName === "RADIAL-COLOR-PICKER-MODAL" ||
           el.tagName === "APP-TOUR"
       );
       
@@ -110,6 +112,9 @@ export class PaintApp extends SignalElement {
 
         <!-- Gallery Clipboard Modal -->
         <artwork-gallery-modal></artwork-gallery-modal>
+        
+        <!-- Radial Color Picker Modal -->
+        <radial-color-picker-modal></radial-color-picker-modal>
         
         <!-- Interactive Tour Guide -->
         <app-tour></app-tour>

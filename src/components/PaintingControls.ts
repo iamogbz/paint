@@ -9,6 +9,7 @@ import {
   currentArtworkSignal,
   isProcessingSignal,
   isGalleryOpenSignal,
+  isColorPickerOpenSignal,
   zoomScaleSignal,
   draggedColorSignal,
   draggedPositionSignal,
@@ -269,7 +270,6 @@ export class PaintingControls extends SignalElement {
     const transparent = { hexCode: "#00000000", rgba: [0, 0, 0, 0] as const };
     const allColorsExceptTransparent = (this.colorStats || [])
       .filter((s) => s.color.hexCode !== transparent.hexCode)
-      .sort((sa, sb) => sb.count - sa.count)
       .map((s) => s.color);
     const allColors = [transparent, ...allColorsExceptTransparent];
 
@@ -653,9 +653,11 @@ export class PaintingControls extends SignalElement {
                 })}
 
                 <button
+                  id="pick-new-color-btn"
                   @pointerdown=${(e: PointerEvent) => {
-                    // TODO: implement color picker modal to add a new color to the swatch
-                    this.handleSwatchPointerDown(e, activeColor);
+                    if (e.pointerType === "mouse" && e.button !== 0) return;
+                    soundEffects.playPop();
+                    isColorPickerOpenSignal.set(true);
                   }}
                   style=${this.renderStyleObject({
                     flex: "0 0 auto",

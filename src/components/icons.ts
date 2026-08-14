@@ -180,3 +180,11 @@ export const iconChevronRight = (size = 24, color = "currentColor") => html`
     <path d="m9 18 6-6-6-6"/>
   </svg>
 `;
+
+export const iconPlus = (size = 16, color = "currentColor") => html`
+  <svg width="${size}" height="${size}" viewBox="0 0 24 24" fill="none" stroke="${color}" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round">
+    <line x1="12" y1="5" x2="12" y2="19"/>
+    <line x1="5" y1="12" x2="19" y2="12"/>
+  </svg>
+`;
+
