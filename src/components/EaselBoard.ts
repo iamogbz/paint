@@ -69,6 +69,7 @@ export class EaselBoard extends SignalElement {
   // Brush Painting State
   private isBrushPainting = false;
   private brushTargetRegionId: number | null = null;
+  private brushPaintedRegions = new Set<number>();
   private brushLastImgX = 0;
   private brushLastImgY = 0;
   private hasPaintedInCurrentStroke = false;
@@ -816,6 +817,10 @@ export class EaselBoard extends SignalElement {
     const minY = Math.max(0, Math.floor(centerImgY - r));
     const maxY = Math.min(h - 1, Math.ceil(centerImgY + r));
 
+    const startRegionExpectedColor =
+      this.regionExpectedColors.get(this.brushTargetRegionId) ||
+      currentArtwork.regionExpectedColors?.[this.brushTargetRegionId];
+
     let changed = false;
     for (let y = minY; y <= maxY; y++) {
       const dy = y - centerImgY;
@@ -825,7 +830,19 @@ export class EaselBoard extends SignalElement {
         const dx = x - centerImgX;
         if (dx * dx + dySquared <= rSquared) {
           const idx = rowOffset + x;
-          if (this.regionMapData[idx] === this.brushTargetRegionId) {
+          const currentRegionId = this.regionMapData[idx];
+          
+          let canPaint = currentRegionId === this.brushTargetRegionId;
+          if (!canPaint && currentRegionId >= 0 && startRegionExpectedColor) {
+            const currentExpectedColor =
+              this.regionExpectedColors.get(currentRegionId) ||
+              currentArtwork.regionExpectedColors?.[currentRegionId];
+            if (currentExpectedColor === startRegionExpectedColor) {
+              canPaint = true;
+            }
+          }
+
+          if (canPaint) {
             const pxIdx = idx * 4;
             if (
               pixels[pxIdx] !== targetRGBA[0] ||
@@ -838,6 +855,7 @@ export class EaselBoard extends SignalElement {
               pixels[pxIdx + 2] = targetRGBA[2];
               pixels[pxIdx + 3] = targetRGBA[3];
               changed = true;
+              this.brushPaintedRegions.add(currentRegionId);
             }
           }
         }
@@ -936,6 +954,7 @@ export class EaselBoard extends SignalElement {
 
     this.isBrushPainting = true;
     this.brushTargetRegionId = regionId;
+    this.brushPaintedRegions.clear();
     this.brushLastImgX = imgX;
     this.brushLastImgY = imgY;
     this.hasPaintedInCurrentStroke = false;
@@ -1031,12 +1050,14 @@ export class EaselBoard extends SignalElement {
               ...(currentArtwork.paintedRegionsState || {}),
             };
             const activeColor = activeHighlightColorSignal.get();
-            if (activeColor && targetRegion !== null) {
+            if (activeColor && this.brushPaintedRegions.size > 0) {
               pushUndoState(
                 { ...currentPainted },
                 currentArtwork.colorStats
               );
-              currentPainted[targetRegion] = activeColor.hexCode;
+              for (const rId of this.brushPaintedRegions) {
+                currentPainted[rId] = activeColor.hexCode;
+              }
             }
             const updatedArtwork: ProcessedArtwork = {
               ...currentArtwork,
