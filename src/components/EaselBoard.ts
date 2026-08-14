@@ -736,6 +736,11 @@ export class EaselBoard extends SignalElement {
     const currentPainted = {
       ...(currentArtwork.paintedRegionsState || {}),
     };
+
+    if (currentPainted[regionId] === colorHex) {
+      return;
+    }
+
     pushUndoState(
       currentPainted,
       currentArtwork.colorStats
@@ -917,6 +922,14 @@ export class EaselBoard extends SignalElement {
     }
     if (!activeColor) return;
 
+    const currentPainted = {
+      ...(currentArtwork.paintedRegionsState || {}),
+    };
+
+    if (currentPainted[regionId] === activeColor.hexCode) {
+      return;
+    }
+
     try {
       canvas.setPointerCapture(e.pointerId);
     } catch (_) {}
@@ -926,15 +939,6 @@ export class EaselBoard extends SignalElement {
     this.brushLastImgX = imgX;
     this.brushLastImgY = imgY;
     this.hasPaintedInCurrentStroke = false;
-
-    const currentPainted = {
-      ...(currentArtwork.paintedRegionsState || {}),
-    };
-    pushUndoState(
-      currentPainted,
-      currentArtwork.colorStats
-
-    );
 
     this.applyBrushStamp(imgX, imgY, scaleX);
   };
@@ -1028,6 +1032,10 @@ export class EaselBoard extends SignalElement {
             };
             const activeColor = activeHighlightColorSignal.get();
             if (activeColor && targetRegion !== null) {
+              pushUndoState(
+                { ...currentPainted },
+                currentArtwork.colorStats
+              );
               currentPainted[targetRegion] = activeColor.hexCode;
             }
             const updatedArtwork: ProcessedArtwork = {
