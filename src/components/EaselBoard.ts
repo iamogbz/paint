@@ -243,6 +243,7 @@ export class EaselBoard extends SignalElement {
       const img = new Image();
       img.onload = () => {
         if (this.offscreenCtx) {
+          this.offscreenCtx.clearRect(0, 0, w, h);
           this.offscreenCtx.drawImage(img, 0, 0);
           this.offscreenPixelsData = this.offscreenCtx.getImageData(0, 0, w, h);
           this.lastPaintedStateStr = artwork.modifiedAt
@@ -568,6 +569,7 @@ export class EaselBoard extends SignalElement {
         const img = new Image();
         img.onload = () => {
           if (this.offscreenCtx) {
+            this.offscreenCtx.clearRect(0, 0, w, h);
             this.offscreenCtx.drawImage(img, 0, 0);
             this.offscreenPixelsData = this.offscreenCtx.getImageData(
               0,
@@ -779,17 +781,7 @@ export class EaselBoard extends SignalElement {
       currentArtwork.paintedCanvasDataUrl
     );
 
-    const isEraser = colorHex === "#00000000";
-    const expected =
-      this.regionExpectedColors.get(regionId) ||
-      currentArtwork.regionExpectedColors?.[regionId];
-    const unpaintedRGBA =
-      expected === "#00000000"
-        ? ([0, 0, 0, 0] as const)
-        : ([255, 255, 255, 255] as const);
-    const targetRGBA = isEraser
-      ? unpaintedRGBA
-      : this.parseColorToRGBA(colorHex);
+    const targetRGBA = this.parseColorToRGBA(colorHex);
 
     if (!this.offscreenPixelsData) {
       this.offscreenPixelsData = this.offscreenCtx.getImageData(0, 0, w, h);
@@ -808,11 +800,7 @@ export class EaselBoard extends SignalElement {
 
     this.offscreenCtx.putImageData(this.offscreenPixelsData, 0, 0);
 
-    if (isEraser) {
-      delete currentPainted[regionId];
-    } else {
-      currentPainted[regionId] = colorHex;
-    }
+    currentPainted[regionId] = colorHex;
 
     const paintedCanvasDataUrl = this.offscreenCanvas.toDataURL("image/png");
     const updatedArtwork: ProcessedArtwork = {
@@ -848,19 +836,7 @@ export class EaselBoard extends SignalElement {
 
     const w = this.artworkWidth;
     const h = this.artworkHeight;
-    const isEraser = activeColor.hexCode === "#00000000";
-    const expected =
-      this.brushTargetRegionId !== null
-        ? this.regionExpectedColors.get(this.brushTargetRegionId) ||
-          currentArtwork.regionExpectedColors?.[this.brushTargetRegionId]
-        : undefined;
-    const unpaintedRGBA =
-      expected === "#00000000"
-        ? ([0, 0, 0, 0] as const)
-        : ([255, 255, 255, 255] as const);
-    const targetRGBA = isEraser
-      ? unpaintedRGBA
-      : this.parseColorToRGBA(activeColor.hexCode);
+    const targetRGBA = this.parseColorToRGBA(activeColor.hexCode);
 
     if (!this.offscreenPixelsData) {
       this.offscreenPixelsData = this.offscreenCtx.getImageData(0, 0, w, h);
@@ -1095,11 +1071,7 @@ export class EaselBoard extends SignalElement {
             };
             const activeColor = activeHighlightColorSignal.get();
             if (activeColor && targetRegion !== null) {
-              if (activeColor.hexCode === "#00000000") {
-                delete currentPainted[targetRegion];
-              } else {
-                currentPainted[targetRegion] = activeColor.hexCode;
-              }
+              currentPainted[targetRegion] = activeColor.hexCode;
             }
             const updatedArtwork: ProcessedArtwork = {
               ...currentArtwork,
