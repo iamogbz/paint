@@ -268,9 +268,35 @@ export class PaintingControls extends SignalElement {
     }
 
     const transparent = { hexCode: "#00000000", rgba: [0, 0, 0, 0] as const };
-    const allColorsExceptTransparent = (this.colorStats || [])
-      .filter((s) => s.color.hexCode !== transparent.hexCode)
-      .map((s) => s.color);
+    const nonTransparentStats = (this.colorStats || []).filter(
+      (s) => s.color.hexCode !== transparent.hexCode
+    );
+
+    const regionedStats: UsedColorStat[] = [];
+    const nonRegionedStats: UsedColorStat[] = [];
+
+    for (const stat of nonTransparentStats) {
+      const status = expectedColorStatus.get(stat.color.hexCode);
+      const totalRegions = status ? status.total : (stat.count || 0);
+      if (totalRegions > 0) {
+        regionedStats.push(stat);
+      } else {
+        nonRegionedStats.push(stat);
+      }
+    }
+
+    // Sort regioned colors from highest region count to lowest
+    regionedStats.sort((sa, sb) => {
+      const countA = expectedColorStatus.get(sa.color.hexCode)?.total ?? sa.count;
+      const countB = expectedColorStatus.get(sb.color.hexCode)?.total ?? sb.count;
+      return countB - countA;
+    });
+
+    // Un-regioned colors maintain their preserved order
+    const allColorsExceptTransparent = [
+      ...regionedStats.map((s) => s.color),
+      ...nonRegionedStats.map((s) => s.color),
+    ];
     const allColors = [transparent, ...allColorsExceptTransparent];
 
     const containerStyle = {
