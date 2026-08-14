@@ -1,7 +1,7 @@
 
 export interface PaletteColor {
   hexCode: string;
-  rgba: [number, number, number, number];
+  rgba: readonly [number, number, number, number];
 }
 
 export interface UsedColorStat {

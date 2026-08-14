@@ -266,13 +266,12 @@ export class PaintingControls extends SignalElement {
       }
     }
 
-    const allColors = (this.colorStats || [])
-      .sort((sa, sb) => {
-        if (sa.color.hexCode === "#00000000") return -1;
-        if (sb.color.hexCode === "#00000000") return 1;
-        return sb.count - sa.count;
-      })
+    const transparent = { hexCode: "#00000000", rgba: [0, 0, 0, 0] as const };
+    const allColorsExceptTransparent = (this.colorStats || [])
+      .filter((s) => s.color.hexCode !== transparent.hexCode)
+      .sort((sa, sb) => sb.count - sa.count)
       .map((s) => s.color);
+    const allColors = [transparent, ...allColorsExceptTransparent];
 
     const containerStyle = {
       position: "fixed" as const,
@@ -346,7 +345,7 @@ export class PaintingControls extends SignalElement {
       overflowX: "auto" as const,
       overflowY: "hidden" as const,
       width: "100%",
-      padding: "0.25rem 0.75rem",
+      padding: "0.5rem 0.25rem",
       boxSizing: "border-box" as const,
       scrollBehavior: "smooth" as const,
       WebkitOverflowScrolling: "touch" as const,
@@ -537,8 +536,6 @@ export class PaintingControls extends SignalElement {
           ? html`
               <div style=${this.renderStyleObject(scrollRowStyle)}>
                 ${allColors.map((color) => {
-                  const stat = statsMap.get(color.hexCode);
-                  const isUsed = stat?.count > 0;
                   const colorStatus = expectedColorStatus.get(color.hexCode);
                   const isFullyPainted = colorStatus
                     ? colorStatus.total > 0 &&
@@ -565,7 +562,7 @@ export class PaintingControls extends SignalElement {
                     cursor: "pointer",
                     border: isSelected
                       ? "3px solid #E63946"
-                      : "2.5px solid transparent",
+                      : "3px solid transparent",
                     backgroundColor: isSelected
                       ? "rgba(254, 243, 199, 0.95)"
                       : "rgba(255, 255, 255, 0.5)",
@@ -629,11 +626,72 @@ export class PaintingControls extends SignalElement {
                       <span
                         style="font-size: 0.6875rem; font-weight: 900; color: #3D2314; margin-top: 0.375rem; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; line-height: 1.2;"
                       >
-                        ${color.hexCode === "#00000000" ? "Eraser" : progressLabel}
+                        ${color.hexCode === "#00000000"
+                          ? "Eraser"
+                          : progressLabel}
                       </span>
                     </button>
                   `;
                 })}
+
+                <button
+                  @pointerdown=${(e: PointerEvent) => {
+                    // TODO: implement color picker modal to add a new color to the swatch
+                    this.handleSwatchPointerDown(e, activeColor);
+                  }}
+                  style=${this.renderStyleObject({
+                    flex: "0 0 auto",
+                    width: "82px",
+                    display: "flex",
+                    flexDirection: "column" as const,
+                    alignItems: "center",
+                    padding: "0.375rem",
+                    borderRadius: "1rem",
+                    transition: "all 0.15s ease",
+                    cursor: "pointer",
+                    border: "3px solid transparent",
+                    opacity: "0.85",
+                    touchAction: "auto",
+                  })}
+                  title="Add New Color"
+                >
+                  <!-- Color Circle -->
+                  <div
+                    style=${this.renderStyleObject({
+                      width: "3.25rem",
+                      height: "3.25rem",
+                      borderRadius: "9999px",
+                      border: "3px solid #000000",
+                      boxShadow: "0 2px 4px rgba(0, 0, 0, 0.15)",
+                      display: "flex",
+                      alignItems: "center",
+                      justifyContent: "center",
+                      position: "relative" as const,
+                      backgroundImage: `conic-gradient(
+                        from 0deg,
+                      hsl(0, 100%, 50%) 0deg,     /* Red at 0° */
+                      hsl(60, 100%, 50%) 60deg,   /* Yellow at 60° */
+                      hsl(120, 100%, 50%) 120deg, /* Green at 120° */
+                      hsl(180, 100%, 50%) 180deg, /* Cyan at 180° */
+                      hsl(240, 100%, 50%) 240deg, /* Blue at 240° */
+                      hsl(300, 100%, 50%) 300deg, /* Magenta at 300° */
+                      hsl(360, 100%, 50%) 360deg  /* Red at 360° */
+                      );`,
+                      transition: "transform 0.15s ease",
+                    })}
+                  >
+                    <div
+                      style="position: absolute; inset: 0; width: 0; height: 0; margin: auto; background-color: #FFFFFF; border: solid 2px #FFFFFF; border-radius: 100%; corner-shape: round !important; display: flex; align-items: center; justify-content: center;"
+                    ></div>
+                  </div>
+
+                  <!-- Color Label/Progress -->
+                  <span
+                    style="font-size: 0.6875rem; font-weight: 900; color: #3D2314; margin-top: 0.375rem; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; line-height: 1.2;"
+                  >
+                    Pick
+                  </span>
+                </button>
               </div>
             `
           : ""}
