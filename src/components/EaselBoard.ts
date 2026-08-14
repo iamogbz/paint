@@ -1056,7 +1056,15 @@ export class EaselBoard extends SignalElement {
                 currentArtwork.colorStats
               );
               for (const rId of this.brushPaintedRegions) {
-                currentPainted[rId] = activeColor.hexCode;
+                const expectedHex =
+                  this.regionExpectedColors.get(rId) ||
+                  currentArtwork.regionExpectedColors?.[rId];
+
+                if (activeColor.hexCode !== expectedHex) {
+                  currentPainted[rId] = activeColor.hexCode;
+                } else if (currentPainted[rId] !== expectedHex) {
+                  delete currentPainted[rId];
+                }
               }
             }
             const updatedArtwork: ProcessedArtwork = {
