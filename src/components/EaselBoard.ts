@@ -216,6 +216,40 @@ export class EaselBoard extends SignalElement {
     window.addEventListener("easel-zoom-in", this.zoomIn);
     window.addEventListener("easel-zoom-out", this.zoomOut);
     window.addEventListener("easel-redraw-artboard", this.redrawArtboard);
+
+    // Dev utility window functions
+    (window as any).getRegionIds = () => {
+      const currentArtwork = currentArtworkSignal.get();
+      return currentArtwork?.svgPaths?.map((path) => path.id) || [];
+    };
+
+    (window as any).getRegionColors = () => {
+      const currentArtwork = currentArtworkSignal.get();
+      if (!currentArtwork) return {};
+      const colors: Record<number, string> = {};
+      for (const path of currentArtwork.svgPaths || []) {
+        colors[path.id] =
+          currentArtwork.paintedRegionsState?.[path.id] ||
+          currentArtwork.regionExpectedColors?.[path.id] ||
+          "#00000000";
+      }
+      return colors;
+    };
+
+    (window as any).setRegionHighlight = (regionId: number, colorHex?: string) => {
+      this.hoveredRegionId = regionId;
+      if (colorHex) {
+        activeHighlightColorSignal.set({
+          hexCode: colorHex,
+          rgba: [0, 0, 0, 255],
+        });
+      }
+      this.requestUpdate();
+    };
+
+    (window as any).setRegionFill = (regionId: number, colorHex: string) => {
+      this.fillRegion(regionId, colorHex);
+    };
   }
 
   updated() {
