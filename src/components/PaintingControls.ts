@@ -40,50 +40,10 @@ export class PaintingControls extends SignalElement {
 
   connectedCallback() {
     super.connectedCallback();
-    (window as any).selectAndScrollToColor = (hexCode: string) => {
-      this.selectAndScrollToColor(hexCode);
-    };
   }
 
   disconnectedCallback() {
-    if ((window as any).selectAndScrollToColor) {
-      delete (window as any).selectAndScrollToColor;
-    }
     super.disconnectedCallback();
-  }
-
-  public selectAndScrollToColor(hexCode: string) {
-    if (!hexCode) return;
-    let formattedHex = hexCode.trim().toUpperCase();
-    if (!formattedHex.startsWith("#")) {
-      formattedHex = "#" + formattedHex;
-    }
-
-    const transparent = { hexCode: "#00000000", rgba: [0, 0, 0, 0] as const };
-    const allColorsExceptTransparent = (this.colorStats || []).map((s) => s.color);
-    const allColors = [transparent, ...allColorsExceptTransparent];
-
-    const foundColor = allColors.find(
-      (c) => c.hexCode.toUpperCase() === formattedHex
-    );
-
-    if (foundColor) {
-      activeHighlightColorSignal.set(foundColor);
-      soundEffects.playPop();
-
-      // Scroll into view
-      setTimeout(() => {
-        const idSafeHex = foundColor.hexCode.replace("#", "");
-        const btn = this.shadowRoot?.getElementById(`swatch-btn-${idSafeHex}`);
-        if (btn) {
-          btn.scrollIntoView({
-            behavior: "smooth",
-            block: "nearest",
-            inline: "center",
-          });
-        }
-      }, 50);
-    }
   }
 
   private timeoutId?: number;

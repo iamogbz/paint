@@ -217,12 +217,6 @@ export class EaselBoard extends SignalElement {
     window.addEventListener("easel-zoom-out", this.zoomOut);
     window.addEventListener("easel-redraw-artboard", this.redrawArtboard);
 
-    // Dev utility window functions
-    (window as any).getRegionIds = () => {
-      const currentArtwork = currentArtworkSignal.get();
-      return currentArtwork?.svgPaths?.map((path) => path.id) || [];
-    };
-
     (window as any).getRegionColors = () => {
       const currentArtwork = currentArtworkSignal.get();
       if (!currentArtwork) return {};
