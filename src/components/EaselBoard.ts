@@ -302,7 +302,7 @@ export class EaselBoard extends SignalElement {
     return h;
   }
 
-  private getRegionIdAtPoint(
+private getRegionIdAtPoint(
     clientX: number,
     clientY: number,
     isDragging: boolean,
@@ -484,8 +484,6 @@ export class EaselBoard extends SignalElement {
         }
       }
 
-      window.addEventListener("pointermove", this.handleBrushPointerMove);
-
       this.requestUpdate();
     }
   };
@@ -606,12 +604,11 @@ export class EaselBoard extends SignalElement {
   };
 
   private handleGlobalPointerUp = () => {
+    this.isDragging = false;
     this.isBrushPainting = false;
     this.brushTargetRegionId = null;
     this.activeStrokeIdx = -1;
     this.currentStrokeRegionId = null;
-
-    window.removeEventListener("pointermove", this.handleBrushPointerMove);
 
     const currentArtwork = currentArtworkSignal.get();
     if (currentArtwork) {
@@ -621,6 +618,8 @@ export class EaselBoard extends SignalElement {
       );
     }
 
+    this.updateTransformStyle();
+  
     this.requestUpdate();
   };
 
@@ -667,11 +666,11 @@ export class EaselBoard extends SignalElement {
       container.addEventListener("pointerdown", this.handlePointerDown);
 
       window.removeEventListener("pointermove", this.handlePointerMove);
-      window.removeEventListener("pointerup", this.handlePointerUp);
-      window.removeEventListener("pointercancel", this.handlePointerUp);
+      window.removeEventListener("pointerup", this.handleGlobalPointerUp);
+      window.removeEventListener("pointercancel", this.handleGlobalPointerUp);
       window.addEventListener("pointermove", this.handlePointerMove);
-      window.addEventListener("pointerup", this.handlePointerUp);
-      window.addEventListener("pointercancel", this.handlePointerUp);
+      window.addEventListener("pointerup", this.handleGlobalPointerUp);
+      window.addEventListener("pointercancel", this.handleGlobalPointerUp);
     }
   }
 
@@ -949,6 +948,7 @@ export class EaselBoard extends SignalElement {
         this.isDragging = false;
         this.hasDragged = false;
       }
+      this.handleBrushPointerMove(e);
       return;
     }
     if (e.pointerType === "mouse" && e.buttons === 0 && this.isDragging) {
@@ -968,11 +968,6 @@ export class EaselBoard extends SignalElement {
     const dy = e.clientY - this.startTouchY;
     this.panX = this.clampPanX(this.startPanX + dx, this.scale);
     this.panY = this.clampPanY(this.startPanY + dy, this.scale);
-    this.updateTransformStyle();
-  };
-
-  private handlePointerUp = () => {
-    this.isDragging = false;
     this.updateTransformStyle();
   };
 
