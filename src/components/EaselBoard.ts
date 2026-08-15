@@ -160,23 +160,6 @@ function eraseFromStrokesList(
   return currentStrokes;
 }
 
-// Pre-ordered offsets within a 4px radius, sorted by distance from center for O(1) closest match retrieval
-const SEARCH_OFFSETS_4PX = [
-  { dx: 0, dy: 0 },
-  { dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 },
-  { dx: 1, dy: 1 }, { dx: -1, dy: 1 }, { dx: 1, dy: -1 }, { dx: -1, dy: -1 },
-  { dx: 2, dy: 0 }, { dx: -2, dy: 0 }, { dx: 0, dy: 2 }, { dx: 0, dy: -2 },
-  { dx: 2, dy: 1 }, { dx: -2, dy: 1 }, { dx: 2, dy: -1 }, { dx: -2, dy: -1 },
-  { dx: 1, dy: 2 }, { dx: -1, dy: 2 }, { dx: 1, dy: -2 }, { dx: -1, dy: -2 },
-  { dx: 2, dy: 2 }, { dx: -2, dy: 2 }, { dx: 2, dy: -2 }, { dx: -2, dy: -2 },
-  { dx: 3, dy: 0 }, { dx: -3, dy: 0 }, { dx: 0, dy: 3 }, { dx: 0, dy: -3 },
-  { dx: 3, dy: 1 }, { dx: -3, dy: 1 }, { dx: 3, dy: -1 }, { dx: -3, dy: -1 },
-  { dx: 1, dy: 3 }, { dx: -1, dy: 3 }, { dx: 1, dy: -3 }, { dx: -1, dy: -3 },
-  { dx: 3, dy: 2 }, { dx: -3, dy: 2 }, { dx: 3, dy: -2 }, { dx: -3, dy: -2 },
-  { dx: 2, dy: 3 }, { dx: -2, dy: 3 }, { dx: 2, dy: -3 }, { dx: -2, dy: -3 },
-  { dx: 4, dy: 0 }, { dx: -4, dy: 0 }, { dx: 0, dy: 4 }, { dx: 0, dy: -4 }
-];
-
 @customElement("easel-board")
 export class EaselBoard extends SignalElement {
   private scale = 1;
@@ -338,26 +321,6 @@ private getRegionIdAtPoint(
 
     const targetX = clientX;
     const targetY = isDragging ? clientY - this.dropperBufferPx : clientY;
-
-    if (selectedColorHex) {
-      const normalizedSelectedHex = this.normalizeHexColor(selectedColorHex);
-      for (let i = 0; i < SEARCH_OFFSETS_4PX.length; i++) {
-        const offset = SEARCH_OFFSETS_4PX[i];
-        const x = targetX + offset.dx;
-        const y = targetY + offset.dy;
-        const element = document.elementFromPoint(x, y);
-        if (element && element.tagName.toLowerCase() === "path") {
-          const regionIdStr = element.getAttribute("data-region-id");
-          if (regionIdStr) {
-            const rId = parseInt(regionIdStr, 10);
-            const expectedColor = currentArtwork.regionExpectedColors[rId];
-            if (this.normalizeHexColor(expectedColor) === normalizedSelectedHex) {
-              return rId;
-            }
-          }
-        }
-      }
-    }
 
     const elementUnderneath = document.elementFromPoint(targetX, targetY);
     if (elementUnderneath && elementUnderneath.tagName.toLowerCase() === "path") {
@@ -622,7 +585,7 @@ private getRegionIdAtPoint(
     }
 
     this.updateTransformStyle();
-  
+
     this.requestUpdate();
   };
 
