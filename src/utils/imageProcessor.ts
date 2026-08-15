@@ -78,21 +78,21 @@ export async function processImageToCartoonPalette(
     /** If a pallete is defined maps colors to this */
     palette: palette,
     /** Discard patches smaller than X px in size (0..=128) */
-    // filterSpeckle: Math.min(Math.round(Math.max(width, height) / 1920 * 4), 128),
+    filterSpeckle: 18, // Discards tiny speckles smaller than 18px to prevent unpaintable color islands
     /** default: 8 (best) - Significant bits per RGB channel (1..=8)  */
-    // colorPrecision: 8, 
+    colorPrecision: 8, // Full 8-bit precision to preserve fine details and exact color contrast
     /** Color difference between gradient layers (0..=255) */
-    // layerDifference: 48,
+    layerDifference: 24, // Lower difference preserves better color contrast transitions
     /** Method for converting in to shapes. Values below only valid in spline */
-    // mode: 'spline',
-    /** default: 60, Minimum Momentary Angle (in degrees) to be considered a corner (to be kept after smoothing) */
-    // cornerThreshold: 60,
-    /** default: 4, Perform Iterative Subdivide Smooth until all segments are shorter than this length <3.5..=10> */
-    // lengthThreshold: 4,
-    /** default: 45, Minimum Angle Displacement (in degrees) to be considered a cutting point between curves <0..=180> */
-    // spliceThreshold: 45, // default: 45
-    /** default: off, Simplify curves: fewest cubics within this tolerance in px (try 1–2.5) */
-    // simplify: 2,
+    mode: 'spline', // Spline mode ensures beautifully smooth lines and vector curves
+    /** default: 60, Minimum Momentary Angle (in degrees) to be considered a corner */
+    cornerThreshold: 60, // Keeps key sharp edges intact while smoothing curves
+    /** default: 4, Perform Iterative Subdivide Smooth until all segments are shorter than this length */
+    lengthThreshold: 4,
+    /** default: 45, Minimum Angle Displacement (in degrees) to be considered a cutting point between curves */
+    spliceThreshold: 45,
+    /** Simplify curves: fewest cubics within this tolerance in px */
+    simplify: 1.2, // Smoothens lines elegantly without compromising structural image details
   }
   console.log(options)
   let svgStr = vectorize_rgba(rawPixels, width, height, options);
