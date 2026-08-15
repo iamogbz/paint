@@ -50,7 +50,10 @@ function erasePointsFromStrokePath(
     if (a < 1e-9) {
       const distSq = (p1.x - cx) ** 2 + (p1.y - cy) ** 2;
       if (distSq >= r * r) {
-        if (currentSubPath.length === 0 || currentSubPath[currentSubPath.length - 1] !== p1) {
+        if (
+          currentSubPath.length === 0 ||
+          currentSubPath[currentSubPath.length - 1] !== p1
+        ) {
           currentSubPath.push(p1);
         }
       }
@@ -65,7 +68,7 @@ function erasePointsFromStrokePath(
     const discriminant = b * b - 4 * a * c;
 
     if (discriminant < 0) {
-      const p1Inside = (fx * fx + fy * fy) < r * r;
+      const p1Inside = fx * fx + fy * fy < r * r;
       if (!p1Inside) {
         if (currentSubPath.length === 0) {
           currentSubPath.push(p1);
@@ -135,16 +138,33 @@ function erasePointsFromStrokePath(
 }
 
 function eraseFromStrokesList(
-  strokes: Array<{ points: Array<{ x: number; y: number }>; stroke: string; strokeWidth: number }>,
+  strokes: Array<{
+    points: Array<{ x: number; y: number }>;
+    stroke: string;
+    strokeWidth: number;
+  }>,
   eraserPoints: Array<{ x: number; y: number }>,
   eraserRadius: number
-): Array<{ points: Array<{ x: number; y: number }>; stroke: string; strokeWidth: number }> {
+): Array<{
+  points: Array<{ x: number; y: number }>;
+  stroke: string;
+  strokeWidth: number;
+}> {
   let currentStrokes = [...strokes];
 
   for (const ep of eraserPoints) {
-    const nextStrokes: Array<{ points: Array<{ x: number; y: number }>; stroke: string; strokeWidth: number }> = [];
+    const nextStrokes: Array<{
+      points: Array<{ x: number; y: number }>;
+      stroke: string;
+      strokeWidth: number;
+    }> = [];
     for (const stroke of currentStrokes) {
-      const splitPaths = erasePointsFromStrokePath(stroke.points, ep.x, ep.y, eraserRadius);
+      const splitPaths = erasePointsFromStrokePath(
+        stroke.points,
+        ep.x,
+        ep.y,
+        eraserRadius
+      );
       for (const path of splitPaths) {
         if (path.length > 0) {
           nextStrokes.push({
@@ -230,7 +250,10 @@ export class EaselBoard extends SignalElement {
       return colors;
     };
 
-    (window as any).setRegionHighlight = (regionId: number, colorHex?: string) => {
+    (window as any).setRegionHighlight = (
+      regionId: number,
+      colorHex?: string
+    ) => {
       this.hoveredRegionId = regionId;
       if (colorHex) {
         activeHighlightColorSignal.set({
@@ -302,7 +325,7 @@ export class EaselBoard extends SignalElement {
     return h;
   }
 
-private getRegionIdAtPoint(
+  private getRegionIdAtPoint(
     clientX: number,
     clientY: number,
     isDragging: boolean,
@@ -323,7 +346,10 @@ private getRegionIdAtPoint(
     const targetY = isDragging ? clientY - this.dropperBufferPx : clientY;
 
     const elementUnderneath = document.elementFromPoint(targetX, targetY);
-    if (elementUnderneath && elementUnderneath.tagName.toLowerCase() === "path") {
+    if (
+      elementUnderneath &&
+      elementUnderneath.tagName.toLowerCase() === "path"
+    ) {
       const regionIdStr = elementUnderneath.getAttribute("data-region-id");
       if (regionIdStr) {
         return parseInt(regionIdStr, 10);
@@ -385,7 +411,11 @@ private getRegionIdAtPoint(
       if (!regionIdStr) return;
       let regionId = parseInt(regionIdStr, 10);
 
-      const resolvedRegionId = this.getRegionIdAtPoint(e.clientX, e.clientY, false);
+      const resolvedRegionId = this.getRegionIdAtPoint(
+        e.clientX,
+        e.clientY,
+        false
+      );
       if (resolvedRegionId !== null) {
         regionId = resolvedRegionId;
       }
@@ -423,7 +453,9 @@ private getRegionIdAtPoint(
           ((e.clientY - rect.top) / rect.height) * currentArtwork.height;
 
         this.currentStrokeRegionId = regionId;
-        const strokeWidth = Math.round(Math.max(1, BASE_BRUSH_RADIUS / this.scale));
+        const strokeWidth = Math.round(
+          Math.max(1, BASE_BRUSH_RADIUS / this.scale)
+        );
 
         if (activeColor.hexCode === "#00000000") {
           if (this.brushStrokePaths[regionId]) {
@@ -469,7 +501,11 @@ private getRegionIdAtPoint(
     }));
 
     // Find the region under the pointer using getRegionIdAtPoint
-    const currentBrushRegionId = this.getRegionIdAtPoint(e.clientX, e.clientY, false);
+    const currentBrushRegionId = this.getRegionIdAtPoint(
+      e.clientX,
+      e.clientY,
+      false
+    );
 
     if (currentBrushRegionId !== null) {
       const isSameExpectedColor =
@@ -548,7 +584,11 @@ private getRegionIdAtPoint(
     if (!regionIdStr) return;
     let regionId = parseInt(regionIdStr, 10);
 
-    const resolvedRegionId = this.getRegionIdAtPoint(e.clientX, e.clientY, false);
+    const resolvedRegionId = this.getRegionIdAtPoint(
+      e.clientX,
+      e.clientY,
+      false
+    );
     if (resolvedRegionId !== null) {
       regionId = resolvedRegionId;
     }
@@ -1376,8 +1416,14 @@ private getRegionIdAtPoint(
                                     ).toString();
 
                                     if (isHovered) {
-                                      stroke = targetHex || "#000000";
-                                      mixBlendMode = "normal";
+                                      const isTransparentPaintFill =
+                                        targetHexUpper.substring(7) === "00";
+                                      stroke = isTransparentPaintFill
+                                        ? "#FFFFFF"
+                                        : targetHex || "#000000";
+                                      mixBlendMode = isTransparentPaintFill
+                                        ? "difference"
+                                        : "normal";
                                     } else {
                                       if (isTarget) {
                                         if (isPaintedCorrect) {

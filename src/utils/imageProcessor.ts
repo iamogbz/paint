@@ -13,7 +13,7 @@ function loadImage(src: string): Promise<HTMLImageElement> {
 
 export async function processImageToCartoonPalette(
   imageSrc: string,
-  artworkName: string,
+  artworkName: string
 ): Promise<ProcessedArtwork> {
   const isSvgImage = imageSrc.startsWith("data:image/svg+xml");
 
@@ -38,77 +38,79 @@ export async function processImageToCartoonPalette(
   const origImgData = origCtx.getImageData(0, 0, width, height);
   const rawPixels = origImgData.data;
 
-  // Extract colors if SVG to preserve them
-  let palette: string[] | undefined = undefined;
-  let maxColors = 32;
+  let svgStr = "";
 
   if (isSvgImage) {
-    try {
-      let svgText = "";
-      if (imageSrc.includes(";base64,")) {
-        svgText = atob(imageSrc.split(";base64,")[1]);
-      } else {
-        svgText = decodeURIComponent(imageSrc.split(",")[1]);
-      }
-      const parser = new DOMParser();
-      const doc = parser.parseFromString(svgText, "image/svg+xml");
-      const uniqueColors = new Set<string>();
-      doc.querySelectorAll("[fill]").forEach(el => {
-        const fill = el.getAttribute("fill");
-        if (fill && fill.startsWith("#")) uniqueColors.add(fill.toUpperCase());
-      });
-      if (uniqueColors.size > 0) {
-        palette = Array.from(uniqueColors);
-        maxColors = palette.length; // Not really needed if palette is provided, but good for logic
-      }
-    } catch (e) {
-      console.warn("Failed to extract SVG palette", e);
+    if (imageSrc.includes(";base64,")) {
+      svgStr = atob(imageSrc.split(";base64,")[1]);
+    } else {
+      svgStr = decodeURIComponent(imageSrc.split(",")[1]);
     }
-  }
+  } else {
+    // Run vtracer
+    await init(
+      "https://unpkg.com/@visioncortex/vtracer@1.0.0-alpha.3/pkg/vtracer_wasm_bg.wasm"
+    );
+    const options = {
+      /** default: color-cluster for true color image */
+      clustering: "color-cluster",
+      /** shapes disjoint with others */
+      hierarchical: "cutout",
+      /** Auto-quantize target color count */
+      // maxColors: maxColors,
+      /** If a pallete is defined maps colors to this */
+      // palette: palette,
+      /** Discard patches smaller than X px in size (0..=128) */
+      // filterSpeckle: Math.min(Math.round(Math.max(width, height) / 1920 * 4), 128),
+      /** default: 8 (best) - Significant bits per RGB channel (1..=8)  */
+      // colorPrecision: 8,
+      /** Color difference between gradient layers (0..=255) */
+      // layerDifference: 48,
+      /** Method for converting in to shapes. Values below only valid in spline */
+      // mode: 'spline',
+      /** default: 60, Minimum Momentary Angle (in degrees) to be considered a corner (to be kept after smoothing) */
+      // cornerThreshold: 60,
+      /** default: 4, Perform Iterative Subdivide Smooth until all segments are shorter than this length <3.5..=10> */
+      // lengthThreshold: 4,
+      /** default: 45, Minimum Angle Displacement (in degrees) to be considered a cutting point between curves <0..=180> */
+      // spliceThreshold: 45, // default: 45
+      /** default: off, Simplify curves: fewest cubics within this tolerance in px (try 1–2.5) */
+      // simplify: 2,
+    };
+    svgStr = vectorize_rgba(rawPixels, width, height, options);
 
-  // Run vtracer
-  await init("https://unpkg.com/@visioncortex/vtracer@1.0.0-alpha.3/pkg/vtracer_wasm_bg.wasm");
-  const options = {
-    /** default: color-cluster for true color image */
-    clustering: 'color-cluster',
-    /** shapes disjoint with others */
-    hierarchical: 'cutout',
-    /** Auto-quantize target color count */ 
-    maxColors: isSvgImage && palette ? undefined : maxColors,
-    /** If a pallete is defined maps colors to this */
-    palette: palette,
-    /** Discard patches smaller than X px in size (0..=128) */
-    // filterSpeckle: Math.min(Math.round(Math.max(width, height) / 1920 * 4), 128),
-    /** default: 8 (best) - Significant bits per RGB channel (1..=8)  */
-    // colorPrecision: 8, 
-    /** Color difference between gradient layers (0..=255) */
-    // layerDifference: 48,
-    /** Method for converting in to shapes. Values below only valid in spline */
-    // mode: 'spline',
-    /** default: 60, Minimum Momentary Angle (in degrees) to be considered a corner (to be kept after smoothing) */
-    // cornerThreshold: 60,
-    /** default: 4, Perform Iterative Subdivide Smooth until all segments are shorter than this length <3.5..=10> */
-    // lengthThreshold: 4,
-    /** default: 45, Minimum Angle Displacement (in degrees) to be considered a cutting point between curves <0..=180> */
-    // spliceThreshold: 45, // default: 45
-    /** default: off, Simplify curves: fewest cubics within this tolerance in px (try 1–2.5) */
-    // simplify: 2,
-  }
-  console.log(options)
-  let svgStr = vectorize_rgba(rawPixels, width, height, options);
-
-  if (!svgStr.includes("xmlns=")) {
-    svgStr = svgStr.replace("<svg", '<svg xmlns="http://www.w3.org/2000/svg"');
+    if (!svgStr.includes("xmlns=")) {
+      svgStr = svgStr.replace(
+        "<svg",
+        '<svg xmlns="http://www.w3.org/2000/svg"'
+      );
+    }
   }
 
   // Parse output SVG
   const parser = new DOMParser();
   const doc = parser.parseFromString(svgStr, "image/svg+xml");
-  const paths = Array.from(doc.querySelectorAll("path"));
+
+  // assign black fill to all elements without a fill attribute
+  doc.querySelectorAll("*:not([fill])").forEach((el) => {
+    el.setAttribute("fill", "#000000FF");
+  });
+
+  // assign transparent fill to all elements with fill="none"
+  doc.querySelectorAll("[fill='none']").forEach((el) => {
+    el.setAttribute("fill", "#00000000");
+  });
+
+  const uniqueColors = new Set<string>();
+  doc.querySelectorAll("[fill]").forEach((el) => {
+    const fill = el.getAttribute("fill");
+    if (fill && fill.startsWith("#")) uniqueColors.add(fill.toUpperCase());
+  });
 
   const svgPaths: SvgPath[] = [];
   const regionExpectedColors: Record<number, string> = {};
 
+  const paths = Array.from(doc.querySelectorAll("path"));
   paths.forEach((path, i) => {
     const d = path.getAttribute("d") || "";
     let fill = path.getAttribute("fill") || "";
@@ -141,7 +143,7 @@ export async function processImageToCartoonPalette(
     colorStats.push({
       color: { hexCode, rgba: [r, g, b, 255] },
       count,
-      percentage: Math.max(1, Math.round((count / totalRegions) * 100))
+      percentage: Math.max(1, Math.round((count / totalRegions) * 100)),
     });
   }
 
@@ -149,15 +151,20 @@ export async function processImageToCartoonPalette(
   colorStats.sort((a, b) => b.count - a.count);
 
   // Add transparent color if missing (app assumes it might exist)
-  if (!colorStats.some(s => s.color.hexCode === "#00000000")) {
-    colorStats.unshift({ color: { hexCode: "#00000000", rgba: [0,0,0,0] }, count: 0, percentage: 0 });
+  if (!colorStats.some((s) => s.color.hexCode === "#00000000")) {
+    colorStats.unshift({
+      color: { hexCode: "#00000000", rgba: [0, 0, 0, 0] },
+      count: 0,
+      percentage: 0,
+    });
   }
 
   return {
     id: `art-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
     name: artworkName,
     originalDataUrl,
-    cartoonDataUrl: "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgStr))),
+    cartoonDataUrl:
+      "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgStr))),
     width,
     height,
     createdAt: Date.now(),
@@ -165,6 +172,6 @@ export async function processImageToCartoonPalette(
     colorStats,
     totalPixels: width * height,
     regionExpectedColors,
-    svgPaths
+    svgPaths,
   };
 }
