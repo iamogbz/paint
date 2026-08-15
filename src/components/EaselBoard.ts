@@ -454,8 +454,8 @@ private getRegionIdAtPoint(
   };
 
   private handleBrushPointerMove = (e: PointerEvent) => {
-    this.brushPositionBuffer.push({ x: e.clientX, y: e.clientY });
     if (!this.isBrushPainting) return;
+    this.brushPositionBuffer.push({ x: e.clientX, y: e.clientY });
 
     const svgEl = this.querySelector<SVGSVGElement>("svg");
     const currentArtwork = currentArtworkSignal.get();
