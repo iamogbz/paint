@@ -290,22 +290,95 @@ export class EaselBoard extends SignalElement {
 
   private dropperBufferPx = 60;
 
+  private normalizeHexColor(hex: string | undefined): string {
+    if (!hex) return "";
+    let h = hex.trim().toUpperCase();
+    if (!h.startsWith("#")) {
+      h = "#" + h;
+    }
+    if (h.length === 7) {
+      h = h + "FF";
+    }
+    return h;
+  }
+
+  private getRegionIdAtPoint(
+    clientX: number,
+    clientY: number,
+    isDragging: boolean,
+    overrideColorHex?: string
+  ): number | null {
+    const currentArtwork = currentArtworkSignal.get();
+    if (!currentArtwork) return null;
+
+    let selectedColorHex = overrideColorHex || null;
+    if (!selectedColorHex) {
+      const activeColor = activeHighlightColorSignal.get();
+      if (activeColor) {
+        selectedColorHex = activeColor.hexCode;
+      }
+    }
+
+    const targetX = clientX;
+    const targetY = isDragging ? clientY - this.dropperBufferPx : clientY;
+
+    if (selectedColorHex) {
+      const normalizedSelectedHex = this.normalizeHexColor(selectedColorHex);
+      let closestRegionId: number | null = null;
+      let minDistance = Infinity;
+
+      for (let dx = -15; dx <= 15; dx += 3) {
+        for (let dy = -15; dy <= 15; dy += 3) {
+          const distSq = dx * dx + dy * dy;
+          if (distSq <= 16 * 16) {
+            const x = targetX + dx;
+            const y = targetY + dy;
+            const element = document.elementFromPoint(x, y);
+            if (element && element.tagName.toLowerCase() === "path") {
+              const regionIdStr = element.getAttribute("data-region-id");
+              if (regionIdStr) {
+                const rId = parseInt(regionIdStr, 10);
+                const expectedColor = currentArtwork.regionExpectedColors[rId];
+                if (this.normalizeHexColor(expectedColor) === normalizedSelectedHex) {
+                  const dist = Math.sqrt(distSq);
+                  if (dist < minDistance) {
+                    minDistance = dist;
+                    closestRegionId = rId;
+                  }
+                }
+              }
+            }
+          }
+        }
+      }
+
+      if (closestRegionId !== null) {
+        return closestRegionId;
+      }
+    }
+
+    const elementUnderneath = document.elementFromPoint(targetX, targetY);
+    if (elementUnderneath && elementUnderneath.tagName.toLowerCase() === "path") {
+      const regionIdStr = elementUnderneath.getAttribute("data-region-id");
+      if (regionIdStr) {
+        return parseInt(regionIdStr, 10);
+      }
+    }
+
+    return null;
+  }
+
   private handleColorDragMove = (e: Event) => {
     const customEvent = e as CustomEvent;
     const { x: clientX, y: mouseY } = customEvent.detail;
-    const clientY = mouseY - this.dropperBufferPx;
 
-    const elementAtPoint = document.elementFromPoint(clientX, clientY);
-    if (elementAtPoint && elementAtPoint.tagName.toLowerCase() === "path") {
-      const regionIdStr = elementAtPoint.getAttribute("data-region-id");
-      if (regionIdStr) {
-        const regionId = parseInt(regionIdStr, 10);
-        if (this.hoveredRegionId !== regionId) {
-          this.hoveredRegionId = regionId;
-          this.requestUpdate();
-        }
-        return;
+    const regionId = this.getRegionIdAtPoint(clientX, mouseY, true);
+    if (regionId !== null) {
+      if (this.hoveredRegionId !== regionId) {
+        this.hoveredRegionId = regionId;
+        this.requestUpdate();
       }
+      return;
     }
     if (this.hoveredRegionId !== null) {
       this.hoveredRegionId = null;
@@ -316,22 +389,17 @@ export class EaselBoard extends SignalElement {
   private handleColorDrop = (e: Event) => {
     const customEvent = e as CustomEvent;
     const { x: clientX, y: mouseY, color } = customEvent.detail;
-    const clientY = mouseY - this.dropperBufferPx;
 
     if (this.hoveredRegionId !== null) {
       this.hoveredRegionId = null;
       this.requestUpdate();
     }
 
-    const elementAtPoint = document.elementFromPoint(clientX, clientY);
-    if (elementAtPoint && elementAtPoint.tagName.toLowerCase() === "path") {
-      const regionIdStr = elementAtPoint.getAttribute("data-region-id");
-      if (regionIdStr) {
-        const colorHex =
-          typeof color === "string" ? color : color?.hexCode || "";
-        if (colorHex) {
-          this.fillRegion(parseInt(regionIdStr, 10), colorHex);
-        }
+    const colorHex = typeof color === "string" ? color : color?.hexCode || "";
+    const regionId = this.getRegionIdAtPoint(clientX, mouseY, true, colorHex);
+    if (regionId !== null) {
+      if (colorHex) {
+        this.fillRegion(regionId, colorHex);
       }
     }
   };
@@ -350,7 +418,12 @@ export class EaselBoard extends SignalElement {
       const pathEl = e.currentTarget as SVGPathElement;
       const regionIdStr = pathEl.getAttribute("data-region-id");
       if (!regionIdStr) return;
-      const regionId = parseInt(regionIdStr, 10);
+      let regionId = parseInt(regionIdStr, 10);
+
+      const resolvedRegionId = this.getRegionIdAtPoint(e.clientX, e.clientY, false);
+      if (resolvedRegionId !== null) {
+        regionId = resolvedRegionId;
+      }
 
       const currentArtwork = currentArtworkSignal.get();
       if (!currentArtwork) return;
@@ -432,16 +505,8 @@ export class EaselBoard extends SignalElement {
       y: ((pos.y - rect.top) / rect.height) * currentArtwork.height,
     }));
 
-    // Find the region under the pointer using elementFromPoint
-    const elementAtPoint = document.elementFromPoint(e.clientX, e.clientY);
-    let currentBrushRegionId: number | null = null;
-
-    if (elementAtPoint && elementAtPoint.tagName.toLowerCase() === "path") {
-      const regionIdStr = elementAtPoint.getAttribute("data-region-id");
-      if (regionIdStr) {
-        currentBrushRegionId = parseInt(regionIdStr, 10);
-      }
-    }
+    // Find the region under the pointer using getRegionIdAtPoint
+    const currentBrushRegionId = this.getRegionIdAtPoint(e.clientX, e.clientY, false);
 
     if (currentBrushRegionId !== null) {
       const isSameExpectedColor =
@@ -517,7 +582,12 @@ export class EaselBoard extends SignalElement {
     const pathEl = e.currentTarget as SVGPathElement;
     const regionIdStr = pathEl.getAttribute("data-region-id");
     if (!regionIdStr) return;
-    const regionId = parseInt(regionIdStr, 10);
+    let regionId = parseInt(regionIdStr, 10);
+
+    const resolvedRegionId = this.getRegionIdAtPoint(e.clientX, e.clientY, false);
+    if (resolvedRegionId !== null) {
+      regionId = resolvedRegionId;
+    }
 
     const currentArtwork = currentArtworkSignal.get();
     if (!currentArtwork) return;
