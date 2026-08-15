@@ -1,0 +1,15 @@
+{
+  "name": "PAINT by COLOURS",
+  "short_name": "PAINT",
+  "description": "Unleash your creativity, relax, and bring your artworks to life one color at a time. Have fun painting your masterpiece!",
+  "theme_color": "#FCD5AE",
+  "background_color": "#FCD5AE",
+  "display": "standalone",
+  "icons": [
+    {
+      "src": "favicon.png",
+      "sizes": "192x192 512x512 any",
+      "type": "image/png"
+    }
+  ]
+}
