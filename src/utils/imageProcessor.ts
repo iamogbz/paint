@@ -26,7 +26,7 @@ export async function processImageToCartoonPalette(
   const origCtx = origCanvas.getContext("2d", { willReadFrequently: true });
   if (!origCtx) throw new Error("Failed to initialize canvas 2D context");
 
-  origCtx.imageSmoothingEnabled = true;
+  origCtx.imageSmoothingEnabled = false;
   origCtx.imageSmoothingQuality = "high";
 
   // Fill with white background in case of transparency
@@ -68,12 +68,34 @@ export async function processImageToCartoonPalette(
 
   // Run vtracer
   await init("https://unpkg.com/@visioncortex/vtracer@1.0.0-alpha.3/pkg/vtracer_wasm_bg.wasm");
-  let svgStr = vectorize_rgba(rawPixels, width, height, {
+  const options = {
+    /** default: color-cluster for true color image */
     clustering: 'color-cluster',
+    /** shapes disjoint with others */
     hierarchical: 'cutout',
+    /** Auto-quantize target color count */ 
     maxColors: isSvgImage && palette ? undefined : maxColors,
-    palette: palette
-  });
+    /** If a pallete is defined maps colors to this */
+    palette: palette,
+    /** Discard patches smaller than X px in size (0..=128) */
+    // filterSpeckle: 2,
+    /** default: 8 (best) - Significant bits per RGB channel (1..=8)  */
+    // colorPrecision: 8, 
+    /** Color difference between gradient layers (0..=255) */
+    layerDifference: 128,
+    /** Method for converting in to shapes. Values below only valid in spline */
+    mode: 'spline',
+    /** default: 60, Minimum Momentary Angle (in degrees) to be considered a corner (to be kept after smoothing) */
+    cornerThreshold: 60,
+    /** default: 4, Perform Iterative Subdivide Smooth until all segments are shorter than this length <3.5..=10> */
+    lengthThreshold: 4,
+    /** default: 45, Minimum Angle Displacement (in degrees) to be considered a cutting point between curves <0..=180> */
+    spliceThreshold: 0, // default: 45
+    /** default: off, Simplify curves: fewest cubics within this tolerance in px (try 1–2.5) */
+    // simplify: 2,
+  }
+  console.log(options);
+  let svgStr = vectorize_rgba(rawPixels, width, height, options);
 
   if (!svgStr.includes("xmlns=")) {
     svgStr = svgStr.replace("<svg", '<svg xmlns="http://www.w3.org/2000/svg"');
