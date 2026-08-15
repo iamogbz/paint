@@ -327,10 +327,10 @@ private getRegionIdAtPoint(
       let closestRegionId: number | null = null;
       let minDistance = Infinity;
 
-      for (let dx = -15; dx <= 15; dx += 3) {
-        for (let dy = -15; dy <= 15; dy += 3) {
+      for (let dx = -4; dx <= 4; dx += 1) {
+        for (let dy = -4; dy <= 4; dy += 1) {
           const distSq = dx * dx + dy * dy;
-          if (distSq <= 16 * 16) {
+          if (distSq <= 4 * 4) {
             const x = targetX + dx;
             const y = targetY + dy;
             const element = document.elementFromPoint(x, y);
