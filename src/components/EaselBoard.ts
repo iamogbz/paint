@@ -21,11 +21,9 @@ import { getDailyChallenge } from "../data/dailyChallenge";
 import { soundEffects } from "../utils/soundEffects";
 import {
   iconImage,
-  iconLoader2,
   iconSparkles,
   iconUpload,
   iconPaintBucket,
-  iconPaintbrush,
 } from "./icons";
 import { BASE_BRUSH_RADIUS, transparentImgCss } from "./constants";
 import { getOppositeHueRGBA } from "../utils/colorUtils";
@@ -203,7 +201,6 @@ export class EaselBoard extends SignalElement {
     if (isBrushMode) {
       e.preventDefault();
       this.isBrushPainting = true;
-      this.brushPaintedRegions.clear();
       this.hasPaintedInCurrentStroke = false;
       
       const pathEl = e.currentTarget as SVGPathElement;
@@ -225,8 +222,6 @@ export class EaselBoard extends SignalElement {
       if (!activeColor) return;
       
       this.brushTargetRegionId = regionId;
-      this.brushPaintedRegions.add(regionId);
-      this.fillRegion(regionId, activeColor.hexCode);
 
       // Start initial brush stroke path inside the starting region
       const svgEl = this.querySelector<SVGSVGElement>("svg");
@@ -285,15 +280,6 @@ export class EaselBoard extends SignalElement {
           // Terminate active stroke in the previous region
           this.activeStroke = null;
           
-          // Paint and Fill the entered region if not already done in this drag session
-          if (!this.brushPaintedRegions.has(enteredRegionId)) {
-            this.brushPaintedRegions.add(enteredRegionId);
-            let activeColor = activeHighlightColorSignal.get();
-            if (activeColor) {
-              this.fillRegion(enteredRegionId, activeColor.hexCode);
-            }
-          }
-          
           // Start a new active stroke in the entered region
           this.currentStrokeRegionId = enteredRegionId;
           let activeColor = activeHighlightColorSignal.get() || currentArtwork.colorStats[0]?.color;
@@ -342,7 +328,7 @@ export class EaselBoard extends SignalElement {
     if (e.pointerType === "mouse" && e.button !== 0) return;
     
     const isBrushMode = isBrushModeSignal.get();
-    if (isBrushMode) return; // Handled in down/enter
+    if (isBrushMode) return; // Handled in down/move
 
     const pathEl = e.currentTarget as SVGPathElement;
     const regionIdStr = pathEl.getAttribute("data-region-id");
@@ -365,31 +351,9 @@ export class EaselBoard extends SignalElement {
     this.fillRegion(regionId, activeColor.hexCode);
   };
 
-  private handleSvgPointerEnter = (e: PointerEvent) => {
-    if (e.buttons !== 1) return;
-    const isBrushMode = isBrushModeSignal.get();
-    if (!isBrushMode || !this.isBrushPainting) return;
-
-    const pathEl = e.currentTarget as SVGPathElement;
-    const regionIdStr = pathEl.getAttribute("data-region-id");
-    if (!regionIdStr) return;
-    const regionId = parseInt(regionIdStr, 10);
-
-    let activeColor = activeHighlightColorSignal.get();
-    if (!activeColor) return;
-
-    const currentArtwork = currentArtworkSignal.get();
-    const isSameExpectedColor = currentArtwork.regionExpectedColors[regionIdStr] === currentArtwork.regionExpectedColors[this.brushTargetRegionId];
-    if (!this.brushPaintedRegions.has(regionId) && isSameExpectedColor) {
-      this.brushPaintedRegions.add(regionId);
-      this.fillRegion(regionId, activeColor.hexCode);
-    }
-  };
-
   private handleGlobalPointerUp = () => {
     this.isBrushPainting = false;
     this.brushTargetRegionId = null;
-    this.brushPaintedRegions.clear();
     this.activeStroke = null;
     this.currentStrokeRegionId = null;
     window.removeEventListener("pointermove", this.handleBrushPointerMove);
@@ -784,18 +748,6 @@ export class EaselBoard extends SignalElement {
     window.removeEventListener("easel-zoom-in", this.zoomIn);
     window.removeEventListener("easel-zoom-out", this.zoomOut);
   }
-
-  private getRegionLuminance(colorHex: string): number {
-    if (!colorHex || colorHex === "#00000000") return 255;
-    let hex = colorHex.slice(1);
-    if (hex.length === 3) {
-      hex = hex.split("").map((c) => c + c).join("");
-    }
-    const r = parseInt(hex.slice(0, 2), 16) || 0;
-    const g = parseInt(hex.slice(2, 4), 16) || 0;
-    const b = parseInt(hex.slice(4, 6), 16) || 0;
-    return 0.299 * r + 0.587 * g + 0.114 * b;
-  }
   
   render() {
     const currentArtwork = currentArtworkSignal.get();
@@ -1011,7 +963,6 @@ export class EaselBoard extends SignalElement {
                                 @pointerenter=${(e: PointerEvent) => {
                                   this.hoveredRegionId = path.id;
                                   this.requestUpdate();
-                                  this.handleSvgPointerEnter(e);
                                 }}
                                 @pointerleave=${() => {
                                   if (this.hoveredRegionId === path.id) {

@@ -1,6 +1,0 @@
-{
-  "name": "PAINT",
-  "description": "A playful painterly art studio game that converts photos into colorful artoon artworks on an easel board for paiting by palette.",
-  "requestFramePermissions": [],
-  "majorCapabilities": ["MAJOR_CAPABILITY_SERVER_SIDE_GEMINI_API"]
-}
