@@ -76,6 +76,9 @@ export class EaselBoard extends SignalElement {
   private brushLastImgX = 0;
   private brushLastImgY = 0;
   private hasPaintedInCurrentStroke = false;
+  private brushStrokePaths: Record<number, Array<{ points: Array<{ x: number, y: number }>; stroke: string; strokeWidth: number }>> = {};
+  private activeStroke: { points: Array<{ x: number, y: number }>; stroke: string; strokeWidth: number } | null = null;
+  private currentStrokeRegionId: number | null = null;
 
   public triggerFilePicker = () => {
     const input = document.getElementById(
@@ -121,6 +124,10 @@ export class EaselBoard extends SignalElement {
         currentArtwork.colorStats
       );
       this.hasPaintedInCurrentStroke = true;
+    }
+
+    if (!isBrushMode) {
+      delete this.brushStrokePaths[regionId];
     }
 
     const newPaintedState = {
@@ -198,7 +205,6 @@ export class EaselBoard extends SignalElement {
       this.isBrushPainting = true;
       this.brushPaintedRegions.clear();
       this.hasPaintedInCurrentStroke = false;
-      // Capture to ensure we receive moves/ups globally. Actually, for pointerenter, we DON'T want capture.
       
       const pathEl = e.currentTarget as SVGPathElement;
       const regionIdStr = pathEl.getAttribute("data-region-id");
@@ -221,7 +227,113 @@ export class EaselBoard extends SignalElement {
       this.brushTargetRegionId = regionId;
       this.brushPaintedRegions.add(regionId);
       this.fillRegion(regionId, activeColor.hexCode);
+
+      // Start initial brush stroke path inside the starting region
+      const svgEl = this.querySelector<SVGSVGElement>("svg");
+      if (svgEl) {
+        const rect = svgEl.getBoundingClientRect();
+        const x = ((e.clientX - rect.left) / rect.width) * currentArtwork.width;
+        const y = ((e.clientY - rect.top) / rect.height) * currentArtwork.height;
+        
+        this.currentStrokeRegionId = regionId;
+        this.activeStroke = {
+          points: [{ x, y }],
+          stroke: activeColor.hexCode,
+          strokeWidth: 10
+        };
+        if (!this.brushStrokePaths[regionId]) {
+          this.brushStrokePaths[regionId] = [];
+        }
+        this.brushStrokePaths[regionId].push(this.activeStroke);
+      }
+
+      window.addEventListener("pointermove", this.handleBrushPointerMove);
+      window.addEventListener("pointerup", this.handleBrushPointerUp);
+      window.addEventListener("pointercancel", this.handleBrushPointerUp);
+      
+      this.requestUpdate();
     }
+  };
+
+  private handleBrushPointerMove = (e: PointerEvent) => {
+    if (!this.isBrushPainting) return;
+    
+    const svgEl = this.querySelector<SVGSVGElement>("svg");
+    const currentArtwork = currentArtworkSignal.get();
+    if (!svgEl || !currentArtwork) return;
+    
+    const rect = svgEl.getBoundingClientRect();
+    const x = ((e.clientX - rect.left) / rect.width) * currentArtwork.width;
+    const y = ((e.clientY - rect.top) / rect.height) * currentArtwork.height;
+    
+    // Find the region under the pointer using elementFromPoint
+    const elementAtPoint = document.elementFromPoint(e.clientX, e.clientY);
+    let enteredRegionId: number | null = null;
+    
+    if (elementAtPoint && elementAtPoint.tagName.toLowerCase() === 'path') {
+      const regionIdStr = elementAtPoint.getAttribute("data-region-id");
+      if (regionIdStr) {
+        enteredRegionId = parseInt(regionIdStr, 10);
+      }
+    }
+    
+    if (enteredRegionId !== null) {
+      if (enteredRegionId !== this.currentStrokeRegionId) {
+        const isSameExpectedColor = currentArtwork.regionExpectedColors[enteredRegionId] === currentArtwork.regionExpectedColors[this.brushTargetRegionId!];
+        
+        if (isSameExpectedColor) {
+          // Terminate active stroke in the previous region
+          this.activeStroke = null;
+          
+          // Paint and Fill the entered region if not already done in this drag session
+          if (!this.brushPaintedRegions.has(enteredRegionId)) {
+            this.brushPaintedRegions.add(enteredRegionId);
+            let activeColor = activeHighlightColorSignal.get();
+            if (activeColor) {
+              this.fillRegion(enteredRegionId, activeColor.hexCode);
+            }
+          }
+          
+          // Start a new active stroke in the entered region
+          this.currentStrokeRegionId = enteredRegionId;
+          let activeColor = activeHighlightColorSignal.get() || currentArtwork.colorStats[0]?.color;
+          if (activeColor) {
+            this.activeStroke = {
+              points: [{ x, y }],
+              stroke: activeColor.hexCode,
+              strokeWidth: 10
+            };
+            if (!this.brushStrokePaths[enteredRegionId]) {
+              this.brushStrokePaths[enteredRegionId] = [];
+            }
+            this.brushStrokePaths[enteredRegionId].push(this.activeStroke);
+          }
+        } else {
+          // Terminate active stroke if entering a region with a different expected color
+          this.activeStroke = null;
+          this.currentStrokeRegionId = null;
+        }
+      } else if (this.activeStroke) {
+        // Still inside same region, append point to active stroke
+        this.activeStroke.points.push({ x, y });
+      }
+    } else {
+      // Out of bounds or not over any region path, terminate active stroke
+      this.activeStroke = null;
+      this.currentStrokeRegionId = null;
+    }
+    
+    this.requestUpdate();
+  };
+
+  private handleBrushPointerUp = () => {
+    this.isBrushPainting = false;
+    this.activeStroke = null;
+    this.currentStrokeRegionId = null;
+    window.removeEventListener("pointermove", this.handleBrushPointerMove);
+    window.removeEventListener("pointerup", this.handleBrushPointerUp);
+    window.removeEventListener("pointercancel", this.handleBrushPointerUp);
+    this.requestUpdate();
   };
 
   private handleSvgPointerUp = (e: PointerEvent) => {
@@ -278,6 +390,12 @@ export class EaselBoard extends SignalElement {
     this.isBrushPainting = false;
     this.brushTargetRegionId = null;
     this.brushPaintedRegions.clear();
+    this.activeStroke = null;
+    this.currentStrokeRegionId = null;
+    window.removeEventListener("pointermove", this.handleBrushPointerMove);
+    window.removeEventListener("pointerup", this.handleBrushPointerUp);
+    window.removeEventListener("pointercancel", this.handleBrushPointerUp);
+    this.requestUpdate();
   };
 
   private setupZoomListeners() {
@@ -694,6 +812,7 @@ export class EaselBoard extends SignalElement {
       this.scale = 1;
       this.panX = 0;
       this.panY = 0;
+      this.brushStrokePaths = {};
       zoomScaleSignal.set(1);
       setTimeout(() => this.updateTransformStyle(), 0);
     }
@@ -845,7 +964,7 @@ export class EaselBoard extends SignalElement {
                           ${iconPaintBucket(
                             20,
                             "#000000"
-                          )} Or Paint the Daily Challenge
+                          )} Or Try the Daily Challenge
                         </button>
                       </div>
                     </div>
@@ -865,6 +984,14 @@ export class EaselBoard extends SignalElement {
                             width="100%" height="100%" viewBox="0 0 ${currentArtwork.width} ${currentArtwork.height}"
                             style="position: relative; touch-action: none; display: block; max-height: none; max-width: none; overflow: visible; cursor: crosshair;"
                         >
+                          <defs>
+                            ${currentArtwork.svgPaths.map((path) => svg`
+                              <clipPath id="mask-${path.id}">
+                                <path d="${path.d}" />
+                              </clipPath>
+                            `)}
+                          </defs>
+
                           ${currentArtwork.svgPaths.map((path) => {
                             const isPainted = currentArtwork.paintedRegionsState?.[path.id];
                             const expected = currentArtwork.regionExpectedColors?.[path.id];
@@ -893,6 +1020,30 @@ export class EaselBoard extends SignalElement {
                                   }
                                 }}
                               />
+                            `;
+                          })}
+
+                          ${currentArtwork.svgPaths.map((path) => {
+                            const strokes = this.brushStrokePaths[path.id] || [];
+                            return svg`
+                              <g clip-path="url(#mask-${path.id})" id="brush-paths-${path.id}">
+                                ${strokes.map((stroke) => {
+                                  if (stroke.points.length === 0) return svg``;
+                                  const dStr = stroke.points.map((p, idx) => `${idx === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
+                                  const currentStrokeWidth = Math.max(1, 10 / this.scale);
+                                  return svg`
+                                    <path
+                                      d="${dStr}"
+                                      fill="none"
+                                      stroke="${stroke.stroke}"
+                                      stroke-width="${currentStrokeWidth}"
+                                      stroke-linecap="round"
+                                      stroke-linejoin="round"
+                                      pointer-events="none"
+                                    />
+                                  `;
+                                })}
+                              </g>
                             `;
                           })}
                         </svg>
