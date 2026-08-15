@@ -156,12 +156,37 @@ export function handleToggleSound() {
   soundEffects.enabled = next;
   }
 
+export function saveCurrentArtworkProgress(
+  paintedRegionsState: Record<number, string>,
+  brushStrokePaths?: Record<number, Array<{ points: Array<{ x: number, y: number }>; stroke: string; strokeWidth: number }>>
+) {
+  const current = currentArtworkSignal.get();
+  if (!current) return;
+
+  const updatedArtwork: ProcessedArtwork = {
+    ...current,
+    paintedRegionsState: { ...paintedRegionsState },
+    brushStrokePaths: brushStrokePaths ? JSON.parse(JSON.stringify(brushStrokePaths)) : current.brushStrokePaths,
+    modifiedAt: Date.now(),
+  };
+
+  const list = [...artworksSignal.get()];
+  const artworkIdx = list.findIndex((a) => a.id === updatedArtwork.id);
+  if (artworkIdx !== -1) {
+    list[artworkIdx] = updatedArtwork;
+    saveArtworksList(list);
+  }
+  currentArtworkSignal.set(updatedArtwork);
+}
+
 export function pushUndoState(
   paintedRegionsState: Record<number, string>,
-  colorStats?: UsedColorStat[]
+  colorStats?: UsedColorStat[],
+  brushStrokePaths?: Record<number, Array<{ points: Array<{ x: number, y: number }>; stroke: string; strokeWidth: number }>>
 ) {
   const current = currentArtworkSignal.get();
   const stats = colorStats || current?.colorStats;
+  const strokes = brushStrokePaths || current?.brushStrokePaths;
   undoStackSignal.set([
     ...undoStackSignal.get(),
     {
@@ -170,6 +195,7 @@ export function pushUndoState(
         ? stats.map((s) => ({ ...s, color: { ...s.color } }))
         : undefined,
       paintedCanvasDataUrl: undefined,
+      brushStrokePaths: strokes ? JSON.parse(JSON.stringify(strokes)) : undefined,
     },
   ]);
 }
@@ -241,6 +267,7 @@ export function handleUndo() {
     colorStats: previousState.colorStats
       ? previousState.colorStats
       : current.colorStats,
+    brushStrokePaths: previousState.brushStrokePaths,
     paintedCanvasDataUrl: undefined,
     modifiedAt: Date.now(),
   };

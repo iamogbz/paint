@@ -14,6 +14,7 @@ export interface UndoHistoryItem {
   paintedRegionsState: Record<number, string>;
   colorStats?: UsedColorStat[];
   paintedCanvasDataUrl?: string;
+  brushStrokePaths?: Record<number, Array<{ points: Array<{ x: number, y: number }>; stroke: string; strokeWidth: number }>>;
 }
 
 export interface SvgPath { id: number; d: string; }
@@ -34,4 +35,5 @@ export interface ProcessedArtwork {
   regionMapData?: Int32Array | number[];
   regionExpectedColors?: Record<number, string>;
   svgPaths?: SvgPath[];
+  brushStrokePaths?: Record<number, Array<{ points: Array<{ x: number, y: number }>; stroke: string; strokeWidth: number }>>;
 }

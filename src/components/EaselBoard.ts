@@ -12,6 +12,7 @@ import {
   handleSelectArtwork,
   draggedColorSignal,
   pushUndoState,
+  saveCurrentArtworkProgress,
   footerStyleSignal,
   isBrushModeSignal,
   artworksSignal,
@@ -100,7 +101,8 @@ export class EaselBoard extends SignalElement {
     if (!isBrushMode || (isBrushMode && !this.hasPaintedInCurrentStroke)) {
       pushUndoState(
         { ...(currentArtwork.paintedRegionsState || {}) },
-        currentArtwork.colorStats
+        currentArtwork.colorStats,
+        this.brushStrokePaths
       );
       this.hasPaintedInCurrentStroke = true;
     }
@@ -114,10 +116,7 @@ export class EaselBoard extends SignalElement {
       [regionId]: colorHex,
     };
     
-    currentArtworkSignal.set({
-      ...currentArtwork,
-      paintedRegionsState: newPaintedState,
-    });
+    saveCurrentArtworkProgress(newPaintedState, this.brushStrokePaths);
     
     if (colorHex === expected) {
       soundEffects.playPop();
@@ -203,6 +202,13 @@ export class EaselBoard extends SignalElement {
       if (!activeColor) return;
       
       this.brushTargetRegionId = regionId;
+
+      // Push state to undo stack before adding the new stroke
+      pushUndoState(
+        { ...(currentArtwork.paintedRegionsState || {}) },
+        currentArtwork.colorStats,
+        this.brushStrokePaths
+      );
 
       // Start initial brush stroke path inside the starting region
       const svgEl = this.querySelector<SVGSVGElement>("svg");
@@ -300,6 +306,12 @@ export class EaselBoard extends SignalElement {
     window.removeEventListener("pointermove", this.handleBrushPointerMove);
     window.removeEventListener("pointerup", this.handleBrushPointerUp);
     window.removeEventListener("pointercancel", this.handleBrushPointerUp);
+    
+    const currentArtwork = currentArtworkSignal.get();
+    if (currentArtwork) {
+      saveCurrentArtworkProgress(currentArtwork.paintedRegionsState || {}, this.brushStrokePaths);
+    }
+    
     this.requestUpdate();
   };
 
@@ -745,9 +757,15 @@ export class EaselBoard extends SignalElement {
       this.scale = 1;
       this.panX = 0;
       this.panY = 0;
-      this.brushStrokePaths = {};
+      this.brushStrokePaths = currentArtwork?.brushStrokePaths
+        ? JSON.parse(JSON.stringify(currentArtwork.brushStrokePaths))
+        : {};
       zoomScaleSignal.set(1);
       setTimeout(() => this.updateTransformStyle(), 0);
+    } else if (!this.isBrushPainting) {
+      this.brushStrokePaths = currentArtwork?.brushStrokePaths
+        ? JSON.parse(JSON.stringify(currentArtwork.brushStrokePaths))
+        : {};
     }
 
     const outerContainerStyle = {
