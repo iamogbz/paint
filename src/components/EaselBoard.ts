@@ -54,6 +54,7 @@ export class EaselBoard extends SignalElement {
   private hasPaintedInCurrentStroke = false;
   private activeStrokeIdx = -1;
   private currentStrokeRegionId: number | null = null;
+  // faster buffering of painted paths without waiting for save logic
   private brushStrokePaths = {} as ProcessedArtwork["brushStrokePaths"];
 
   public triggerFilePicker = () => {
@@ -739,6 +740,7 @@ export class EaselBoard extends SignalElement {
   private redrawArtboard = () => {
     const currentArtwork = currentArtworkSignal.get();
     if (currentArtwork) {
+      // refresh the local strokes buffer from the saved artwork
       this.brushStrokePaths = deepCopy(currentArtwork.brushStrokePaths ?? {});
       this.requestUpdate();
     }

@@ -6,6 +6,7 @@ import {
   currentArtworkSignal,
   activeHighlightColorSignal,
   handleSelectArtwork,
+  pushUndoState,
 } from "../state/store";
 import { PaletteColor, UsedColorStat, ProcessedArtwork } from "../types";
 import { soundEffects } from "../utils/soundEffects";
@@ -330,6 +331,12 @@ export class RadialColorPickerModal extends SignalElement {
     );
 
     if (existingIdx === -1) {
+      pushUndoState(
+        currentArtwork.paintedRegionsState,
+        currentArtwork.colorStats,
+        currentArtwork.brushStrokePaths
+      );
+
       const newColorStat: UsedColorStat = {
         color: newPaletteColor,
         count: 0,
