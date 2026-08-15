@@ -56,6 +56,8 @@ export class EaselBoard extends SignalElement {
   private currentStrokeRegionId: number | null = null;
   // faster buffering of painted paths without waiting for save logic
   private brushStrokePaths = {} as ProcessedArtwork["brushStrokePaths"];
+  private brushPositionBuffer =
+    [] as ProcessedArtwork["brushStrokePaths"][number][number]["points"];
 
   public triggerFilePicker = () => {
     const input = document.getElementById(
@@ -239,6 +241,7 @@ export class EaselBoard extends SignalElement {
   };
 
   private handleBrushPointerMove = (e: PointerEvent) => {
+    this.brushPositionBuffer.push({ x: e.clientX, y: e.clientY });
     if (!this.isBrushPainting) return;
 
     const svgEl = this.querySelector<SVGSVGElement>("svg");
@@ -246,8 +249,11 @@ export class EaselBoard extends SignalElement {
     if (!svgEl || !currentArtwork) return;
 
     const rect = svgEl.getBoundingClientRect();
-    const x = ((e.clientX - rect.left) / rect.width) * currentArtwork.width;
-    const y = ((e.clientY - rect.top) / rect.height) * currentArtwork.height;
+    // clear the buffer now that the element has been found to place the stroke path
+    const strokePoints = this.brushPositionBuffer.splice(0).map((pos) => ({
+      x: ((pos.x - rect.left) / rect.width) * currentArtwork.width,
+      y: ((pos.y - rect.top) / rect.height) * currentArtwork.height,
+    }));
 
     // Find the region under the pointer using elementFromPoint
     const elementAtPoint = document.elementFromPoint(e.clientX, e.clientY);
@@ -274,7 +280,7 @@ export class EaselBoard extends SignalElement {
           // Still inside same region, append point to active stroke
           this.brushStrokePaths[currentBrushRegionId][
             this.activeStrokeIdx
-          ].points.push({ x, y });
+          ].points.push(...strokePoints);
         } else {
           // Start a new active stroke in the entered region
           this.brushTargetRegionId = currentBrushRegionId;
@@ -283,7 +289,7 @@ export class EaselBoard extends SignalElement {
             currentArtwork.colorStats[0]?.color;
           if (activeColor) {
             const startNewStrokePoint = {
-              points: [{ x, y }],
+              points: strokePoints,
               stroke: activeColor.hexCode,
               strokeWidth: Math.max(1, BASE_BRUSH_RADIUS / this.scale),
             };
@@ -744,7 +750,7 @@ export class EaselBoard extends SignalElement {
       this.brushStrokePaths = deepCopy(currentArtwork.brushStrokePaths ?? {});
       this.requestUpdate();
     }
-  }
+  };
 
   disconnectedCallback() {
     super.disconnectedCallback();
@@ -778,7 +784,6 @@ export class EaselBoard extends SignalElement {
       // first time this artwork is loaded
       isBrushModeSignal.set(false);
       window.dispatchEvent(new CustomEvent("easel-redraw-artboard"));
-    //   this.brushStrokePaths = deepCopy(currentArtwork?.brushStrokePaths ?? {});
     }
 
     const outerContainerStyle = {
