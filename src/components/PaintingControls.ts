@@ -369,7 +369,7 @@ export class PaintingControls extends SignalElement {
       display: "flex",
       flexDirection: "row" as const,
       alignItems: "center",
-      gap: "0.75rem",
+      gap: "0",
       overflowX: "auto" as const,
       overflowY: "hidden" as const,
       width: "100%",
@@ -616,9 +616,7 @@ export class PaintingControls extends SignalElement {
                     border: isSelected
                       ? "3px solid #E63946"
                       : "3px solid transparent",
-                    backgroundColor: isSelected
-                      ? "rgba(254, 243, 199, 0.95)"
-                      : "rgba(255, 255, 255, 0.5)",
+                    backgroundColor: "transparent",
                     boxShadow: isSelected
                       ? "3px 3px 0px 0px #E63946"
                       : "0px 0px 0px 0px rgba(0,0,0,0.08)",
