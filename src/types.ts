@@ -16,6 +16,8 @@ export interface UndoHistoryItem {
   paintedCanvasDataUrl?: string;
 }
 
+export interface SvgPath { id: number; d: string; }
+
 export interface ProcessedArtwork {
   id: string;
   name: string;
@@ -31,4 +33,5 @@ export interface ProcessedArtwork {
   paintedCanvasDataUrl?: string;
   regionMapData?: Int32Array | number[];
   regionExpectedColors?: Record<number, string>;
+  svgPaths?: SvgPath[];
 }

@@ -329,7 +329,7 @@ export class ArtworkGalleryModal extends SignalElement {
                         <button
                           @click=${() => {
                             const cleanDataUrl = exportArtworkCleanDataUrl(art);
-                            downloadImage(cleanDataUrl, `paint_by_numbers_${art.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}_paint.ogbizi.com.png`);
+                            downloadImage(cleanDataUrl, `paint_by_numbers_${art.name.toLowerCase().replace(/[^a-z0-9]+/g, '-').replace(/(^-|-$)/g, '')}_paint.ogbizi.com.svg`);
                           }}
                           style="padding: 0.5rem; border-radius: 14px; background-color: #FFFFFF; border: 2px solid #000000; color: #000000; boxShadow: 2px 2px 0px 0px #000000; cursor: pointer;"
                           title="Download Artwork"

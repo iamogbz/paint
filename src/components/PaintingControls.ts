@@ -219,7 +219,7 @@ export class PaintingControls extends SignalElement {
       `paint_by_numbers_${artwork.name
         .toLowerCase()
         .replace(/[^a-z0-9]+/g, "-")
-        .replace(/(^-|-$)/g, "")}_paint.ogbizi.com.png`
+        .replace(/(^-|-$)/g, "")}_paint.ogbizi.com.svg`
     );
   };
 

@@ -23,14 +23,10 @@ export class PaintApp extends SignalElement {
     isWindowFocusedSignal.set(false);
   };
 
-  private handleFocus = () => {
-    isWindowFocusedSignal.set(true);
-  };
-
-  private handleGlobalPointerDown = (e: Event) => {
-    if (!isWindowFocusedSignal.get()) {
-      isWindowFocusedSignal.set(true);
+  // Use UP because we want to enable focus after the first click
+  private handleGlobalPointerUp = (e: Event) => {
       window.focus();
+      isWindowFocusedSignal.set(true);
       
       const path = e.composedPath() as HTMLElement[];
       const isModal = path.some(
@@ -45,22 +41,19 @@ export class PaintApp extends SignalElement {
       if (!isModal) {
         e.preventDefault();
       }
-    }
   };
 
   connectedCallback() {
     super.connectedCallback();
     loadSavedArtworks();
     window.addEventListener("blur", this.handleBlur);
-    window.addEventListener("focus", this.handleFocus);
-    window.addEventListener("pointerdown", this.handleGlobalPointerDown, { capture: true });
+    window.addEventListener("pointerup", this.handleGlobalPointerUp, { capture: true });
     // Initialize state
     isWindowFocusedSignal.set(document.hasFocus());
   }
 
   disconnectedCallback() {
-    window.removeEventListener("pointerdown", this.handleGlobalPointerDown, { capture: true });
-    window.removeEventListener("focus", this.handleFocus);
+    window.removeEventListener("pointerup", this.handleGlobalPointerUp, { capture: true });
     window.removeEventListener("blur", this.handleBlur);
     super.disconnectedCallback();
   }
@@ -132,18 +125,6 @@ export class PaintApp extends SignalElement {
         ${!isFocused && currentArtwork
           ? html`
               <div
-                @pointerdown=${(e: Event) => {
-                  e.stopPropagation();
-                  isWindowFocusedSignal.set(true);
-                }}
-                @mousedown=${(e: Event) => {
-                  e.stopPropagation();
-                  isWindowFocusedSignal.set(true);
-                }}
-                @click=${(e: Event) => {
-                  e.stopPropagation();
-                  isWindowFocusedSignal.set(true);
-                }}
                 style="position: fixed; inset: 0; z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: rgba(255, 255, 255, 0.4); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); cursor: pointer;"
               >
                 <div style="background: white; padding: 2rem 3rem; border-radius: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); display: flex; flex-direction: column; align-items: center; gap: 1rem; border: 2px solid ${"#FCD5AE"};">

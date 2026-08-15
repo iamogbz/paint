@@ -45,7 +45,7 @@ class SoundEffects {
   }
 
   /**
-   * Painterly brush stroke swoosh sound
+   * Painterly brush stroke miss swoosh sound
    */
   playBrushSwoosh() {
     const ctx = this.getContext();
