@@ -9,6 +9,18 @@ export function exportArtworkCleanDataUrl(artwork: ProcessedArtwork): string {
     
     let svgContent = `<svg version="1.1" xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">`;
     
+    const hasBrushStrokes = artwork.brushStrokePaths && Object.values(artwork.brushStrokePaths).some(
+      (strokes) => strokes && strokes.length > 0
+    );
+    
+    if (hasBrushStrokes) {
+      svgContent += "<defs>";
+      for (const path of artwork.svgPaths) {
+        svgContent += `<clipPath id="mask-${path.id}"><path d="${path.d}" /></clipPath>`;
+      }
+      svgContent += "</defs>";
+    }
+    
     for (const path of artwork.svgPaths) {
         const paintedColor = paintedState[path.id];
         const expectedColor = artwork.regionExpectedColors?.[path.id];
@@ -17,6 +29,23 @@ export function exportArtworkCleanDataUrl(artwork: ProcessedArtwork): string {
             fill = expectedColor === "#00000000" ? "none" : "#FFFFFF";
         }
         svgContent += `<path xmlns="http://www.w3.org/2000/svg" d="${path.d}" fill="${fill}" />`;
+    }
+    
+    if (hasBrushStrokes && artwork.brushStrokePaths) {
+      for (const path of artwork.svgPaths) {
+        const strokes = artwork.brushStrokePaths[path.id] || [];
+        const validStrokes = strokes.filter((s) => s.points && s.points.length > 0);
+        if (validStrokes.length > 0) {
+          svgContent += `<g clip-path="url(#mask-${path.id})">`;
+          for (const stroke of validStrokes) {
+            const dStr = stroke.points
+              .map((p, idx) => `${idx === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`)
+              .join(" ");
+            svgContent += `<path d="${dStr}" fill="none" stroke="${stroke.stroke}" stroke-width="${stroke.strokeWidth}" stroke-linecap="round" stroke-linejoin="round" />`;
+          }
+          svgContent += "</g>";
+        }
+      }
     }
     
     svgContent += `</svg>`;
