@@ -26,7 +26,6 @@ import {
   iconPaintBucket,
 } from "./icons";
 import { BASE_BRUSH_RADIUS, transparentImgCss } from "./constants";
-import { getOppositeHueRGBA } from "../utils/colorUtils";
 
 @customElement("easel-board")
 export class EaselBoard extends SignalElement {
@@ -50,29 +49,11 @@ export class EaselBoard extends SignalElement {
   private containerElement: HTMLElement | null = null;
 
   // Interactive Canvas State
-  private activeArtworkId: string | null = null;
-  
-  
-  private regionExpectedColors = new Map<number, string>();
   private hoveredRegionId: number | null = null;
-  private artworkWidth = 0;
-  private artworkHeight = 0;
-  
-  
-  private offscreenPixelsData: ImageData | null = null;
-  private lastPaintedStateStr = "";
-  private lastBorderPaintedStateStr = "";
-  private lastTargetHex: string | null = null;
-  private lastZoomScale = 1;
-  
-  
 
   // Brush Painting State
   private isBrushPainting = false;
   private brushTargetRegionId: number | null = null;
-  private brushPaintedRegions = new Set<number>();
-  private brushLastImgX = 0;
-  private brushLastImgY = 0;
   private hasPaintedInCurrentStroke = false;
   private brushStrokePaths: Record<number, Array<{ points: Array<{ x: number, y: number }>; stroke: string; strokeWidth: number }>> = {};
   private activeStroke: { points: Array<{ x: number, y: number }>; stroke: string; strokeWidth: number } | null = null;
@@ -234,7 +215,7 @@ export class EaselBoard extends SignalElement {
         this.activeStroke = {
           points: [{ x, y }],
           stroke: activeColor.hexCode,
-          strokeWidth: 10
+          strokeWidth: Math.max(1, BASE_BRUSH_RADIUS / this.scale),
         };
         if (!this.brushStrokePaths[regionId]) {
           this.brushStrokePaths[regionId] = [];
@@ -287,7 +268,7 @@ export class EaselBoard extends SignalElement {
             this.activeStroke = {
               points: [{ x, y }],
               stroke: activeColor.hexCode,
-              strokeWidth: 10
+              strokeWidth: Math.max(1, BASE_BRUSH_RADIUS / this.scale),
             };
             if (!this.brushStrokePaths[enteredRegionId]) {
               this.brushStrokePaths[enteredRegionId] = [];
@@ -981,13 +962,12 @@ export class EaselBoard extends SignalElement {
                                 ${strokes.map((stroke) => {
                                   if (stroke.points.length === 0) return svg``;
                                   const dStr = stroke.points.map((p, idx) => `${idx === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
-                                  const currentStrokeWidth = Math.max(1, 10 / this.scale);
                                   return svg`
                                     <path
                                       d="${dStr}"
                                       fill="none"
                                       stroke="${stroke.stroke}"
-                                      stroke-width="${currentStrokeWidth}"
+                                      stroke-width="${stroke.strokeWidth}"
                                       stroke-linecap="round"
                                       stroke-linejoin="round"
                                       pointer-events="none"
