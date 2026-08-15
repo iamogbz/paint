@@ -811,20 +811,11 @@ export class EaselBoard extends SignalElement {
                     <h3 style="font-size: 1.5rem; font-weight: 900; font-style: italic; color: #3D2314; margin: 0 0 0.5rem 0; letter-spacing: -0.02em;">
                       Upload Your Image
                     </h3>
-                    <p style="font-size: 0.875rem; font-weight: 700; color: rgba(74, 40, 16, 0.8); margin: 0 0 1.25rem 0; line-height: 1.5;">
+                    <p style="font-size: 0.875rem; font-weight: 700; color: rgba(74, 40, 16, 0.8); margin: 0; line-height: 1.5;">
                       Tap to select or drag & drop any photo.
                     </p>
-                    <button
-                      @click=${(e: Event) => {
-                        e.stopPropagation();
-                        this.triggerFilePicker();
-                      }}
-                      style="background-color: #E63946; color: #FFFFFF; font-weight: 900; padding: 0.75rem 1.5rem; border-radius: 20px; border: 3px solid #000000; box-shadow: 4px 4px 0px 0px #000000; font-size: 0.875rem; display: flex; align-items: center; gap: 0.5rem; text-transform: uppercase; cursor: pointer;"
-                    >
-                      ${iconImage(20, "#FFFFFF")} Choose Photo
-                    </button>
-                    <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 2px solid rgba(0, 0, 0, 0.15); width: 100%;">
-                      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.75rem; width: 100%;">
+                    <div style="margin-top: 2rem; padding-top: 2rem; border-top: 2px solid rgba(0, 0, 0, 0.15); width: 100%;">
+                      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2rem; width: 100%;">
                         ${artworksSignal.get().length > 0
                           ? html`
                               <button
@@ -835,9 +826,9 @@ export class EaselBoard extends SignalElement {
                                     handleSelectArtwork(sorted[0]);
                                   }
                                 }}
-                                style="background-color: #2A9D8F; color: #FFFFFF; border: 2.5px solid #000000; padding: 0.625rem 1.25rem; border-radius: 16px; font-weight: 900; font-size: 0.875rem; display: flex; align-items: center; gap: 0.5rem; box-shadow: 2px 2px 0px 0px #000000; cursor: pointer; text-transform: uppercase;"
+                                style="background-color: #2A9D8F; color: #FFFFFF; border: 2.5px solid #000000; padding: 0.625rem 1.25rem; border-radius: 16px; font-weight: 900; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem; box-shadow: 2px 2px 0px 0px #000000; cursor: pointer; text-transform: uppercase;"
                               >
-                                ${iconPaintbrush(18, "#FFFFFF")} Resume Painting
+                                ${iconImage(24, "#FFFFFF")} Resume Painting
                               </button>
                             `
                           : ""}
