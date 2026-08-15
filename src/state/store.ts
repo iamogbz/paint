@@ -4,6 +4,7 @@ import { ProcessedArtwork, PaletteColor, UndoHistoryItem, UsedColorStat } from "
 import { processImageToCartoonPalette } from "../utils/imageProcessor";
 import { soundEffects } from "../utils/soundEffects";
 import confetti from "canvas-confetti";
+import { deepCopy } from "../utils/object";
 
 const STORAGE_KEY_ALL_ARTWORKS = "paint_part_sd_artworks_v1";
 
@@ -166,7 +167,7 @@ export function saveCurrentArtworkProgress(
   const updatedArtwork: ProcessedArtwork = {
     ...current,
     paintedRegionsState: { ...paintedRegionsState },
-    brushStrokePaths: brushStrokePaths ? JSON.parse(JSON.stringify(brushStrokePaths)) : current.brushStrokePaths,
+    brushStrokePaths: brushStrokePaths ? deepCopy(brushStrokePaths) : current.brushStrokePaths,
     modifiedAt: Date.now(),
   };
 
@@ -180,7 +181,7 @@ export function saveCurrentArtworkProgress(
 }
 
 export function pushUndoState(
-  paintedRegionsState: Record<number, string>,
+  paintedRegionsState?: Record<number, string>,
   colorStats?: UsedColorStat[],
   brushStrokePaths?: Record<number, Array<{ points: Array<{ x: number, y: number }>; stroke: string; strokeWidth: number }>>
 ) {
@@ -191,11 +192,9 @@ export function pushUndoState(
     ...undoStackSignal.get(),
     {
       paintedRegionsState: { ...paintedRegionsState },
-      colorStats: stats
-        ? stats.map((s) => ({ ...s, color: { ...s.color } }))
-        : undefined,
+      colorStats: stats ? deepCopy(stats) : undefined,
       paintedCanvasDataUrl: undefined,
-      brushStrokePaths: strokes ? JSON.parse(JSON.stringify(strokes)) : undefined,
+      brushStrokePaths: strokes ? deepCopy(strokes) : undefined,
     },
   ]);
 }

@@ -17,16 +17,12 @@ import {
   isBrushModeSignal,
   artworksSignal,
 } from "../state/store";
-import { ProcessedArtwork } from "../types";
 import { getDailyChallenge } from "../data/dailyChallenge";
 import { soundEffects } from "../utils/soundEffects";
-import {
-  iconImage,
-  iconSparkles,
-  iconUpload,
-  iconPaintBucket,
-} from "./icons";
+import { iconImage, iconSparkles, iconUpload, iconPaintBucket } from "./icons";
 import { BASE_BRUSH_RADIUS, transparentImgCss } from "./constants";
+import { deepCopy } from "../utils/object";
+import { ProcessedArtwork } from "../types";
 
 @customElement("easel-board")
 export class EaselBoard extends SignalElement {
@@ -56,9 +52,9 @@ export class EaselBoard extends SignalElement {
   private isBrushPainting = false;
   private brushTargetRegionId: number | null = null;
   private hasPaintedInCurrentStroke = false;
-  private brushStrokePaths: Record<number, Array<{ points: Array<{ x: number, y: number }>; stroke: string; strokeWidth: number }>> = {};
-  private activeStroke: { points: Array<{ x: number, y: number }>; stroke: string; strokeWidth: number } | null = null;
+  private activeStrokeIdx = -1;
   private currentStrokeRegionId: number | null = null;
+  private brushStrokePaths = {} as ProcessedArtwork["brushStrokePaths"];
 
   public triggerFilePicker = () => {
     const input = document.getElementById(
@@ -80,17 +76,17 @@ export class EaselBoard extends SignalElement {
     window.addEventListener("easel-pan-delta", this.handlePanDelta);
     window.addEventListener("easel-zoom-in", this.zoomIn);
     window.addEventListener("easel-zoom-out", this.zoomOut);
+    window.addEventListener("easel-redraw-artboard", this.redrawArtboard);
   }
 
   updated() {
     this.setupZoomListeners();
-    
   }
 
   private fillRegion(regionId: number, colorHex: string) {
     const currentArtwork = currentArtworkSignal.get();
     if (!currentArtwork) return;
-    
+
     const expected = currentArtwork.regionExpectedColors?.[regionId];
     if (!expected || expected === "#00000000") return;
 
@@ -100,9 +96,9 @@ export class EaselBoard extends SignalElement {
     const isBrushMode = isBrushModeSignal.get();
     if (!isBrushMode || (isBrushMode && !this.hasPaintedInCurrentStroke)) {
       pushUndoState(
-        { ...(currentArtwork.paintedRegionsState || {}) },
+        currentArtwork.paintedRegionsState,
         currentArtwork.colorStats,
-        this.brushStrokePaths
+        currentArtwork.brushStrokePaths
       );
       this.hasPaintedInCurrentStroke = true;
     }
@@ -115,9 +111,9 @@ export class EaselBoard extends SignalElement {
       ...(currentArtwork.paintedRegionsState || {}),
       [regionId]: colorHex,
     };
-    
+
     saveCurrentArtworkProgress(newPaintedState, this.brushStrokePaths);
-    
+
     if (colorHex === expected) {
       soundEffects.playPop();
     } else {
@@ -133,7 +129,7 @@ export class EaselBoard extends SignalElement {
     const clientY = mouseY - this.dropperBufferPx;
 
     const elementAtPoint = document.elementFromPoint(clientX, clientY);
-    if (elementAtPoint && elementAtPoint.tagName.toLowerCase() === 'path') {
+    if (elementAtPoint && elementAtPoint.tagName.toLowerCase() === "path") {
       const regionIdStr = elementAtPoint.getAttribute("data-region-id");
       if (regionIdStr) {
         const regionId = parseInt(regionIdStr, 10);
@@ -161,10 +157,11 @@ export class EaselBoard extends SignalElement {
     }
 
     const elementAtPoint = document.elementFromPoint(clientX, clientY);
-    if (elementAtPoint && elementAtPoint.tagName.toLowerCase() === 'path') {
+    if (elementAtPoint && elementAtPoint.tagName.toLowerCase() === "path") {
       const regionIdStr = elementAtPoint.getAttribute("data-region-id");
       if (regionIdStr) {
-        const colorHex = typeof color === 'string' ? color : (color?.hexCode || "");
+        const colorHex =
+          typeof color === "string" ? color : color?.hexCode || "";
         if (colorHex) {
           this.fillRegion(parseInt(regionIdStr, 10), colorHex);
         }
@@ -175,14 +172,14 @@ export class EaselBoard extends SignalElement {
   private handleSvgPointerDown = (e: PointerEvent) => {
     if (!isWindowFocusedSignal.get()) return;
     if (e.pointerType === "mouse" && e.button !== 0) return;
-    
+
     const isBrushMode = isBrushModeSignal.get();
-    
+
     if (isBrushMode) {
       e.preventDefault();
       this.isBrushPainting = true;
       this.hasPaintedInCurrentStroke = false;
-      
+
       const pathEl = e.currentTarget as SVGPathElement;
       const regionIdStr = pathEl.getAttribute("data-region-id");
       if (!regionIdStr) return;
@@ -190,7 +187,7 @@ export class EaselBoard extends SignalElement {
 
       const currentArtwork = currentArtworkSignal.get();
       if (!currentArtwork) return;
-      
+
       let activeColor = activeHighlightColorSignal.get();
       if (!activeColor) {
         const defaultColor = currentArtwork.colorStats[0]?.color;
@@ -200,118 +197,114 @@ export class EaselBoard extends SignalElement {
         }
       }
       if (!activeColor) return;
-      
+
       this.brushTargetRegionId = regionId;
 
       // Push state to undo stack before adding the new stroke
       pushUndoState(
-        { ...(currentArtwork.paintedRegionsState || {}) },
+        currentArtwork.paintedRegionsState,
         currentArtwork.colorStats,
-        this.brushStrokePaths
+        currentArtwork.brushStrokePaths
       );
+
+      this.brushStrokePaths = deepCopy(currentArtwork.brushStrokePaths ?? {});
 
       // Start initial brush stroke path inside the starting region
       const svgEl = this.querySelector<SVGSVGElement>("svg");
       if (svgEl) {
         const rect = svgEl.getBoundingClientRect();
         const x = ((e.clientX - rect.left) / rect.width) * currentArtwork.width;
-        const y = ((e.clientY - rect.top) / rect.height) * currentArtwork.height;
-        
+        const y =
+          ((e.clientY - rect.top) / rect.height) * currentArtwork.height;
+
         this.currentStrokeRegionId = regionId;
-        this.activeStroke = {
+        const startStrokePoint = {
           points: [{ x, y }],
           stroke: activeColor.hexCode,
           strokeWidth: Math.max(1, BASE_BRUSH_RADIUS / this.scale),
         };
+
         if (!this.brushStrokePaths[regionId]) {
           this.brushStrokePaths[regionId] = [];
         }
-        this.brushStrokePaths[regionId].push(this.activeStroke);
+        this.activeStrokeIdx = this.brushStrokePaths[regionId].length;
+        this.brushStrokePaths[regionId].push(startStrokePoint);
       }
 
       window.addEventListener("pointermove", this.handleBrushPointerMove);
-      window.addEventListener("pointerup", this.handleBrushPointerUp);
-      window.addEventListener("pointercancel", this.handleBrushPointerUp);
-      
+
       this.requestUpdate();
     }
   };
 
   private handleBrushPointerMove = (e: PointerEvent) => {
     if (!this.isBrushPainting) return;
-    
+
     const svgEl = this.querySelector<SVGSVGElement>("svg");
     const currentArtwork = currentArtworkSignal.get();
     if (!svgEl || !currentArtwork) return;
-    
+
     const rect = svgEl.getBoundingClientRect();
     const x = ((e.clientX - rect.left) / rect.width) * currentArtwork.width;
     const y = ((e.clientY - rect.top) / rect.height) * currentArtwork.height;
-    
+
     // Find the region under the pointer using elementFromPoint
     const elementAtPoint = document.elementFromPoint(e.clientX, e.clientY);
-    let enteredRegionId: number | null = null;
-    
-    if (elementAtPoint && elementAtPoint.tagName.toLowerCase() === 'path') {
+    let currentBrushRegionId: number | null = null;
+
+    if (elementAtPoint && elementAtPoint.tagName.toLowerCase() === "path") {
       const regionIdStr = elementAtPoint.getAttribute("data-region-id");
       if (regionIdStr) {
-        enteredRegionId = parseInt(regionIdStr, 10);
+        currentBrushRegionId = parseInt(regionIdStr, 10);
       }
     }
-    
-    if (enteredRegionId !== null) {
-      if (enteredRegionId !== this.currentStrokeRegionId) {
-        const isSameExpectedColor = currentArtwork.regionExpectedColors[enteredRegionId] === currentArtwork.regionExpectedColors[this.brushTargetRegionId!];
-        
-        if (isSameExpectedColor) {
-          // Terminate active stroke in the previous region
-          this.activeStroke = null;
-          
+
+    if (currentBrushRegionId !== null) {
+      const isSameExpectedColor =
+        currentArtwork.regionExpectedColors[currentBrushRegionId] ===
+        currentArtwork.regionExpectedColors[this.brushTargetRegionId!];
+      if (isSameExpectedColor) {
+        if (currentBrushRegionId !== this.brushTargetRegionId) {
+          // Reset active stroke index when moving to a different region with the same expected color
+          this.activeStrokeIdx = -1;
+        }
+
+        if (this.activeStrokeIdx >= 0) {
+          // Still inside same region, append point to active stroke
+          this.brushStrokePaths[currentBrushRegionId][
+            this.activeStrokeIdx
+          ].points.push({ x, y });
+        } else {
           // Start a new active stroke in the entered region
-          this.currentStrokeRegionId = enteredRegionId;
-          let activeColor = activeHighlightColorSignal.get() || currentArtwork.colorStats[0]?.color;
+          this.brushTargetRegionId = currentBrushRegionId;
+          let activeColor =
+            activeHighlightColorSignal.get() ||
+            currentArtwork.colorStats[0]?.color;
           if (activeColor) {
-            this.activeStroke = {
+            const startNewStrokePoint = {
               points: [{ x, y }],
               stroke: activeColor.hexCode,
               strokeWidth: Math.max(1, BASE_BRUSH_RADIUS / this.scale),
             };
-            if (!this.brushStrokePaths[enteredRegionId]) {
-              this.brushStrokePaths[enteredRegionId] = [];
+            if (!this.brushStrokePaths[currentBrushRegionId]) {
+              this.brushStrokePaths[currentBrushRegionId] = [];
             }
-            this.brushStrokePaths[enteredRegionId].push(this.activeStroke);
+            this.activeStrokeIdx =
+              this.brushStrokePaths[currentBrushRegionId].length;
+            this.brushStrokePaths[currentBrushRegionId].push(
+              startNewStrokePoint
+            );
           }
-        } else {
-          // Terminate active stroke if entering a region with a different expected color
-          this.activeStroke = null;
-          this.currentStrokeRegionId = null;
         }
-      } else if (this.activeStroke) {
-        // Still inside same region, append point to active stroke
-        this.activeStroke.points.push({ x, y });
+      } else {
+        // Not over a colorable region, terminate active stroke
+        this.activeStrokeIdx = -1;
       }
     } else {
       // Out of bounds or not over any region path, terminate active stroke
-      this.activeStroke = null;
-      this.currentStrokeRegionId = null;
+      this.activeStrokeIdx = -1;
     }
-    
-    this.requestUpdate();
-  };
 
-  private handleBrushPointerUp = () => {
-    this.isBrushPainting = false;
-    this.activeStroke = null;
-    this.currentStrokeRegionId = null;
-    window.removeEventListener("pointermove", this.handleBrushPointerMove);
-    window.removeEventListener("pointerup", this.handleBrushPointerUp);
-    window.removeEventListener("pointercancel", this.handleBrushPointerUp);
-    
-    const currentArtwork = currentArtworkSignal.get();
-    if (currentArtwork) {
-      saveCurrentArtworkProgress(currentArtwork.paintedRegionsState || {}, this.brushStrokePaths);
-    }
-    
     this.requestUpdate();
   };
 
@@ -319,7 +312,7 @@ export class EaselBoard extends SignalElement {
     if (!isWindowFocusedSignal.get()) return;
     if (this.hasDragged) return;
     if (e.pointerType === "mouse" && e.button !== 0) return;
-    
+
     const isBrushMode = isBrushModeSignal.get();
     if (isBrushMode) return; // Handled in down/move
 
@@ -330,7 +323,7 @@ export class EaselBoard extends SignalElement {
 
     const currentArtwork = currentArtworkSignal.get();
     if (!currentArtwork) return;
-    
+
     let activeColor = activeHighlightColorSignal.get();
     if (!activeColor) {
       const defaultColor = currentArtwork.colorStats[0]?.color;
@@ -347,11 +340,19 @@ export class EaselBoard extends SignalElement {
   private handleGlobalPointerUp = () => {
     this.isBrushPainting = false;
     this.brushTargetRegionId = null;
-    this.activeStroke = null;
+    this.activeStrokeIdx = -1;
     this.currentStrokeRegionId = null;
+
     window.removeEventListener("pointermove", this.handleBrushPointerMove);
-    window.removeEventListener("pointerup", this.handleBrushPointerUp);
-    window.removeEventListener("pointercancel", this.handleBrushPointerUp);
+
+    const currentArtwork = currentArtworkSignal.get();
+    if (currentArtwork) {
+      saveCurrentArtworkProgress(
+        currentArtwork.paintedRegionsState,
+        this.brushStrokePaths
+      );
+    }
+
     this.requestUpdate();
   };
 
@@ -412,17 +413,25 @@ export class EaselBoard extends SignalElement {
       el.style.transform = `translate3d(${this.panX}px, ${this.panY}px, 0px) scale(${this.scale})`;
       const isAnimating = Date.now() < this.zoomAnimationEndTime;
       el.style.transition =
-        (!isAnimating && (this.isDragging || this.isPinching))
+        !isAnimating && (this.isDragging || this.isPinching)
           ? "none"
           : "transform 0.15s cubic-bezier(0.2, 0, 0, 1)";
     }
   }
 
-  private setScaleAtPoint(newScale: number, clientX?: number, clientY?: number) {
+  private setScaleAtPoint(
+    newScale: number,
+    clientX?: number,
+    clientY?: number
+  ) {
     newScale = Math.min(8.0, Math.max(0.5, newScale));
     if (newScale === this.scale) return;
 
-    if (clientX === undefined || clientY === undefined || !this.containerElement) {
+    if (
+      clientX === undefined ||
+      clientY === undefined ||
+      !this.containerElement
+    ) {
       if (newScale === 1) {
         this.scale = 1;
         this.panX = 0;
@@ -436,12 +445,12 @@ export class EaselBoard extends SignalElement {
       const rect = this.containerElement.getBoundingClientRect();
       const centerX = rect.left + rect.width / 2;
       const centerY = rect.top + rect.height / 2;
-      
+
       const x = clientX - centerX;
       const y = clientY - centerY;
-      
+
       const ratio = newScale / this.scale;
-      
+
       const newPanX = x - (x - this.panX) * ratio;
       const newPanY = y - (y - this.panY) * ratio;
 
@@ -455,7 +464,7 @@ export class EaselBoard extends SignalElement {
         this.panY = this.clampPanY(newPanY, newScale);
       }
     }
-    
+
     zoomScaleSignal.set(this.scale);
     this.updateTransformStyle();
   }
@@ -574,20 +583,20 @@ export class EaselBoard extends SignalElement {
 
       const midX = (t1.clientX + t2.clientX) / 2;
       const midY = (t1.clientY + t2.clientY) / 2;
-      
+
       let newPanX = this.startPanX;
       let newPanY = this.startPanY;
-      
+
       if (this.containerElement) {
         const rect = this.containerElement.getBoundingClientRect();
         const centerX = rect.left + rect.width / 2;
         const centerY = rect.top + rect.height / 2;
-        
+
         const startX = this.startTouchX - centerX;
         const startY = this.startTouchY - centerY;
         const endX = midX - centerX;
         const endY = midY - centerY;
-        
+
         const scaleRatio = targetScale / this.initialScale;
         newPanX = endX - (startX - this.startPanX) * scaleRatio;
         newPanY = endY - (startY - this.startPanY) * scaleRatio;
@@ -695,7 +704,6 @@ export class EaselBoard extends SignalElement {
   };
 
   private handlePointerUp = () => {
-    
     this.isDragging = false;
     this.updateTransformStyle();
   };
@@ -728,8 +736,14 @@ export class EaselBoard extends SignalElement {
     if (file) this.handleFileInput(file);
   };
 
-  
-  
+  private redrawArtboard = () => {
+    const currentArtwork = currentArtworkSignal.get();
+    if (currentArtwork) {
+      this.brushStrokePaths = deepCopy(currentArtwork.brushStrokePaths ?? {});
+      this.requestUpdate();
+    }
+  }
+
   disconnectedCallback() {
     super.disconnectedCallback();
     window.removeEventListener("color-drag-move", this.handleColorDragMove);
@@ -741,7 +755,7 @@ export class EaselBoard extends SignalElement {
     window.removeEventListener("easel-zoom-in", this.zoomIn);
     window.removeEventListener("easel-zoom-out", this.zoomOut);
   }
-  
+
   render() {
     const currentArtwork = currentArtworkSignal.get();
     const currentArtworkId = currentArtwork?.id || null;
@@ -751,21 +765,18 @@ export class EaselBoard extends SignalElement {
     const isProcessing = isProcessingSignal.get();
     const isDragOver = isDragOverSignal.get();
     const dailyChallengeImage = getDailyChallenge();
-    
+
     if (currentArtworkId !== this.lastArtworkId) {
       this.lastArtworkId = currentArtworkId;
       this.scale = 1;
       this.panX = 0;
       this.panY = 0;
-      this.brushStrokePaths = currentArtwork?.brushStrokePaths
-        ? JSON.parse(JSON.stringify(currentArtwork.brushStrokePaths))
-        : {};
       zoomScaleSignal.set(1);
       setTimeout(() => this.updateTransformStyle(), 0);
-    } else if (!this.isBrushPainting) {
-      this.brushStrokePaths = currentArtwork?.brushStrokePaths
-        ? JSON.parse(JSON.stringify(currentArtwork.brushStrokePaths))
-        : {};
+      // first time this artwork is loaded
+      isBrushModeSignal.set(false);
+      window.dispatchEvent(new CustomEvent("easel-redraw-artboard"));
+    //   this.brushStrokePaths = deepCopy(currentArtwork?.brushStrokePaths ?? {});
     }
 
     const outerContainerStyle = {
@@ -844,111 +855,176 @@ export class EaselBoard extends SignalElement {
           style="display: none;"
           @change=${this.handleFileChange}
         />
-        
-        <div id="easel-zoom-container" style="position: relative; width: 100%; touch-action: none; user-select: none; -webkit-user-select: none;">
-          <div id="easel-transform-element" style="width: 100%; display: flex; flex-direction: column; align-items: center; transform: translate3d(${this.panX}px, ${this.panY}px, 0px) scale(${this.scale}); transform-origin: center center; transition: ${this.isDragging || this.isPinching ? 'none' : 'transform 0.15s cubic-bezier(0.2, 0, 0, 1)'}; will-change: transform;">
+
+        <div
+          id="easel-zoom-container"
+          style="position: relative; width: 100%; touch-action: none; user-select: none; -webkit-user-select: none;"
+        >
+          <div
+            id="easel-transform-element"
+            style="width: 100%; display: flex; flex-direction: column; align-items: center; transform: translate3d(${this
+              .panX}px, ${this.panY}px, 0px) scale(${this
+              .scale}); transform-origin: center center; transition: ${this
+              .isDragging || this.isPinching
+              ? "none"
+              : "transform 0.15s cubic-bezier(0.2, 0, 0, 1)"}; will-change: transform;"
+          >
             <div style=${this.renderStyleObject(easelTopClampStyle)}></div>
             <div style=${this.renderStyleObject(mainFrameStyle)}>
-              <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; padding: 0.5rem; background-size: 0.5rem 0.5rem; background-image: ${transparentImgCss}; min-height: 40vh; overflow: hidden;">
-                
-                ${isProcessing ? html`
-                  <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;">
-                    <div style="position: relative; width: 2rem; height: 2rem; display: flex; border-radius: 100%; align-items: center; justify-content: center;">
-                      <div style="position: absolute;">
-                        ${iconSparkles(32, "#AA3311")}
-                      </div>
-                    </div>
-                    <span style="font-size: 1.25rem; font-weight: 900; color: #3D2314; margin-bottom: 1.5rem; font-style: italic;">
-                      Preparing Canvas...
-                    </span>
-                  </div>
-                ` : ""}
-
-                ${!currentArtwork && !isProcessing ? html`
-                  <div
-                    @dragover=${(e: DragEvent) => {
-                      e.preventDefault();
-                      isDragOverSignal.set(true);
-                    }}
-                    @dragleave=${() => isDragOverSignal.set(false)}
-                    @drop=${this.handleDrop}
-                    @click=${this.triggerFilePicker}
-                    style=${this.renderStyleObject(dropAreaStyle)}
-                  >
-                    <div style="width: 5rem; height: 5rem; border-radius: 24px; background-color: #FFD166; border: 3px solid #000000; display: flex; align-items: center; justify-content: center; box-shadow: 4px 4px 0px 0px #000000; margin-bottom: 1rem; color: #000000;">
-                      ${iconUpload(40, "#000000")}
-                    </div>
-                    <h3 style="font-size: 1.5rem; font-weight: 900; font-style: italic; color: #3D2314; margin: 0 0 0.5rem 0; letter-spacing: -0.02em;">
-                      Upload Your Image
-                    </h3>
-                    <p style="font-size: 0.875rem; font-weight: 700; color: rgba(74, 40, 16, 0.8); margin: 0; line-height: 1.5;">
-                      Tap to select or drag & drop any photo.
-                    </p>
-                    <div style="margin-top: 2rem; padding-top: 2rem; border-top: 2px solid rgba(0, 0, 0, 0.15); width: 100%;">
-                      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2rem; width: 100%;">
-                        ${artworksSignal.get().length > 0
-                          ? html`
-                              <button
-                                @click=${(e: Event) => {
-                                  e.stopPropagation();
-                                  const sorted = [...artworksSignal.get()].sort((a, b) => (b.modifiedAt || 0) - (a.modifiedAt || 0));
-                                  if (sorted.length > 0) {
-                                    handleSelectArtwork(sorted[0]);
-                                  }
-                                }}
-                                style="background-color: #2A9D8F; color: #FFFFFF; border: 2.5px solid #000000; padding: 0.625rem 1.25rem; border-radius: 16px; font-weight: 900; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem; box-shadow: 2px 2px 0px 0px #000000; cursor: pointer; text-transform: uppercase;"
-                              >
-                                ${iconImage(24, "#FFFFFF")} Resume Painting
-                              </button>
-                            `
-                          : ""}
-                        <button
-                          @click=${(e: Event) => {
-                            e.stopPropagation();
-                            handleImageSelected(
-                              dailyChallengeImage.dataUrl,
-                              dailyChallengeImage.name
-                            );
-                          }}
-                          style="background-color: #FFFFFF; color: #000000; border: 2.5px solid #000000; padding: 0.625rem 0.875rem; border-radius: 16px; font-weight: 900; font-size: 0.875rem; display: flex; align-items: center; gap: 0.375rem; box-shadow: 2px 2px 0px 0px #000000; cursor: pointer;"
+              <div
+                style="display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; padding: 0.5rem; background-size: 0.5rem 0.5rem; background-image: ${transparentImgCss}; min-height: 40vh; overflow: hidden;"
+              >
+                ${isProcessing
+                  ? html`
+                      <div
+                        style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;"
+                      >
+                        <div
+                          style="position: relative; width: 2rem; height: 2rem; display: flex; border-radius: 100%; align-items: center; justify-content: center;"
                         >
-                          ${iconPaintBucket(
-                            20,
-                            "#000000"
-                          )} Or Try the Daily Challenge
-                        </button>
-                      </div>
-                    </div>
-                  </div>
-                  <footer style=${this.renderStyleObject(footerStyleSignal.get())}>
-                    <p style="margin: 0;">PAINT by COLOURS <a href="https://github.com/sponsors/iamogbz" target="_blank" style="color: inherit; text-decoration: inherit; cursor: pointer;">❤️ QBRKTS</a> ©️ ${new Date().getFullYear()}</p>
-                  </footer>
-                ` : ""}
-
-                ${currentArtwork && !isProcessing ? html`
-                  <div style="width: 100%; display: flex; flex-direction: column; align-items: center;">
-                    <div style="position: relative; width: 100%; aspect-ratio: ${currentArtwork.width} / ${currentArtwork.height}; border-radius: 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; background-color: transparent;">
-                      ${currentArtwork.svgPaths ? html`
-                        <!-- Lower SVG for color fills -->
-                        <svg 
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="100%" height="100%" viewBox="0 0 ${currentArtwork.width} ${currentArtwork.height}"
-                            style="position: relative; touch-action: none; display: block; max-height: none; max-width: none; overflow: visible; cursor: crosshair;"
+                          <div style="position: absolute;">
+                            ${iconSparkles(32, "#AA3311")}
+                          </div>
+                        </div>
+                        <span
+                          style="font-size: 1.25rem; font-weight: 900; color: #3D2314; margin-bottom: 1.5rem; font-style: italic;"
                         >
-                          <defs>
-                            ${currentArtwork.svgPaths.map((path) => svg`
+                          Preparing Canvas...
+                        </span>
+                      </div>
+                    `
+                  : ""}
+                ${!currentArtwork && !isProcessing
+                  ? html`
+                      <div
+                        @dragover=${(e: DragEvent) => {
+                          e.preventDefault();
+                          isDragOverSignal.set(true);
+                        }}
+                        @dragleave=${() => isDragOverSignal.set(false)}
+                        @drop=${this.handleDrop}
+                        @click=${this.triggerFilePicker}
+                        style=${this.renderStyleObject(dropAreaStyle)}
+                      >
+                        <div
+                          style="width: 5rem; height: 5rem; border-radius: 24px; background-color: #FFD166; border: 3px solid #000000; display: flex; align-items: center; justify-content: center; box-shadow: 4px 4px 0px 0px #000000; margin-bottom: 1rem; color: #000000;"
+                        >
+                          ${iconUpload(40, "#000000")}
+                        </div>
+                        <h3
+                          style="font-size: 1.5rem; font-weight: 900; font-style: italic; color: #3D2314; margin: 0 0 0.5rem 0; letter-spacing: -0.02em;"
+                        >
+                          Upload Your Image
+                        </h3>
+                        <p
+                          style="font-size: 0.875rem; font-weight: 700; color: rgba(74, 40, 16, 0.8); margin: 0; line-height: 1.5;"
+                        >
+                          Tap to select or drag & drop any photo.
+                        </p>
+                        <div
+                          style="margin-top: 2rem; padding-top: 2rem; border-top: 2px solid rgba(0, 0, 0, 0.15); width: 100%;"
+                        >
+                          <div
+                            style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2rem; width: 100%;"
+                          >
+                            ${artworksSignal.get().length > 0
+                              ? html`
+                                  <button
+                                    @click=${(e: Event) => {
+                                      e.stopPropagation();
+                                      const sorted = [
+                                        ...artworksSignal.get(),
+                                      ].sort(
+                                        (a, b) =>
+                                          (b.modifiedAt || 0) -
+                                          (a.modifiedAt || 0)
+                                      );
+                                      if (sorted.length > 0) {
+                                        handleSelectArtwork(sorted[0]);
+                                      }
+                                    }}
+                                    style="background-color: #2A9D8F; color: #FFFFFF; border: 2.5px solid #000000; padding: 0.625rem 1.25rem; border-radius: 16px; font-weight: 900; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem; box-shadow: 2px 2px 0px 0px #000000; cursor: pointer; text-transform: uppercase;"
+                                  >
+                                    ${iconImage(24, "#FFFFFF")} Resume Painting
+                                  </button>
+                                `
+                              : ""}
+                            <button
+                              @click=${(e: Event) => {
+                                e.stopPropagation();
+                                handleImageSelected(
+                                  dailyChallengeImage.dataUrl,
+                                  dailyChallengeImage.name
+                                );
+                              }}
+                              style="background-color: #FFFFFF; color: #000000; border: 2.5px solid #000000; padding: 0.625rem 0.875rem; border-radius: 16px; font-weight: 900; font-size: 0.875rem; display: flex; align-items: center; gap: 0.375rem; box-shadow: 2px 2px 0px 0px #000000; cursor: pointer;"
+                            >
+                              ${iconPaintBucket(20, "#000000")} Or Try the Daily
+                              Challenge
+                            </button>
+                          </div>
+                        </div>
+                      </div>
+                      <footer
+                        style=${this.renderStyleObject(footerStyleSignal.get())}
+                      >
+                        <p style="margin: 0;">
+                          PAINT by COLOURS
+                          <a
+                            href="https://github.com/sponsors/iamogbz"
+                            target="_blank"
+                            style="color: inherit; text-decoration: inherit; cursor: pointer;"
+                            >❤️ QBRKTS</a
+                          >
+                          ©️ ${new Date().getFullYear()}
+                        </p>
+                      </footer>
+                    `
+                  : ""}
+                ${currentArtwork && !isProcessing
+                  ? html`
+                      <div
+                        style="width: 100%; display: flex; flex-direction: column; align-items: center;"
+                      >
+                        <div
+                          style="position: relative; width: 100%; aspect-ratio: ${currentArtwork.width} / ${currentArtwork.height}; border-radius: 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; background-color: transparent;"
+                        >
+                          ${currentArtwork.svgPaths
+                            ? html`
+                                <!-- Lower SVG for color fills -->
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="100%"
+                                  height="100%"
+                                  viewBox="0 0 ${currentArtwork.width} ${currentArtwork.height}"
+                                  style="position: relative; touch-action: none; display: block; max-height: none; max-width: none; overflow: visible; cursor: crosshair;"
+                                >
+                                  <defs>
+                                    ${currentArtwork.svgPaths.map(
+                                      (path) => svg`
                               <clipPath id="mask-${path.id}">
                                 <path d="${path.d}" />
                               </clipPath>
-                            `)}
-                          </defs>
+                            `
+                                    )}
+                                  </defs>
 
-                          ${currentArtwork.svgPaths.map((path) => {
-                            const isPainted = currentArtwork.paintedRegionsState?.[path.id];
-                            const expected = currentArtwork.regionExpectedColors?.[path.id];
-                            const fill = isPainted || (expected === "#00000000" ? "none" : "#FFFFFF");
-                            
-                            return svg`
+                                  ${currentArtwork.svgPaths.map((path) => {
+                                    const isPainted =
+                                      currentArtwork.paintedRegionsState?.[
+                                        path.id
+                                      ];
+                                    const expected =
+                                      currentArtwork.regionExpectedColors?.[
+                                        path.id
+                                      ];
+                                    const fill =
+                                      isPainted ||
+                                      (expected === "#00000000"
+                                        ? "none"
+                                        : "#FFFFFF");
+
+                                    return svg`
                               <path
                                 data-region-id="${path.id}"
                                 d="${path.d}"
@@ -971,15 +1047,24 @@ export class EaselBoard extends SignalElement {
                                 }}
                               />
                             `;
-                          })}
-
-                          ${currentArtwork.svgPaths.map((path) => {
-                            const strokes = this.brushStrokePaths[path.id] || [];
-                            return svg`
-                              <g clip-path="url(#mask-${path.id})" id="brush-paths-${path.id}">
+                                  })}
+                                  ${currentArtwork.svgPaths.map((path) => {
+                                    const strokes =
+                                      this.brushStrokePaths?.[path.id] || [];
+                                    return svg`
+                              <g clip-path="url(#mask-${
+                                path.id
+                              })" id="brush-paths-${path.id}">
                                 ${strokes.map((stroke) => {
                                   if (stroke.points.length === 0) return svg``;
-                                  const dStr = stroke.points.map((p, idx) => `${idx === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
+                                  const dStr = stroke.points
+                                    .map(
+                                      (p, idx) =>
+                                        `${idx === 0 ? "M" : "L"} ${p.x.toFixed(
+                                          1
+                                        )} ${p.y.toFixed(1)}`
+                                    )
+                                    .join(" ");
                                   return svg`
                                     <path
                                       d="${dStr}"
@@ -994,67 +1079,93 @@ export class EaselBoard extends SignalElement {
                                 })}
                               </g>
                             `;
-                          })}
-                        </svg>
+                                  })}
+                                </svg>
 
-                        <!-- Upper SVG for outline guides -->
-                        <svg 
-                            xmlns="http://www.w3.org/2000/svg"
-                            width="100%" height="100%" viewBox="0 0 ${currentArtwork.width} ${currentArtwork.height}"
-                            style="position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible;"
-                        >
-                          ${currentArtwork.svgPaths.map((path) => {
-                            const isPainted = currentArtwork.paintedRegionsState?.[path.id];
-                            const expected = currentArtwork.regionExpectedColors?.[path.id];
-                            
-                            let stroke = "none";
-                            let strokeWidth = "0";
-                            let mixBlendMode = "normal";
+                                <!-- Upper SVG for outline guides -->
+                                <svg
+                                  xmlns="http://www.w3.org/2000/svg"
+                                  width="100%"
+                                  height="100%"
+                                  viewBox="0 0 ${currentArtwork.width} ${currentArtwork.height}"
+                                  style="position: absolute; top: 0; left: 0; pointer-events: none; overflow: visible;"
+                                >
+                                  ${currentArtwork.svgPaths.map((path) => {
+                                    const isPainted =
+                                      currentArtwork.paintedRegionsState?.[
+                                        path.id
+                                      ];
+                                    const expected =
+                                      currentArtwork.regionExpectedColors?.[
+                                        path.id
+                                      ];
 
-                            if (expected !== "#00000000") {
-                              const baseStrokeWidth = Math.max(1, (currentArtwork.width / 400) / this.scale);
-                              
-                              const normalizeHex = (hex: string | undefined): string => {
-                                if (!hex) return "";
-                                let h = hex.trim().toUpperCase();
-                                if (!h.startsWith("#")) {
-                                  h = "#" + h;
-                                }
-                                if (h.length === 7) {
-                                  h = h + "FF";
-                                }
-                                return h;
-                              };
+                                    let stroke = "none";
+                                    let strokeWidth = "0";
+                                    let mixBlendMode = "normal";
 
-                              const targetHexUpper = normalizeHex(targetHex);
-                              const expectedUpper = normalizeHex(expected);
-                              const isPaintedUpper = normalizeHex(isPainted);
+                                    if (expected !== "#00000000") {
+                                      const baseStrokeWidth = Math.max(
+                                        1,
+                                        currentArtwork.width / 400 / this.scale
+                                      );
 
-                              const isTarget = !!targetHexUpper && expectedUpper === targetHexUpper;
-                              const isPaintedCorrect = !!isPainted && isPaintedUpper === expectedUpper;
-                              const isPaintedWrong = !!isPainted && isPaintedUpper !== expectedUpper;
-                              const isHovered = path.id === this.hoveredRegionId;
-                              strokeWidth = (baseStrokeWidth * (isPaintedWrong ? 1.2 : 1.0)).toString();
+                                      const normalizeHex = (
+                                        hex: string | undefined
+                                      ): string => {
+                                        if (!hex) return "";
+                                        let h = hex.trim().toUpperCase();
+                                        if (!h.startsWith("#")) {
+                                          h = "#" + h;
+                                        }
+                                        if (h.length === 7) {
+                                          h = h + "FF";
+                                        }
+                                        return h;
+                                      };
 
-                              if (isHovered) {
-                                stroke = targetHex || "#000000";
-                                mixBlendMode = "normal";
-                              } else {
-                                if (isTarget) {
-                                  if (isPaintedCorrect) {
-                                    stroke = "none";
-                                    strokeWidth = "0";
-                                    mixBlendMode = "normal";
-                                  } else {
-                                    stroke = "#FFFFFF";
-                                    strokeWidth = strokeWidth;
-                                    mixBlendMode = "difference";
-                                  }
-                                }
-                              }
-                            }
+                                      const targetHexUpper =
+                                        normalizeHex(targetHex);
+                                      const expectedUpper =
+                                        normalizeHex(expected);
+                                      const isPaintedUpper =
+                                        normalizeHex(isPainted);
 
-                            return svg`
+                                      const isTarget =
+                                        !!targetHexUpper &&
+                                        expectedUpper === targetHexUpper;
+                                      const isPaintedCorrect =
+                                        !!isPainted &&
+                                        isPaintedUpper === expectedUpper;
+                                      const isPaintedWrong =
+                                        !!isPainted &&
+                                        isPaintedUpper !== expectedUpper;
+                                      const isHovered =
+                                        path.id === this.hoveredRegionId;
+                                      strokeWidth = (
+                                        baseStrokeWidth *
+                                        (isPaintedWrong ? 1.2 : 1.0)
+                                      ).toString();
+
+                                      if (isHovered) {
+                                        stroke = targetHex || "#000000";
+                                        mixBlendMode = "normal";
+                                      } else {
+                                        if (isTarget) {
+                                          if (isPaintedCorrect) {
+                                            stroke = "none";
+                                            strokeWidth = "0";
+                                            mixBlendMode = "normal";
+                                          } else {
+                                            stroke = "#FFFFFF";
+                                            strokeWidth = strokeWidth;
+                                            mixBlendMode = "difference";
+                                          }
+                                        }
+                                      }
+                                    }
+
+                                    return svg`
                               <path
                                 d="${path.d}"
                                 fill="none"
@@ -1065,22 +1176,40 @@ export class EaselBoard extends SignalElement {
                                 style="mix-blend-mode: ${mixBlendMode};"
                               />
                             `;
-                          })}
-                        </svg>
-                      ` : html`
-                         <img src=${currentArtwork?.cartoonDataUrl || ""} style="width:100%;height:100%;object-fit:contain;opacity:0.5;filter:grayscale(1)" />
-                         <p style="position:absolute;color:black;font-weight:bold;background:white;padding:4px 8px;border-radius:4px">Legacy image format not supported by SVG engine.</p>
-                      `}
-                    </div>
-                  </div>
-                ` : ""}
+                                  })}
+                                </svg>
+                              `
+                            : html`
+                                <img
+                                  src=${currentArtwork?.cartoonDataUrl || ""}
+                                  style="width:100%;height:100%;object-fit:contain;opacity:0.5;filter:grayscale(1)"
+                                />
+                                <p
+                                  style="position:absolute;color:black;font-weight:bold;background:white;padding:4px 8px;border-radius:4px"
+                                >
+                                  Legacy image format not supported by SVG
+                                  engine.
+                                </p>
+                              `}
+                        </div>
+                      </div>
+                    `
+                  : ""}
               </div>
             </div>
-            
-            <div style="width: 100%; max-width: 28rem; display: flex; justify-content: space-between; padding: 0 2rem; margin-top: -0.5rem;">
-              <div style="width: 1.5rem; height: 4rem; background-color: #845442; border: 2px solid #845442; border-bottom-left-radius: 0.5rem; border-bottom-right-radius: 0.5rem; transform: rotate(12deg); box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
-              <div style="width: 1.5rem; height: 5rem; background-color: #845442; border: 2px solid #845442; border-bottom-left-radius: 0.5rem; border-bottom-right-radius: 0.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
-              <div style="width: 1.5rem; height: 4rem; background-color: #845442; border: 2px solid #845442; border-bottom-left-radius: 0.5rem; border-bottom-right-radius: 0.5rem; transform: rotate(-12deg); box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
+
+            <div
+              style="width: 100%; max-width: 28rem; display: flex; justify-content: space-between; padding: 0 2rem; margin-top: -0.5rem;"
+            >
+              <div
+                style="width: 1.5rem; height: 4rem; background-color: #845442; border: 2px solid #845442; border-bottom-left-radius: 0.5rem; border-bottom-right-radius: 0.5rem; transform: rotate(12deg); box-shadow: 0 4px 6px rgba(0,0,0,0.1);"
+              ></div>
+              <div
+                style="width: 1.5rem; height: 5rem; background-color: #845442; border: 2px solid #845442; border-bottom-left-radius: 0.5rem; border-bottom-right-radius: 0.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"
+              ></div>
+              <div
+                style="width: 1.5rem; height: 4rem; background-color: #845442; border: 2px solid #845442; border-bottom-left-radius: 0.5rem; border-bottom-right-radius: 0.5rem; transform: rotate(-12deg); box-shadow: 0 4px 6px rgba(0,0,0,0.1);"
+              ></div>
             </div>
           </div>
         </div>
