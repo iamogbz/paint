@@ -24,6 +24,142 @@ import { BASE_BRUSH_RADIUS, transparentImgCss } from "./constants";
 import { deepCopy } from "../utils/object";
 import { ProcessedArtwork } from "../types";
 
+function erasePointsFromStrokePath(
+  points: Array<{ x: number; y: number }>,
+  cx: number,
+  cy: number,
+  r: number
+): Array<Array<{ x: number; y: number }>> {
+  if (points.length === 0) return [];
+  if (points.length === 1) {
+    const distSq = (points[0].x - cx) ** 2 + (points[0].y - cy) ** 2;
+    return distSq < r * r ? [] : [[points[0]]];
+  }
+
+  const result: Array<Array<{ x: number; y: number }>> = [];
+  let currentSubPath: Array<{ x: number; y: number }> = [];
+
+  for (let i = 0; i < points.length - 1; i++) {
+    const p1 = points[i];
+    const p2 = points[i + 1];
+
+    const dx = p2.x - p1.x;
+    const dy = p2.y - p1.y;
+    const a = dx * dx + dy * dy;
+
+    if (a < 1e-9) {
+      const distSq = (p1.x - cx) ** 2 + (p1.y - cy) ** 2;
+      if (distSq >= r * r) {
+        if (currentSubPath.length === 0 || currentSubPath[currentSubPath.length - 1] !== p1) {
+          currentSubPath.push(p1);
+        }
+      }
+      continue;
+    }
+
+    const fx = p1.x - cx;
+    const fy = p1.y - cy;
+    const b = 2 * (fx * dx + fy * dy);
+    const c = fx * fx + fy * fy - r * r;
+
+    const discriminant = b * b - 4 * a * c;
+
+    if (discriminant < 0) {
+      const p1Inside = (fx * fx + fy * fy) < r * r;
+      if (!p1Inside) {
+        if (currentSubPath.length === 0) {
+          currentSubPath.push(p1);
+        }
+        currentSubPath.push(p2);
+      } else {
+        if (currentSubPath.length > 0) {
+          result.push(currentSubPath);
+          currentSubPath = [];
+        }
+      }
+    } else {
+      const sqrtDisc = Math.sqrt(discriminant);
+      let t1 = (-b - sqrtDisc) / (2 * a);
+      let t2 = (-b + sqrtDisc) / (2 * a);
+
+      if (t1 > t2) {
+        const temp = t1;
+        t1 = t2;
+        t2 = temp;
+      }
+
+      const tIn = Math.max(0, Math.min(t1, t2));
+      const tOut = Math.min(1, Math.max(t1, t2));
+
+      if (tIn >= tOut || tOut <= 0 || tIn >= 1) {
+        if (currentSubPath.length === 0) {
+          currentSubPath.push(p1);
+        }
+        currentSubPath.push(p2);
+      } else {
+        if (tIn > 0) {
+          const intersectIn = {
+            x: p1.x + tIn * dx,
+            y: p1.y + tIn * dy,
+          };
+          if (currentSubPath.length === 0) {
+            currentSubPath.push(p1);
+          }
+          currentSubPath.push(intersectIn);
+          result.push(currentSubPath);
+          currentSubPath = [];
+        } else {
+          if (currentSubPath.length > 0) {
+            result.push(currentSubPath);
+            currentSubPath = [];
+          }
+        }
+
+        if (tOut < 1) {
+          const intersectOut = {
+            x: p1.x + tOut * dx,
+            y: p1.y + tOut * dy,
+          };
+          currentSubPath.push(intersectOut);
+          currentSubPath.push(p2);
+        }
+      }
+    }
+  }
+
+  if (currentSubPath.length > 0) {
+    result.push(currentSubPath);
+  }
+
+  return result;
+}
+
+function eraseFromStrokesList(
+  strokes: Array<{ points: Array<{ x: number; y: number }>; stroke: string; strokeWidth: number }>,
+  eraserPoints: Array<{ x: number; y: number }>,
+  eraserRadius: number
+): Array<{ points: Array<{ x: number; y: number }>; stroke: string; strokeWidth: number }> {
+  let currentStrokes = [...strokes];
+
+  for (const ep of eraserPoints) {
+    const nextStrokes: Array<{ points: Array<{ x: number; y: number }>; stroke: string; strokeWidth: number }> = [];
+    for (const stroke of currentStrokes) {
+      const splitPaths = erasePointsFromStrokePath(stroke.points, ep.x, ep.y, eraserRadius);
+      for (const path of splitPaths) {
+        if (path.length > 0) {
+          nextStrokes.push({
+            ...stroke,
+            points: path,
+          });
+        }
+      }
+    }
+    currentStrokes = nextStrokes;
+  }
+
+  return currentStrokes;
+}
+
 @customElement("easel-board")
 export class EaselBoard extends SignalElement {
   private scale = 1;
@@ -221,19 +357,30 @@ export class EaselBoard extends SignalElement {
           ((e.clientY - rect.top) / rect.height) * currentArtwork.height;
 
         this.currentStrokeRegionId = regionId;
-        const startStrokePoint = {
-          points: [{ x, y }],
-          stroke: activeColor.hexCode,
-          strokeWidth: Math.max(1, BASE_BRUSH_RADIUS / this.scale),
-        };
+        const strokeWidth = Math.max(1, BASE_BRUSH_RADIUS / this.scale);
 
-        if (!this.brushStrokePaths[regionId]) {
-          this.brushStrokePaths[regionId] = [];
-        }
-        if (activeColor.hexCode !== "#00000000") {
+        if (activeColor.hexCode === "#00000000") {
+          if (this.brushStrokePaths[regionId]) {
+            this.brushStrokePaths[regionId] = eraseFromStrokesList(
+              this.brushStrokePaths[regionId],
+              [{ x, y }],
+              strokeWidth / 2
+            );
+          }
+          this.activeStrokeIdx = -1;
+        } else {
+          const startStrokePoint = {
+            points: [{ x, y }],
+            stroke: activeColor.hexCode,
+            strokeWidth,
+          };
+
+          if (!this.brushStrokePaths[regionId]) {
+            this.brushStrokePaths[regionId] = [];
+          }
           this.activeStrokeIdx = this.brushStrokePaths[regionId].length;
+          this.brushStrokePaths[regionId].push(startStrokePoint);
         }
-        this.brushStrokePaths[regionId].push(startStrokePoint);
       }
 
       window.addEventListener("pointermove", this.handleBrushPointerMove);
@@ -296,22 +443,11 @@ export class EaselBoard extends SignalElement {
               // instead remove from any strokes in the region
               if (this.brushStrokePaths[currentBrushRegionId]) {
                 this.brushStrokePaths[currentBrushRegionId] =
-                  this.brushStrokePaths[currentBrushRegionId]
-                    .map((stroke) => {
-                      const newPoints = stroke.points.filter((point) => {
-                        // Remove points that are within the strokePoints area
-                        return !strokePoints.some(
-                          (sp) =>
-                            Math.hypot(sp.x - point.x, sp.y - point.y) <
-                            strokeWidth / 2
-                        );
-                      });
-                      if (!newPoints.length) {
-                        return null; // Remove stroke if no points remain
-                      }
-                      return { ...stroke, points: newPoints };
-                    })
-                    .filter(Boolean);
+                  eraseFromStrokesList(
+                    this.brushStrokePaths[currentBrushRegionId],
+                    strokePoints,
+                    strokeWidth / 2
+                  );
               }
             } else {
               const startNewStrokePoint = {
