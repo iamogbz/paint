@@ -385,7 +385,7 @@ export class EaselBoard extends SignalElement {
           ((e.clientY - rect.top) / rect.height) * currentArtwork.height;
 
         this.currentStrokeRegionId = regionId;
-        const strokeWidth = Math.max(1, BASE_BRUSH_RADIUS / this.scale);
+        const strokeWidth = Math.round(Math.max(1, BASE_BRUSH_RADIUS / this.scale));
 
         if (activeColor.hexCode === "#00000000") {
           if (this.brushStrokePaths[regionId]) {
@@ -1078,7 +1078,7 @@ export class EaselBoard extends SignalElement {
                         style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;"
                       >
                         <div
-                          style="position: relative; width: 2rem; height: 2rem; display: flex; border-radius: 100%; align-items: center; justify-content: center;"
+                          style="position: relative; width: 2rem; height: 2rem; display: flex; border-radius: 100%; align-items: center; justify-content: center; animation: hue-loop 5s infinite"
                         >
                           <div style="position: absolute;">
                             ${iconSparkles(32, "#AA3311")}
