@@ -82,22 +82,14 @@ export async function processImageToCartoonPalette(
   const colorComplexity = uniqueColorBins.size;
 
   // Map color complexity to layerDifference
-  // Low complexity (flat color / simple icons) -> high layerDifference (96)
-  // High complexity (detailed / rich photo gradients) -> low layerDifference (16)
-  const minComplexity = 15;
-  const maxComplexity = 200;
-  const minLayerDiff = 16;
-  const maxLayerDiff = 96;
+  // Low complexity (flat color / simple icons) -> high layerDifference
+  // High complexity (detailed / rich photo gradients) -> low layerDifference
+  const minLayerDiff = 32;
+  const maxLayerDiff = 128;
 
-  let layerDifference = maxLayerDiff;
-  if (colorComplexity >= maxComplexity) {
-    layerDifference = minLayerDiff;
-  } else if (colorComplexity <= minComplexity) {
-    layerDifference = maxLayerDiff;
-  } else {
-    const t = (colorComplexity - minComplexity) / (maxComplexity - minComplexity);
-    layerDifference = Math.round(maxLayerDiff - t * (maxLayerDiff - minLayerDiff));
-  }
+  // 4,096 === 12-bit color space
+  const layerDifference = Math.round((1 - colorComplexity / 4096) * (maxLayerDiff - minLayerDiff) + minLayerDiff);
+  console.log({ colorComplexity, layerDifference })
 
   // Run vtracer
   await init("https://unpkg.com/@visioncortex/vtracer@1.0.0-alpha.3/pkg/vtracer_wasm_bg.wasm");
@@ -111,11 +103,11 @@ export async function processImageToCartoonPalette(
     /** If a pallete is defined maps colors to this */
     palette: palette,
     /** Discard patches smaller than X px in size (0..=128) */
-    // filterSpeckle: 8,
+    filterSpeckle: Math.min(Math.round(Math.max(width, height) / 1920 * 4), 128),
     /** default: 8 (best) - Significant bits per RGB channel (1..=8)  */
-    // colorPrecision: 8, 
+    colorPrecision: 8, 
     /** Color difference between gradient layers (0..=255) */
-    layerDifference,
+    layerDifference: layerDifference,
     /** Method for converting in to shapes. Values below only valid in spline */
     mode: 'spline',
     /** default: 60, Minimum Momentary Angle (in degrees) to be considered a corner (to be kept after smoothing) */
@@ -127,6 +119,7 @@ export async function processImageToCartoonPalette(
     /** default: off, Simplify curves: fewest cubics within this tolerance in px (try 1–2.5) */
     // simplify: 2,
   }
+  console.log(options)
   let svgStr = vectorize_rgba(rawPixels, width, height, options);
 
   if (!svgStr.includes("xmlns=")) {
