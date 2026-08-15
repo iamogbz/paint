@@ -14,6 +14,7 @@ import {
   pushUndoState,
   footerStyleSignal,
   isBrushModeSignal,
+  artworksSignal,
 } from "../state/store";
 import { ProcessedArtwork } from "../types";
 import { getDailyChallenge } from "../data/dailyChallenge";
@@ -24,6 +25,7 @@ import {
   iconSparkles,
   iconUpload,
   iconPaintBucket,
+  iconPaintbrush,
 } from "./icons";
 import { BASE_BRUSH_RADIUS, transparentImgCss } from "./constants";
 import { getOppositeHueRGBA } from "../utils/colorUtils";
@@ -822,7 +824,23 @@ export class EaselBoard extends SignalElement {
                       ${iconImage(20, "#FFFFFF")} Choose Photo
                     </button>
                     <div style="margin-top: 2rem; padding-top: 1.5rem; border-top: 2px solid rgba(0, 0, 0, 0.15); width: 100%;">
-                      <div style="display: flex; align-items: center; justify-content: center; gap: 0.5rem; flex-wrap: wrap;">
+                      <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 0.75rem; width: 100%;">
+                        ${artworksSignal.get().length > 0
+                          ? html`
+                              <button
+                                @click=${(e: Event) => {
+                                  e.stopPropagation();
+                                  const sorted = [...artworksSignal.get()].sort((a, b) => (b.modifiedAt || 0) - (a.modifiedAt || 0));
+                                  if (sorted.length > 0) {
+                                    handleSelectArtwork(sorted[0]);
+                                  }
+                                }}
+                                style="background-color: #2A9D8F; color: #FFFFFF; border: 2.5px solid #000000; padding: 0.625rem 1.25rem; border-radius: 16px; font-weight: 900; font-size: 0.875rem; display: flex; align-items: center; gap: 0.5rem; box-shadow: 2px 2px 0px 0px #000000; cursor: pointer; text-transform: uppercase;"
+                              >
+                                ${iconPaintbrush(18, "#FFFFFF")} Resume Painting
+                              </button>
+                            `
+                          : ""}
                         <button
                           @click=${(e: Event) => {
                             e.stopPropagation();

@@ -59,7 +59,6 @@ export async function loadSavedArtworks() {
     if (parsed && parsed.length > 0) {
       const sorted = parsed.sort((a, b) => (b.modifiedAt || 0) - (a.modifiedAt || 0));
       artworksSignal.set(sorted);
-      currentArtworkSignal.set(sorted[0]);
     }
   } catch (e) {
     console.warn("Could not restore saved artworks from idb", e);
