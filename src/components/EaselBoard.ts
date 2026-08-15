@@ -1,5 +1,4 @@
 import { html, svg } from "lit";
-import { unsafeSVG } from "lit/directives/unsafe-svg.js";
 import { customElement } from "lit/decorators.js";
 import { SignalElement } from "../utils/SignalElement";
 import {
@@ -1309,13 +1308,6 @@ private getRegionIdAtPoint(
                                 })}
                               </g>
                             `;
-                                  })}
-
-                                  ${currentArtwork.importedStrokes?.map((stroke) => {
-                                    const attrs = Object.entries(stroke.attributes)
-                                      .map(([k, v]) => `${k}="${v}"`)
-                                      .join(" ");
-                                    return svg`${unsafeSVG(`<${stroke.tagName} ${attrs} pointer-events="none" />`)}`;
                                   })}
                                 </svg>
 

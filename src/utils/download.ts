@@ -47,15 +47,6 @@ export function exportArtworkCleanDataUrl(artwork: ProcessedArtwork): string {
         }
       }
     }
-
-    if (artwork.importedStrokes && artwork.importedStrokes.length > 0) {
-      for (const stroke of artwork.importedStrokes) {
-        const attrs = Object.entries(stroke.attributes)
-          .map(([k, v]) => `${k}="${v}"`)
-          .join(" ");
-        svgContent += `<${stroke.tagName} ${attrs} />`;
-      }
-    }
     
     svgContent += `</svg>`;
     return "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgContent)));

@@ -19,11 +19,6 @@ export interface UndoHistoryItem {
 
 export interface SvgPath { id: number; d: string; }
 
-export interface ImportedStroke {
-  tagName: string;
-  attributes: Record<string, string>;
-}
-
 export interface ProcessedArtwork {
   id: string;
   name: string;
@@ -41,5 +36,4 @@ export interface ProcessedArtwork {
   regionExpectedColors?: Record<number, string>;
   svgPaths?: SvgPath[];
   brushStrokePaths?: Record<number, Array<{ points: Array<{ x: number, y: number }>; stroke: string; strokeWidth: number }>>;
-  importedStrokes?: ImportedStroke[];
 }
