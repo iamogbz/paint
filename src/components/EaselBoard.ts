@@ -573,6 +573,7 @@ private getRegionIdAtPoint(
     if (!isWindowFocusedSignal.get()) return;
     if (this.hasDragged) return;
     if (e.pointerType === "mouse" && e.button !== 0) return;
+    if (draggedColorSignal.get()) return;
 
     const isBrushMode = isBrushModeSignal.get();
     if (isBrushMode) return; // Handled in down/move
