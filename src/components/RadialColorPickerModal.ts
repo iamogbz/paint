@@ -549,6 +549,7 @@ export class RadialColorPickerModal extends SignalElement {
               <input
                 type="text"
                 maxlength="7"
+                pattern="^#?([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$"
                 .value=${this.hexInput}
                 @input=${this.handleHexInputChange}
                 style="width: 100%; border: 2px solid #000000; border-radius: 8px; padding: 0.25rem 0.5rem; font-weight: 800; font-family: monospace; font-size: 0.875rem; color: #000000; background-color: #FFFFFF;"
