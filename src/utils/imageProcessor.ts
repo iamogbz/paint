@@ -82,7 +82,7 @@ export async function processImageToCartoonPalette(
     /** default: 8 (best) - Significant bits per RGB channel (1..=8)  */
     // colorPrecision: 8, 
     /** Color difference between gradient layers (0..=255) */
-    layerDifference: 128,
+    layerDifference: 64,
     /** Method for converting in to shapes. Values below only valid in spline */
     mode: 'spline',
     /** default: 60, Minimum Momentary Angle (in degrees) to be considered a corner (to be kept after smoothing) */

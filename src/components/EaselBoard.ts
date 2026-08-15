@@ -1308,63 +1308,61 @@ export class EaselBoard extends SignalElement {
                                     let strokeWidth = "0";
                                     let mixBlendMode = "normal";
 
-                                    if (expected !== "#00000000") {
-                                      const baseStrokeWidth = Math.max(
-                                        1,
-                                        currentArtwork.width / 400 / this.scale
-                                      );
+                                    const baseStrokeWidth = Math.max(
+                                      1,
+                                      currentArtwork.width / 400 / this.scale
+                                    );
 
-                                      const normalizeHex = (
-                                        hex: string | undefined
-                                      ): string => {
-                                        if (!hex) return "";
-                                        let h = hex.trim().toUpperCase();
-                                        if (!h.startsWith("#")) {
-                                          h = "#" + h;
-                                        }
-                                        if (h.length === 7) {
-                                          h = h + "FF";
-                                        }
-                                        return h;
-                                      };
+                                    const normalizeHex = (
+                                      hex: string | undefined
+                                    ): string => {
+                                      if (!hex) return "";
+                                      let h = hex.trim().toUpperCase();
+                                      if (!h.startsWith("#")) {
+                                        h = "#" + h;
+                                      }
+                                      if (h.length === 7) {
+                                        h = h + "FF";
+                                      }
+                                      return h;
+                                    };
 
-                                      const targetHexUpper =
-                                        normalizeHex(targetHex);
-                                      const expectedUpper =
-                                        normalizeHex(expected);
-                                      const isPaintedUpper =
-                                        normalizeHex(isPainted);
+                                    const targetHexUpper =
+                                      normalizeHex(targetHex);
+                                    const expectedUpper =
+                                      normalizeHex(expected);
+                                    const isPaintedUpper =
+                                      normalizeHex(isPainted);
 
-                                      const isTarget =
-                                        !!targetHexUpper &&
-                                        expectedUpper === targetHexUpper;
-                                      const isPaintedCorrect =
-                                        !!isPainted &&
-                                        isPaintedUpper === expectedUpper;
-                                      const isPaintedWrong =
-                                        !!isPainted &&
-                                        isPaintedUpper !== expectedUpper;
-                                      const isHovered =
-                                        path.id === this.hoveredRegionId;
-                                      strokeWidth = (
-                                        baseStrokeWidth *
-                                        (isPaintedWrong ? 1.2 : 1.0)
-                                      ).toString();
+                                    const isTarget =
+                                      !!targetHexUpper &&
+                                      expectedUpper === targetHexUpper;
+                                    const isPaintedCorrect =
+                                      !!isPainted &&
+                                      isPaintedUpper === expectedUpper;
+                                    const isPaintedWrong =
+                                      !!isPainted &&
+                                      isPaintedUpper !== expectedUpper;
+                                    const isHovered =
+                                      path.id === this.hoveredRegionId;
+                                    strokeWidth = (
+                                      baseStrokeWidth *
+                                      (isPaintedWrong ? 1.2 : 1.0)
+                                    ).toString();
 
-                                      if (isHovered) {
-                                        stroke = targetHex || "#000000";
-                                        mixBlendMode = "normal";
-                                      } else {
-                                        if (isTarget) {
-                                          if (isPaintedCorrect) {
-                                            stroke = "none";
-                                            strokeWidth = "0";
-                                            mixBlendMode = "normal";
-                                          } else {
-                                            stroke = "#FFFFFF";
-                                            strokeWidth = strokeWidth;
-                                            mixBlendMode = "difference";
-                                          }
+                                    if (isHovered) {
+                                      stroke = targetHex || "#000000";
+                                      mixBlendMode = "normal";
+                                    } else {
+                                      if (isTarget) {
+                                        if (isPaintedCorrect) {
+                                          stroke = "none";
+                                          strokeWidth = "0";
+                                          mixBlendMode = "normal";
+                                        } else {
+                                          stroke = "#FFFFFF";
+                                          strokeWidth = strokeWidth;
+                                          mixBlendMode = "difference";
                                         }
                                       }
                                     }
