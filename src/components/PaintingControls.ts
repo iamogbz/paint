@@ -38,14 +38,6 @@ import { downloadImage, exportArtworkCleanDataUrl } from "../utils/download";
 export class PaintingControls extends SignalElement {
   @property({ type: Array }) colorStats: UsedColorStat[] = [];
 
-  connectedCallback() {
-    super.connectedCallback();
-  }
-
-  disconnectedCallback() {
-    super.disconnectedCallback();
-  }
-
   private timeoutId?: number;
   private panAnimationFrame: number | null = null;
   private isPanning = false;
