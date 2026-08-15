@@ -230,7 +230,9 @@ export class EaselBoard extends SignalElement {
         if (!this.brushStrokePaths[regionId]) {
           this.brushStrokePaths[regionId] = [];
         }
-        this.activeStrokeIdx = this.brushStrokePaths[regionId].length;
+        if (activeColor.hexCode !== "#00000000") {
+          this.activeStrokeIdx = this.brushStrokePaths[regionId].length;
+        }
         this.brushStrokePaths[regionId].push(startStrokePoint);
       }
 
@@ -287,20 +289,45 @@ export class EaselBoard extends SignalElement {
           let activeColor =
             activeHighlightColorSignal.get() ||
             currentArtwork.colorStats[0]?.color;
+          const strokeWidth = Math.max(1, BASE_BRUSH_RADIUS / this.scale);
           if (activeColor) {
-            const startNewStrokePoint = {
-              points: strokePoints,
-              stroke: activeColor.hexCode,
-              strokeWidth: Math.max(1, BASE_BRUSH_RADIUS / this.scale),
-            };
-            if (!this.brushStrokePaths[currentBrushRegionId]) {
-              this.brushStrokePaths[currentBrushRegionId] = [];
+            // If the active color is transparent, do not create a new stroke
+            if (activeColor.hexCode === "#00000000") {
+              // instead remove from any strokes in the region
+              if (this.brushStrokePaths[currentBrushRegionId]) {
+                this.brushStrokePaths[currentBrushRegionId] =
+                  this.brushStrokePaths[currentBrushRegionId]
+                    .map((stroke) => {
+                      const newPoints = stroke.points.filter((point) => {
+                        // Remove points that are within the strokePoints area
+                        return !strokePoints.some(
+                          (sp) =>
+                            Math.hypot(sp.x - point.x, sp.y - point.y) <
+                            strokeWidth / 2
+                        );
+                      });
+                      if (!newPoints.length) {
+                        return null; // Remove stroke if no points remain
+                      }
+                      return { ...stroke, points: newPoints };
+                    })
+                    .filter(Boolean);
+              }
+            } else {
+              const startNewStrokePoint = {
+                points: strokePoints,
+                stroke: activeColor.hexCode,
+                strokeWidth,
+              };
+              if (!this.brushStrokePaths[currentBrushRegionId]) {
+                this.brushStrokePaths[currentBrushRegionId] = [];
+              }
+              this.activeStrokeIdx =
+                this.brushStrokePaths[currentBrushRegionId].length;
+              this.brushStrokePaths[currentBrushRegionId].push(
+                startNewStrokePoint
+              );
             }
-            this.activeStrokeIdx =
-              this.brushStrokePaths[currentBrushRegionId].length;
-            this.brushStrokePaths[currentBrushRegionId].push(
-              startNewStrokePoint
-            );
           }
         }
       } else {
