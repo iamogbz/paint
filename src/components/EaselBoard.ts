@@ -160,6 +160,23 @@ function eraseFromStrokesList(
   return currentStrokes;
 }
 
+// Pre-ordered offsets within a 4px radius, sorted by distance from center for O(1) closest match retrieval
+const SEARCH_OFFSETS_4PX = [
+  { dx: 0, dy: 0 },
+  { dx: 1, dy: 0 }, { dx: -1, dy: 0 }, { dx: 0, dy: 1 }, { dx: 0, dy: -1 },
+  { dx: 1, dy: 1 }, { dx: -1, dy: 1 }, { dx: 1, dy: -1 }, { dx: -1, dy: -1 },
+  { dx: 2, dy: 0 }, { dx: -2, dy: 0 }, { dx: 0, dy: 2 }, { dx: 0, dy: -2 },
+  { dx: 2, dy: 1 }, { dx: -2, dy: 1 }, { dx: 2, dy: -1 }, { dx: -2, dy: -1 },
+  { dx: 1, dy: 2 }, { dx: -1, dy: 2 }, { dx: 1, dy: -2 }, { dx: -1, dy: -2 },
+  { dx: 2, dy: 2 }, { dx: -2, dy: 2 }, { dx: 2, dy: -2 }, { dx: -2, dy: -2 },
+  { dx: 3, dy: 0 }, { dx: -3, dy: 0 }, { dx: 0, dy: 3 }, { dx: 0, dy: -3 },
+  { dx: 3, dy: 1 }, { dx: -3, dy: 1 }, { dx: 3, dy: -1 }, { dx: -3, dy: -1 },
+  { dx: 1, dy: 3 }, { dx: -1, dy: 3 }, { dx: 1, dy: -3 }, { dx: -1, dy: -3 },
+  { dx: 3, dy: 2 }, { dx: -3, dy: 2 }, { dx: 3, dy: -2 }, { dx: -3, dy: -2 },
+  { dx: 2, dy: 3 }, { dx: -2, dy: 3 }, { dx: 2, dy: -3 }, { dx: -2, dy: -3 },
+  { dx: 4, dy: 0 }, { dx: -4, dy: 0 }, { dx: 0, dy: 4 }, { dx: 0, dy: -4 }
+];
+
 @customElement("easel-board")
 export class EaselBoard extends SignalElement {
   private scale = 1;
@@ -324,36 +341,21 @@ private getRegionIdAtPoint(
 
     if (selectedColorHex) {
       const normalizedSelectedHex = this.normalizeHexColor(selectedColorHex);
-      let closestRegionId: number | null = null;
-      let minDistance = Infinity;
-
-      for (let dx = -4; dx <= 4; dx += 1) {
-        for (let dy = -4; dy <= 4; dy += 1) {
-          const distSq = dx * dx + dy * dy;
-          if (distSq <= 4 * 4) {
-            const x = targetX + dx;
-            const y = targetY + dy;
-            const element = document.elementFromPoint(x, y);
-            if (element && element.tagName.toLowerCase() === "path") {
-              const regionIdStr = element.getAttribute("data-region-id");
-              if (regionIdStr) {
-                const rId = parseInt(regionIdStr, 10);
-                const expectedColor = currentArtwork.regionExpectedColors[rId];
-                if (this.normalizeHexColor(expectedColor) === normalizedSelectedHex) {
-                  const dist = Math.sqrt(distSq);
-                  if (dist < minDistance) {
-                    minDistance = dist;
-                    closestRegionId = rId;
-                  }
-                }
-              }
+      for (let i = 0; i < SEARCH_OFFSETS_4PX.length; i++) {
+        const offset = SEARCH_OFFSETS_4PX[i];
+        const x = targetX + offset.dx;
+        const y = targetY + offset.dy;
+        const element = document.elementFromPoint(x, y);
+        if (element && element.tagName.toLowerCase() === "path") {
+          const regionIdStr = element.getAttribute("data-region-id");
+          if (regionIdStr) {
+            const rId = parseInt(regionIdStr, 10);
+            const expectedColor = currentArtwork.regionExpectedColors[rId];
+            if (this.normalizeHexColor(expectedColor) === normalizedSelectedHex) {
+              return rId;
             }
           }
         }
-      }
-
-      if (closestRegionId !== null) {
-        return closestRegionId;
       }
     }
 
