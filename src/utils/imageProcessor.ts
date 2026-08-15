@@ -1,4 +1,4 @@
-import { ProcessedArtwork, UsedColorStat, SvgPath } from "../types";
+import { ProcessedArtwork, UsedColorStat, SvgPath, ImportedStroke } from "../types";
 import init, { vectorize_rgba } from "../vtracer/vtracer_wasm.js";
 
 function loadImage(src: string): Promise<HTMLImageElement> {
@@ -41,6 +41,7 @@ export async function processImageToCartoonPalette(
   // Extract colors if SVG to preserve them
   let palette: string[] | undefined = undefined;
   let maxColors = 32;
+  let importedStrokes: ImportedStroke[] | undefined = undefined;
 
   if (isSvgImage) {
     try {
@@ -61,8 +62,27 @@ export async function processImageToCartoonPalette(
         palette = Array.from(uniqueColors);
         maxColors = palette.length; // Not really needed if palette is provided, but good for logic
       }
+
+      const strokeElements = Array.from(doc.querySelectorAll("[stroke]")).filter(el => {
+        const stroke = el.getAttribute("stroke");
+        return stroke && stroke !== "none" && stroke !== "transparent";
+      });
+
+      if (strokeElements.length > 0) {
+        importedStrokes = strokeElements.map(el => {
+          const attributes: Record<string, string> = {};
+          for (let i = 0; i < el.attributes.length; i++) {
+            const attr = el.attributes[i];
+            attributes[attr.name] = attr.value;
+          }
+          return {
+            tagName: el.tagName,
+            attributes
+          };
+        });
+      }
     } catch (e) {
-      console.warn("Failed to extract SVG palette", e);
+      console.warn("Failed to extract SVG palette or strokes", e);
     }
   }
 
@@ -165,6 +185,7 @@ export async function processImageToCartoonPalette(
     colorStats,
     totalPixels: width * height,
     regionExpectedColors,
-    svgPaths
+    svgPaths,
+    importedStrokes
   };
 }
