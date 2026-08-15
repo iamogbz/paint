@@ -4,7 +4,14 @@ import init, { vectorize_rgba } from "../vtracer/vtracer_wasm.js";
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
     const img = new Image();
-    img.crossOrigin = "anonymous";
+    
+    const isHttp = src.startsWith("http://") || src.startsWith("https://");
+    const isSameOrigin = !isHttp || src.startsWith(window.location.origin);
+    
+    if (!isSameOrigin) {
+      img.crossOrigin = "anonymous";
+    }
+    
     img.onload = () => resolve(img);
     img.onerror = reject;
     img.src = src;
