@@ -264,7 +264,9 @@ export class EaselBoard extends SignalElement {
     let activeColor = activeHighlightColorSignal.get();
     if (!activeColor) return;
 
-    if (!this.brushPaintedRegions.has(regionId)) {
+    const currentArtwork = currentArtworkSignal.get();
+    const isSameExpectedColor = currentArtwork.regionExpectedColors[regionIdStr] === currentArtwork.regionExpectedColors[this.brushTargetRegionId];
+    if (!this.brushPaintedRegions.has(regionId) && isSameExpectedColor) {
       this.brushPaintedRegions.add(regionId);
       this.fillRegion(regionId, activeColor.hexCode);
     }
