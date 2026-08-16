@@ -192,6 +192,7 @@ export class EaselBoard extends SignalElement {
   private isDragging = false;
   private zoomAnimationEndTime = 0;
   private isPinching = false;
+  private pinchActiveInGesture = false;
   private initialPinchDist = 0;
   private initialScale = 1;
   private startTouchX = 0;
@@ -401,6 +402,7 @@ export class EaselBoard extends SignalElement {
 
   private handleSvgPointerDown = (e: PointerEvent) => {
     if (!isWindowFocusedSignal.get()) return;
+    if (this.isPinching || this.pinchActiveInGesture) return;
     if (e.pointerType === "mouse" && e.button !== 0) return;
 
     const isBrushMode = isBrushModeSignal.get();
@@ -491,6 +493,11 @@ export class EaselBoard extends SignalElement {
 
   private handleBrushPointerMove = (e: PointerEvent) => {
     if (!this.isBrushPainting) return;
+    if (this.isPinching || this.pinchActiveInGesture) {
+      this.isBrushPainting = false;
+      this.activeStrokeIdx = -1;
+      return;
+    }
     this.brushPositionBuffer.push({ x: e.clientX, y: e.clientY });
 
     const svgEl = this.querySelector<SVGSVGElement>("svg");
@@ -576,7 +583,7 @@ export class EaselBoard extends SignalElement {
 
   private handleSvgPointerUp = (e: PointerEvent) => {
     if (!isWindowFocusedSignal.get()) return;
-    if (this.hasDragged) return;
+    if (this.hasDragged || this.isPinching || this.pinchActiveInGesture) return;
     if (e.pointerType === "mouse" && e.button !== 0) return;
     if (draggedColorSignal.get()) return;
 
@@ -797,10 +804,22 @@ export class EaselBoard extends SignalElement {
   };
 
   private handleTouchStart = (e: TouchEvent) => {
-    if (e.touches.length === 2) {
+    if (e.touches.length >= 2) {
       e.preventDefault();
       this.isPinching = true;
+      this.pinchActiveInGesture = true;
       this.hasDragged = true;
+
+      // Abort active brush stroke if pinching/zooming
+      if (this.isBrushPainting) {
+        this.isBrushPainting = false;
+        const currentArtwork = currentArtworkSignal.get();
+        if (currentArtwork) {
+          this.brushStrokePaths = deepCopy(currentArtwork.brushStrokePaths ?? {});
+        }
+        this.activeStrokeIdx = -1;
+      }
+
       const t1 = e.touches[0];
       const t2 = e.touches[1];
       this.initialPinchDist = Math.hypot(
@@ -820,7 +839,9 @@ export class EaselBoard extends SignalElement {
         return;
       }
       this.isPinching = false;
-      this.hasDragged = false;
+      if (!this.pinchActiveInGesture) {
+        this.hasDragged = false;
+      }
       this.pointerDownX = e.touches[0].clientX;
       this.pointerDownY = e.touches[0].clientY;
       this.startTouchX = e.touches[0].clientX;
@@ -907,6 +928,9 @@ export class EaselBoard extends SignalElement {
       zoomScaleSignal.set(this.scale);
       this.updateTransformStyle();
     }
+    if (e.touches.length === 0) {
+      this.pinchActiveInGesture = false;
+    }
   };
 
   private handleWheel = (e: WheelEvent) => {
@@ -917,7 +941,7 @@ export class EaselBoard extends SignalElement {
 
   private handlePointerDown = (e: PointerEvent) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
-    if (this.isPinching) return;
+    if (this.isPinching || this.pinchActiveInGesture) return;
     if (isBrushModeSignal.get()) {
       this.isDragging = false;
       return;
@@ -943,7 +967,9 @@ export class EaselBoard extends SignalElement {
 
     this.pointerDownX = e.clientX;
     this.pointerDownY = e.clientY;
-    this.hasDragged = false;
+    if (!this.isPinching && !this.pinchActiveInGesture) {
+      this.hasDragged = false;
+    }
     this.isDragging = true;
     this.startTouchX = e.clientX;
     this.startTouchY = e.clientY;
@@ -1153,7 +1179,7 @@ export class EaselBoard extends SignalElement {
                 ${currentArtwork || isProcessing
                   ? html`
                       <div
-                        style="width: 100%; aspect-ratio: ${processingWidth} / ${processingHeight}; display: flex; flex-direction: column; justify-content: center; align-items: center; position: ${isProcessing ? 'relative' : 'absolute'}; animation: blur-pulse 2s infinite ease-in-out; transition: opacity 1s ease-out; opacity: ${isProcessing ?  1 : 0}; z-index: 1000; pointer-events: none;"
+                        id="original-image" style="width: 100%; aspect-ratio: ${processingWidth} / ${processingHeight}; display: flex; flex-direction: column; justify-content: center; align-items: center; position: ${isProcessing ? 'relative' : 'absolute'}; animation: blur-pulse 2s infinite ease-in-out; transition: opacity 1s ease-out; opacity: ${isProcessing ?  1 : 0}; z-index: 1000; pointer-events: none;"
                       >
                         <div
                           style="position: relative; width: 100%; height: 100%; border-radius: 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; background-color: transparent;"
