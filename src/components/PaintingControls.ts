@@ -30,10 +30,10 @@ import {
   iconMove,
   iconTrash2,
 } from "./icons";
-import { transparentImgCss } from "./constants";
+import { DROPPER_BUFFER_PX, transparentImgCss } from "./constants";
 import { soundEffects } from "../utils/soundEffects";
 import { downloadImage, exportArtworkCleanDataUrl } from "../utils/download";
-import { hexToRgb, rgbToHsv } from "../utils/color";
+
 
 @customElement("painting-controls")
 export class PaintingControls extends SignalElement {
@@ -173,7 +173,7 @@ export class PaintingControls extends SignalElement {
         // offset by certain amount on the Y axis for better visibility
         draggedPositionSignal.set({
           x: moveEvent.clientX,
-          y: moveEvent.clientY - 60,
+          y: moveEvent.clientY - DROPPER_BUFFER_PX,
         });
         const moveEvt = new CustomEvent("color-drag-move", {
           detail: { x: moveEvent.clientX, y: moveEvent.clientY },

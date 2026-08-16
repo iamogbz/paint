@@ -22,11 +22,11 @@ import {
 } from "../state/store";
 import { getDailyChallenge } from "../data/dailyChallenge";
 import { soundEffects } from "../utils/soundEffects";
-import { iconImage, iconSparkles, iconUpload, iconPaintBucket } from "./icons";
-import { BASE_BRUSH_RADIUS, transparentImgCss } from "./constants";
+import { iconImage, iconUpload, iconPaintBucket } from "./icons";
+import { BASE_BRUSH_RADIUS, DROPPER_BUFFER_PX, transparentImgCss } from "./constants";
 import { deepCopy } from "../utils/object";
 import { normalizeHex } from "../utils/color";
-import { BrushStrokePaths, ProcessedArtwork } from "../types";
+import { BrushStrokePaths } from "../types";
 
 function erasePointsFromStrokePath(
   points: Array<{ x: number; y: number }>,
@@ -315,8 +315,6 @@ export class EaselBoard extends SignalElement {
     }
   }
 
-  private dropperBufferPx = 60;
-
   private normalizeHexColor(hex: string | undefined): string {
     if (!hex) return "";
     let h = hex.trim().toUpperCase();
@@ -347,7 +345,7 @@ export class EaselBoard extends SignalElement {
     }
 
     const targetX = clientX;
-    const targetY = isDragging ? clientY - this.dropperBufferPx : clientY;
+    const targetY = isDragging ? clientY - DROPPER_BUFFER_PX : clientY;
 
     const getRegionAt = (x: number, y: number): number | null => {
       const el = document.elementFromPoint(x, y);
