@@ -803,6 +803,7 @@ export class PaintingControls extends SignalElement {
                       hsl(360, 100%, 50%) 360deg  /* Red at 360° */
                       );`,
                       transition: "transform 0.15s ease",
+                      animation: "hue-loop linear 5s infinite",
                     })}
                   >
                     <div
