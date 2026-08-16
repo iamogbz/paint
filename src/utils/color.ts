@@ -1,5 +1,3 @@
-import { memoise } from "./object";
-
 // Color math utilities
 export function hsvToRgb(
   h: number,
@@ -123,7 +121,7 @@ export function normalizeHex(hex) {
   return h;
 }
 
-export const getColorProperties = memoise((hexCode: string) => {
+export function getColorProperties(hexCode: string) {
   const rgb = hexToRgb(hexCode);
   if (!rgb) return { isGray: true, h: 0, s: 0, v: 0 };
   const [h, s, v] = rgbToHsv(rgb[0], rgb[1], rgb[2]);
@@ -134,4 +132,4 @@ export const getColorProperties = memoise((hexCode: string) => {
   // - or it's very pale/light (s < 0.15 and v > 0.9)
   const isGray = s < 0.08 || v < 0.08 || (s < 0.15 && v > 0.9);
   return { isGray, h, s, v };
-})
+}
