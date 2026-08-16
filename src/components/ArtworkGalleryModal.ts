@@ -1,6 +1,7 @@
 import { html } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import { SignalElement } from "../utils/SignalElement";
+import { ProcessedArtwork } from "../types";
 import {
   isGalleryOpenSignal,
   artworksSignal,
