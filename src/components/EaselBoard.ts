@@ -1225,7 +1225,7 @@ export class EaselBoard extends SignalElement {
             <div style=${this.renderStyleObject(easelTopClampStyle)}></div>
             <div style=${this.renderStyleObject(mainFrameStyle)}>
               <div
-                style="display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; padding: 0.5rem; background-size: 0.5rem 0.5rem; background-image: ${transparentImgCss}; min-height: 40vh; overflow: hidden;"
+                style="display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; padding: 0.5rem; background-size: 0.5rem 0.5rem; background-image: ${transparentImgCss}; min-height: 40vh;"
               >
                 ${currentArtwork || isProcessing
                   ? html`
@@ -1238,7 +1238,7 @@ export class EaselBoard extends SignalElement {
                           : 0}; z-index: 1000; pointer-events: none;"
                       >
                         <div
-                          style="position: relative; width: 100%; height: 100%; border-radius: 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; background-color: transparent;"
+                          style="position: relative; width: 100%; height: 100%; display: flex; align-items: center; justify-content: center; background-color: transparent;"
                         >
                           <img
                             src="${processingSrc ||
@@ -1339,12 +1339,10 @@ export class EaselBoard extends SignalElement {
                 ${currentArtwork && !isProcessing
                   ? html`
                       <div
-                        style="width: 100%; display: flex; flex-direction: column; align-items: center; transition: opacity 1s ease-in-out; opacity: ${isProcessing
-                          ? 0
-                          : 1};"
+                        style="width: 100%; display: flex; flex-direction: column; align-items: center; ${isProcessing ? 'opacity: 0;' : ''}"
                       >
                         <div
-                          style="position: relative; width: 100%; aspect-ratio: ${currentArtwork.width} / ${currentArtwork.height}; border-radius: 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; background-color: transparent;"
+                          style="position: relative; width: 100%; aspect-ratio: ${currentArtwork.width} / ${currentArtwork.height}; display: flex; align-items: center; justify-content: center; background-color: transparent;"
                         >
                           ${currentArtwork.svgPaths
                             ? html`
@@ -1459,7 +1457,6 @@ export class EaselBoard extends SignalElement {
 
                                     let stroke = "none";
                                     let strokeWidth = "0";
-                                    let mixBlendMode = "normal";
 
                                     const baseStrokeWidth = Math.max(
                                       1,
@@ -1495,19 +1492,14 @@ export class EaselBoard extends SignalElement {
                                       stroke = isTransparentPaintFill
                                         ? "#FFFFFF"
                                         : targetHex || "#000000";
-                                      mixBlendMode = isTransparentPaintFill
-                                        ? "difference"
-                                        : "normal";
                                     } else {
                                       if (isTarget) {
                                         if (isPaintedCorrect) {
                                           stroke = "none";
                                           strokeWidth = "0";
-                                          mixBlendMode = "normal";
                                         } else {
                                           stroke = "#FFFFFF";
                                           strokeWidth = strokeWidth;
-                                          mixBlendMode = "difference";
                                         }
                                       } else if (
                                         !this.hoveredRegionId &&
@@ -1516,7 +1508,6 @@ export class EaselBoard extends SignalElement {
                                         stroke = "#00000088";
                                         strokeWidth =
                                           baseStrokeWidth.toString();
-                                        mixBlendMode = "normal";
                                       }
                                     }
 
@@ -1528,7 +1519,6 @@ export class EaselBoard extends SignalElement {
                                 stroke-width="${strokeWidth}"
                                 stroke-linejoin="round"
                                 pointer-events="none"
-                                style="mix-blend-mode: ${mixBlendMode};"
                               />
                             `;
                                   })}
