@@ -69,8 +69,7 @@ export async function downloadImage(dataUrl: string, filename: string): Promise<
     const file = new File([blob], fullFilename, { type: mimeType });
 
     // 2. Try Web Share API (Mobile Safari / Android Chrome share sheet - allows direct saving to Photos)
-    const isMobile = /Android|webOS|iPhone|iPad|iPod|BlackBerry|IEMobile|Opera Mini/i.test(navigator.userAgent);
-    if (isMobile && navigator.canShare && navigator.canShare({ files: [file] })) {
+    if (navigator.canShare && navigator.canShare({ files: [file] })) {
       try {
         await navigator.share({
           files: [file],
