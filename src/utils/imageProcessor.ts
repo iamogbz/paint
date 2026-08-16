@@ -25,13 +25,27 @@ async function transformSVGForPainting(
     const errorMsg = "Failed to parse SVG document";
     console.error(errorMsg, svgDoc.documentElement);
     throw Error(errorMsg);
-  }
 
   // TODO
   // 1. turn all the strokes with >0 widths into paths, the stroke color is now the fill and the new path has no stroke
   // 2. check all the paths in the document including the strokes that just got turned to paths and divide them into unique islands until they are no overlapping paths
   // 3. make sure that the fills for all paths even if was assigned by inheritance are preserved during the previous step
   // 4. parse the generated svg and return it for processing
+  }
+
+  // assign black fill to all elements without a fill attribute
+  // this solve the issue of some paths needing to be rendered as black by default
+  // but introduces an issue where elements that can not be painted are added to the region count
+  svgDoc.querySelectorAll("*:not([fill])").forEach((el) => {
+    el.setAttribute("fill", "#000000FF");
+  });
+
+  // assign transparent fill to all elements with fill="none"
+  // this solve the issue of including transparent regions as places that can be filled in
+  // however when the splitting of overlapping region occurs transparent sections should not win over coloured sections
+  svgDoc.querySelectorAll("[fill='none']").forEach((el) => {
+    el.setAttribute("fill", "#00000000");
+  });
 
   const svgElement = svgDoc.documentElement;
 
