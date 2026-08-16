@@ -103,7 +103,7 @@ export async function processImageToCartoonPalette(
       /** Discard patches smaller than X px in size (0..=128) */
       // filterSpeckle: Math.min(Math.round(Math.max(img.width, img.height) / 1920 * 4), 128),
       /** default: 8 (best) - Significant bits per RGB channel (1..=8)  */
-      // colorPrecision: 8,
+      colorPrecision: 8,
       /** Color difference between gradient layers (0..=255) */
       // layerDifference: 48,
       /** Method for converting in to shapes. Values below only valid in spline */
