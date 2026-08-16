@@ -91,6 +91,7 @@ export async function downloadImage(dataUrl: string, filename: string): Promise<
     const link = document.createElement("a");
     link.href = blobUrl;
     link.download = fullFilename;
+    link.target = "_blank";
     link.style.display = "none";
     document.body.appendChild(link);
     link.click();
