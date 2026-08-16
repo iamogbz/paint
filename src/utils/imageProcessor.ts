@@ -12,6 +12,264 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
+function resolveAttribute(
+  element: Element,
+  attrName: string,
+  svgDoc: Document
+): string | null {
+  let curr: Element | null = element;
+  while (curr && curr.tagName.toLowerCase() !== "svg") {
+    const val = curr.getAttribute(attrName);
+    if (val) return val;
+    curr = curr.parentElement;
+  }
+  return svgDoc.documentElement.getAttribute(attrName);
+}
+
+function elementToPathD(el: Element): string {
+  const tag = el.tagName.toLowerCase();
+  if (tag === "path") {
+    return el.getAttribute("d") || "";
+  }
+  if (tag === "rect") {
+    const x = parseFloat(el.getAttribute("x") || "0");
+    const y = parseFloat(el.getAttribute("y") || "0");
+    const w = parseFloat(el.getAttribute("width") || "0");
+    const h = parseFloat(el.getAttribute("height") || "0");
+    return `M ${x} ${y} h ${w} v ${h} h ${-w} z`;
+  }
+  if (tag === "circle") {
+    const cx = parseFloat(el.getAttribute("cx") || "0");
+    const cy = parseFloat(el.getAttribute("cy") || "0");
+    const r = parseFloat(el.getAttribute("r") || "0");
+    return `M ${cx - r} ${cy} a ${r} ${r} 0 1 0 ${r * 2} 0 a ${r} ${r} 0 1 0 ${-r * 2} 0 z`;
+  }
+  if (tag === "ellipse") {
+    const cx = parseFloat(el.getAttribute("cx") || "0");
+    const cy = parseFloat(el.getAttribute("cy") || "0");
+    const rx = parseFloat(el.getAttribute("rx") || "0");
+    const ry = parseFloat(el.getAttribute("ry") || "0");
+    return `M ${cx - rx} ${cy} a ${rx} ${ry} 0 1 0 ${rx * 2} 0 a ${rx} ${ry} 0 1 0 ${-rx * 2} 0 z`;
+  }
+  if (tag === "line") {
+    const x1 = parseFloat(el.getAttribute("x1") || "0");
+    const y1 = parseFloat(el.getAttribute("y1") || "0");
+    const x2 = parseFloat(el.getAttribute("x2") || "0");
+    const y2 = parseFloat(el.getAttribute("y2") || "0");
+    return `M ${x1} ${y1} L ${x2} ${y2}`;
+  }
+  if (tag === "polygon" || tag === "polyline") {
+    const pointsStr = el.getAttribute("points") || "";
+    const coords = pointsStr
+      .trim()
+      .split(/[\s,]+/)
+      .map(parseFloat)
+      .filter((v) => !isNaN(v));
+    if (coords.length < 4) return "";
+    let path = `M ${coords[0]} ${coords[1]}`;
+    for (let i = 2; i < coords.length; i += 2) {
+      path += ` L ${coords[i]} ${coords[i + 1]}`;
+    }
+    if (tag === "polygon") path += " Z";
+    return path;
+  }
+  return "";
+}
+
+const DX = [0, 1, 1, 1, 0, -1, -1, -1];
+const DY = [-1, -1, 0, 1, 1, 1, 0, -1];
+
+function traceContour(
+  startX: number,
+  startY: number,
+  id: number,
+  width: number,
+  height: number,
+  data32: Uint32Array,
+  visited: Uint8Array
+): Array<{ x: number; y: number }> | null {
+  const points: Array<{ x: number; y: number }> = [];
+
+  let x = startX;
+  let y = startY;
+  let backtrackDir = 6; // West
+
+  const firstX = startX;
+  const firstY = startY;
+
+  let iter = 0;
+  const maxIterations = 50000;
+  const pathSet = new Set<string>();
+
+  while (iter++ < maxIterations) {
+    points.push({ x, y });
+    visited[y * width + x] = 1;
+
+    let foundNext = false;
+    let nextX = -1;
+    let nextY = -1;
+    let nextDir = -1;
+
+    const searchStart = (backtrackDir + 1) % 8;
+    for (let i = 0; i < 8; i++) {
+      const dir = (searchStart + i) % 8;
+      const nx = x + DX[dir];
+      const ny = y + DY[dir];
+
+      if (nx >= 0 && nx < width && ny >= 0 && ny < height) {
+        const val = data32[ny * width + nx] & 0x00ffffff;
+        if (val === id) {
+          nextX = nx;
+          nextY = ny;
+          nextDir = dir;
+          foundNext = true;
+          break;
+        }
+      }
+    }
+
+    if (!foundNext) {
+      break;
+    }
+
+    if (nextX === firstX && nextY === firstY && points.length > 1) {
+      break;
+    }
+
+    backtrackDir = (nextDir + 4) % 8;
+    x = nextX;
+    y = nextY;
+
+    const coordKey = `${x},${y}`;
+    if (pathSet.has(coordKey) && x === firstX && y === firstY) {
+      break;
+    }
+    pathSet.add(coordKey);
+  }
+
+  return points;
+}
+
+function getOrthogonalDistance(
+  p: { x: number; y: number },
+  lineStart: { x: number; y: number },
+  lineEnd: { x: number; y: number }
+): number {
+  const dx = lineEnd.x - lineStart.x;
+  const dy = lineEnd.y - lineStart.y;
+
+  const mag = Math.sqrt(dx * dx + dy * dy);
+  if (mag === 0) {
+    return Math.sqrt((p.x - lineStart.x) ** 2 + (p.y - lineStart.y) ** 2);
+  }
+
+  return (
+    Math.abs(
+      dy * p.x -
+        dx * p.y +
+        lineEnd.x * lineStart.y -
+        lineEnd.y * lineStart.x
+    ) / mag
+  );
+}
+
+function simplifyPath(
+  points: Array<{ x: number; y: number }>,
+  epsilon: number
+): Array<{ x: number; y: number }> {
+  if (points.length <= 2) return points;
+
+  let maxDist = 0;
+  let index = 0;
+  const end = points.length - 1;
+
+  for (let i = 1; i < end; i++) {
+    const dist = getOrthogonalDistance(points[i], points[0], points[end]);
+    if (dist > maxDist) {
+      index = i;
+      maxDist = dist;
+    }
+  }
+
+  if (maxDist > epsilon) {
+    const results1 = simplifyPath(points.slice(0, index + 1), epsilon);
+    const results2 = simplifyPath(points.slice(index), epsilon);
+    return results1.slice(0, results1.length - 1).concat(results2);
+  } else {
+    return [points[0], points[end]];
+  }
+}
+
+function findAndTraceContours(
+  id: number,
+  width: number,
+  height: number,
+  data32: Uint32Array,
+  scale: number
+): string[] {
+  const paths: string[] = [];
+  const visited = new Uint8Array(width * height);
+
+  for (let y = 0; y < height; y++) {
+    for (let x = 0; x < width; x++) {
+      const idx = y * width + x;
+      const pixel = data32[idx] & 0x00ffffff;
+
+      if (pixel === id && visited[idx] === 0) {
+        let isBoundary = false;
+        if (x === 0 || x === width - 1 || y === 0 || y === height - 1) {
+          isBoundary = true;
+        } else {
+          if (
+            (data32[idx - 1] & 0x00ffffff) !== id ||
+            (data32[idx + 1] & 0x00ffffff) !== id ||
+            (data32[idx - width] & 0x00ffffff) !== id ||
+            (data32[idx + width] & 0x00ffffff) !== id
+          ) {
+            isBoundary = true;
+          }
+        }
+
+        if (isBoundary) {
+          const points = traceContour(x, y, id, width, height, data32, visited);
+          if (points && points.length > 2) {
+            const scaledPoints = points.map((p) => ({
+              x: p.x / scale,
+              y: p.y / scale,
+            }));
+
+            const simplified = simplifyPath(scaledPoints, 0.4);
+
+            if (simplified.length > 2) {
+              const pathD =
+                simplified
+                  .map(
+                    (p, idx) =>
+                      `${idx === 0 ? "M" : "L"} ${p.x.toFixed(2)} ${p.y.toFixed(
+                        2
+                      )}`
+                  )
+                  .join(" ") + " Z";
+              paths.push(pathD);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  return paths;
+}
+
+interface DrawAction {
+  type: "fill" | "stroke";
+  pathD: string;
+  color: string;
+  strokeWidth: number;
+  lineCap: string;
+  lineJoin: string;
+}
+
 /**
  * Turns svg outlines into paths and fragments overlapping shapes into non-overlapping islands.
  */
@@ -25,31 +283,180 @@ async function transformSVGForPainting(
     const errorMsg = "Failed to parse SVG document";
     console.error(errorMsg, svgDoc.documentElement);
     throw Error(errorMsg);
-
-  // TODO
-  // 1. turn all the strokes with >0 widths into paths, the stroke color is now the fill and the new path has no stroke
-  // 2. check all the paths in the document including the strokes that just got turned to paths and divide them into unique islands until they are no overlapping paths
-  // 3. make sure that the fills for all paths even if was assigned by inheritance are preserved during the previous step
-  // 4. parse the generated svg and return it for processing
   }
 
-  // assign black fill to all elements without a fill attribute
-  // this solve the issue of some paths needing to be rendered as black by default
-  // but introduces an issue where elements that can not be painted are added to the region count
-  svgDoc.querySelectorAll("*:not([fill])").forEach((el) => {
-    el.setAttribute("fill", "#000000FF");
+  // 1. Resolve ViewBox and base dimensions
+  let viewBoxWidth = 800;
+  let viewBoxHeight = 800;
+  const viewBox = svgDoc.documentElement.getAttribute("viewBox");
+  if (viewBox) {
+    const parts = viewBox.trim().split(/[\s,]+/);
+    if (parts.length === 4) {
+      viewBoxWidth = parseFloat(parts[2]);
+      viewBoxHeight = parseFloat(parts[3]);
+    }
+  } else {
+    const wAttr = svgDoc.documentElement.getAttribute("width");
+    const hAttr = svgDoc.documentElement.getAttribute("height");
+    if (wAttr) viewBoxWidth = parseFloat(wAttr);
+    if (hAttr) viewBoxHeight = parseFloat(hAttr);
+  }
+
+  // 2. Setup Ultra High-Resolution Canvas
+  const TARGET_MAX_DIM = 2400;
+  const scale = Math.max(
+    1,
+    TARGET_MAX_DIM / Math.max(viewBoxWidth, viewBoxHeight)
+  );
+  const canvasWidth = Math.round(viewBoxWidth * scale);
+  const canvasHeight = Math.round(viewBoxHeight * scale);
+
+  const canvas = document.createElement("canvas");
+  canvas.width = canvasWidth;
+  canvas.height = canvasHeight;
+  const ctx = canvas.getContext("2d", { willReadFrequently: true });
+  if (!ctx) {
+    throw new Error("Failed to initialize canvas 2D context");
+  }
+  ctx.imageSmoothingEnabled = false;
+
+  // Clear to fully transparent
+  ctx.clearRect(0, 0, canvasWidth, canvasHeight);
+
+  // 3. Traverse all renderable vector elements sequentially to preserve DOM order
+  const elements = Array.from(
+    svgDoc.querySelectorAll("path, polygon, polyline, rect, circle, ellipse, line")
+  );
+
+  const drawActions: DrawAction[] = [];
+  elements.forEach((el) => {
+    const pathD = elementToPathD(el);
+    if (!pathD) return;
+
+    // Resolve Fill style
+    let fill = resolveAttribute(el, "fill", svgDoc);
+    if (fill === "none") fill = "#00000000";
+    if (!fill) fill = "#000000FF"; // Default SVG fill
+
+    // Resolve Stroke style
+    let stroke = resolveAttribute(el, "stroke", svgDoc);
+    if (stroke === "none") stroke = "";
+    const strokeWidthAttr = resolveAttribute(el, "stroke-width", svgDoc);
+    const strokeWidth = strokeWidthAttr ? parseFloat(strokeWidthAttr) : 0;
+    const lineCap = resolveAttribute(el, "stroke-linecap", svgDoc) || "butt";
+    const lineJoin = resolveAttribute(el, "stroke-linejoin", svgDoc) || "miter";
+
+    // Fill Action
+    const normalizedFill = normalizeHex(fill);
+    if (normalizedFill && normalizedFill !== "#00000000") {
+      drawActions.push({
+        type: "fill",
+        pathD,
+        color: normalizedFill,
+        strokeWidth: 0,
+        lineCap: "butt",
+        lineJoin: "miter",
+      });
+    }
+
+    // Stroke Action
+    if (stroke && strokeWidth > 0) {
+      const normalizedStroke = normalizeHex(stroke);
+      if (normalizedStroke && normalizedStroke !== "#00000000") {
+        drawActions.push({
+          type: "stroke",
+          pathD,
+          color: normalizedStroke,
+          strokeWidth,
+          lineCap,
+          lineJoin,
+        });
+      }
+    }
   });
 
-  // assign transparent fill to all elements with fill="none"
-  // this solve the issue of including transparent regions as places that can be filled in
-  // however when the splitting of overlapping region occurs transparent sections should not win over coloured sections
-  svgDoc.querySelectorAll("[fill='none']").forEach((el) => {
-    el.setAttribute("fill", "#00000000");
+  // 4. Render Draw Actions to High-Res Canvas using unique ID colors
+  const actionColors: string[] = []; // index maps to original color hex
+  ctx.save();
+  ctx.scale(scale, scale);
+
+  drawActions.forEach((action, i) => {
+    const actionId = i + 1; // 1-indexed (0 is transparent background)
+    actionColors[actionId] = action.color;
+
+    const r = actionId & 0xff;
+    const g = (actionId >> 8) & 0xff;
+    const b = (actionId >> 16) & 0xff;
+    const idColorStr = `rgb(${r},${g},${b})`;
+
+    ctx.fillStyle = idColorStr;
+    ctx.strokeStyle = idColorStr;
+
+    const path2d = new Path2D(action.pathD);
+
+    if (action.type === "fill") {
+      ctx.fill(path2d);
+    } else {
+      ctx.lineWidth = action.strokeWidth;
+      ctx.lineCap = action.lineCap as CanvasLineCap;
+      ctx.lineJoin = action.lineJoin as CanvasLineJoin;
+      ctx.stroke(path2d);
+    }
   });
 
-  const svgElement = svgDoc.documentElement;
+  ctx.restore();
 
-  return svgElement;
+  // 5. Read back pixel buffer to find and trace visible regions
+  const imgData = ctx.getImageData(0, 0, canvasWidth, canvasHeight);
+  const buf = new ArrayBuffer(imgData.data.length);
+  const buf8 = new Uint8ClampedArray(buf);
+  const data32 = new Uint32Array(buf);
+  buf8.set(imgData.data);
+
+  // Find all unique visible action IDs
+  const visibleIdsSet = new Set<number>();
+  for (let i = 0; i < data32.length; i++) {
+    const val = data32[i] & 0x00ffffff;
+    if (val !== 0) {
+      visibleIdsSet.add(val);
+    }
+  }
+
+  // 6. Trace contours and construct final flattened SVG
+  const resultSvg = document.createElementNS("http://www.w3.org/2000/svg", "svg");
+  resultSvg.setAttribute("viewBox", `0 0 ${viewBoxWidth} ${viewBoxHeight}`);
+  resultSvg.setAttribute("width", viewBoxWidth.toString());
+  resultSvg.setAttribute("height", viewBoxHeight.toString());
+
+  const sortedIds = Array.from(visibleIdsSet).sort((a, b) => a - b);
+
+  sortedIds.forEach((id) => {
+    const originalColor = actionColors[id];
+    if (!originalColor) return;
+
+    // Trace contours of this ID
+    const pathsOfId = findAndTraceContours(
+      id,
+      canvasWidth,
+      canvasHeight,
+      data32,
+      scale
+    );
+
+    if (pathsOfId.length > 0) {
+      const combinedD = pathsOfId.join(" ");
+      const pathEl = document.createElementNS(
+        "http://www.w3.org/2000/svg",
+        "path"
+      );
+      pathEl.setAttribute("d", combinedD);
+      pathEl.setAttribute("fill", originalColor);
+      pathEl.setAttribute("fill-rule", "evenodd");
+      resultSvg.appendChild(pathEl);
+    }
+  });
+
+  return resultSvg;
 }
 
 export async function processImageToCartoonPalette(
