@@ -57,10 +57,14 @@ export class PaintingControls extends SignalElement {
     let currentDy = 0;
 
     const cleanup = () => {
-      window.removeEventListener("pointermove", onPointerMove);
-      window.removeEventListener("pointerup", onPointerUp);
-      window.removeEventListener("pointercancel", onPointerCancel);
-      target.releasePointerCapture(e.pointerId);
+      target.removeEventListener("pointermove", onPointerMove);
+      target.removeEventListener("pointerup", onPointerUp);
+      target.removeEventListener("pointercancel", onPointerCancel);
+      try {
+        target.releasePointerCapture(e.pointerId);
+      } catch (err) {
+        // ignore if already released
+      }
       if (this.panAnimationFrame !== null) {
         cancelAnimationFrame(this.panAnimationFrame);
         this.panAnimationFrame = null;
@@ -109,9 +113,9 @@ export class PaintingControls extends SignalElement {
 
     const onPointerCancel = () => cleanup();
 
-    window.addEventListener("pointermove", onPointerMove);
-    window.addEventListener("pointerup", onPointerUp);
-    window.addEventListener("pointercancel", onPointerCancel);
+    target.addEventListener("pointermove", onPointerMove);
+    target.addEventListener("pointerup", onPointerUp);
+    target.addEventListener("pointercancel", onPointerCancel);
   };
 
   private handleColorClick = (color: PaletteColor) => {
@@ -458,6 +462,7 @@ export class PaintingControls extends SignalElement {
                       justifyContent: "center",
                       cursor: "grab",
                       padding: "0",
+                      touchAction: "none",
                       transition: "transform 0.15s ease, box-shadow 0.15s ease",
                     })}
                   >
