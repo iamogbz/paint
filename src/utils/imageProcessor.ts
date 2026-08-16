@@ -1,6 +1,6 @@
 import init, { vectorize_rgba } from "../vtracer/vtracer_wasm.js";
 import { ProcessedArtwork, UsedColorStat, SvgPath } from "../types";
-import { hexToRgb, normalizeHex } from "./color.js";
+import { getColorProperties, hexToRgb, normalizeHex } from "./color.js";
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -97,7 +97,7 @@ export async function processImageToCartoonPalette(
       /** shapes disjoint with others */
       hierarchical: "cutout",
       /** Auto-quantize target color count */
-      maxColors: 24,
+      maxColors: 64,
       /** If a pallete is defined maps colors to this */
       // palette: palette,
       /** Discard patches smaller than X px in size (0..=128) */
@@ -176,7 +176,34 @@ export async function processImageToCartoonPalette(
   }
 
   // Sort by count descending
-  colorStats.sort((a, b) => b.count - a.count);
+  colorStats.sort((a, b) => {
+    const colorA = getColorProperties(a.color.hexCode);
+    const colorB = getColorProperties(b.color.hexCode);
+
+    if (colorA.isGray !== colorB.isGray) {
+      return colorA.isGray ? 1 : -1; // Grays last
+    }
+
+    if (colorA.isGray) {
+      // Both are grays. Sort by brightness (value/luminance) ascending (dark to light)
+      return colorA.v - colorB.v;
+    }
+
+    // Both are chromatic colors.
+    // Group by Hue in 15-degree bands for stable and smooth gradient flows
+    const hueGroupA = Math.floor(colorA.h / 15);
+    const hueGroupB = Math.floor(colorB.h / 15);
+
+    if (hueGroupA !== hueGroupB) {
+      return hueGroupA - hueGroupB;
+    }
+
+    // Within the same hue group, sort by Saturation descending, then Value descending
+    if (Math.abs(colorA.s - colorB.s) > 0.05) {
+      return colorB.s - colorA.s;
+    }
+    return colorB.v - colorA.v;
+  });
 
   // Add transparent color if missing (app assumes it might exist)
   if (!colorStats.some((s) => s.color.hexCode === "#00000000")) {

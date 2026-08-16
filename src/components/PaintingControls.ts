@@ -288,49 +288,6 @@ export class PaintingControls extends SignalElement {
       }
     }
 
-    const getColorProperties = (hexCode: string) => {
-      const rgb = hexToRgb(hexCode);
-      if (!rgb) return { isGray: true, h: 0, s: 0, v: 0 };
-      const [h, s, v] = rgbToHsv(rgb[0], rgb[1], rgb[2]);
-      
-      // A color is considered grayscale/achromatic if:
-      // - saturation is extremely low (s < 0.08)
-      // - or it's extremely dark (v < 0.08)
-      // - or it's very pale/light (s < 0.15 and v > 0.9)
-      const isGray = s < 0.08 || v < 0.08 || (s < 0.15 && v > 0.9);
-      return { isGray, h, s, v };
-    };
-
-    // Sort regioned colors by hue, saturation, and luminance starting with red degrees (0 to 360) and keeping shades of gray cleanly grouped
-    regionedStats.sort((sa, sb) => {
-      const colorA = getColorProperties(sa.color.hexCode);
-      const colorB = getColorProperties(sb.color.hexCode);
-
-      if (colorA.isGray !== colorB.isGray) {
-        return colorA.isGray ? -1 : 1; // Grays first, then chromatic colors
-      }
-
-      if (colorA.isGray) {
-        // Both are grays. Sort by brightness (value/luminance) ascending (dark to light)
-        return colorA.v - colorB.v;
-      }
-
-      // Both are chromatic colors.
-      // Group by Hue in 15-degree bands for stable and smooth gradient flows
-      const hueGroupA = Math.floor(colorA.h / 15);
-      const hueGroupB = Math.floor(colorB.h / 15);
-
-      if (hueGroupA !== hueGroupB) {
-        return hueGroupA - hueGroupB;
-      }
-
-      // Within the same hue group, sort by Saturation descending, then Value descending
-      if (Math.abs(colorA.s - colorB.s) > 0.05) {
-        return colorB.s - colorA.s;
-      }
-      return colorB.v - colorA.v;
-    });
-
     // Un-regioned colors maintain their preserved order
     const allColorsExceptTransparent = [
       ...regionedStats.map((s) => s.color),
@@ -632,7 +589,9 @@ export class PaintingControls extends SignalElement {
               <div style=${this.renderStyleObject(scrollRowStyle)}>
                 ${allColors.map((color) => {
                   const colorStatus = expectedColorStatus.get(color.hexCode);
-                  const isCoreColor = colorStatus? colorStatus.total > 0 : undefined;
+                  const isCoreColor = colorStatus
+                    ? colorStatus.total > 0
+                    : undefined;
                   const isFullyPainted = colorStatus
                     ? isCoreColor && colorStatus.total === colorStatus.painted
                     : false;
