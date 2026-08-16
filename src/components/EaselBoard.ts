@@ -1150,10 +1150,10 @@ export class EaselBoard extends SignalElement {
               <div
                 style="display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; padding: 0.5rem; background-size: 0.5rem 0.5rem; background-image: ${transparentImgCss}; min-height: 40vh; overflow: hidden;"
               >
-                ${currentArtwork
+                ${currentArtwork || isProcessing
                   ? html`
                       <div
-                        style="min-width: 100%; min-height: 100%; aspect-ratio: ${processingWidth} / ${processingHeight}; display: flex; flex-direction: column; justify-content: center; align-items: center; position: absolute; animation: blur-pulse 2s infinite ease-in-out; transition: opacity 5s ease-out; opacity: ${isProcessing ?  1 : 0}"
+                        style="width: 100%; aspect-ratio: ${processingWidth} / ${processingHeight}; display: flex; flex-direction: column; justify-content: center; align-items: center; position: ${isProcessing ? 'relative' : 'absolute'}; animation: blur-pulse 2s infinite ease-in-out; transition: opacity 1s ease-out; opacity: ${isProcessing ?  1 : 0}; z-index: 1000; pointer-events: none;"
                       >
                         <div
                           style="position: relative; width: 100%; height: 100%; border-radius: 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; background-color: transparent;"
