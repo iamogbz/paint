@@ -10,7 +10,7 @@
 
 ### References
 
-- <https://aistudio.google.com/>
+- [https://aistudio.google.com/](https://aistudio.google.com/apps/fd5c7deb-d8c0-44f9-ba6f-c7b0430027cf)
 - <https://www.visioncortex.org/vtracer>
 - <https://pixabay.com/>
 
