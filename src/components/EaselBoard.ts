@@ -907,7 +907,7 @@ export class EaselBoard extends SignalElement {
       zoomScaleSignal.set(this.scale);
       this.updateTransformStyle();
     } else if (e.touches.length === 1) {
-      if (isBrushModeSignal.get()) {
+      if (isBrushModeSignal.get() || this.pinchActiveInGesture) {
         return;
       }
       const dx = e.touches[0].clientX - this.pointerDownX;
@@ -993,7 +993,7 @@ export class EaselBoard extends SignalElement {
       this.hasDragged = false;
       this.updateTransformStyle();
     }
-    if (this.isPinching || !this.isDragging) return;
+    if (this.isPinching || this.pinchActiveInGesture || !this.isDragging) return;
     const dist = Math.hypot(
       e.clientX - this.pointerDownX,
       e.clientY - this.pointerDownY
