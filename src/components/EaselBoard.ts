@@ -5,6 +5,9 @@ import {
   isWindowFocusedSignal,
   currentArtworkSignal,
   isProcessingSignal,
+  processingImageSrcSignal,
+  processingImageWidthSignal,
+  processingImageHeightSignal,
   activeHighlightColorSignal,
   isDragOverSignal,
   zoomScaleSignal,
@@ -1034,6 +1037,9 @@ export class EaselBoard extends SignalElement {
     draggedColorSignal.get();
     zoomScaleSignal.get();
     const isProcessing = isProcessingSignal.get();
+    const processingSrc = processingImageSrcSignal.get();
+    const processingWidth = processingImageWidthSignal.get();
+    const processingHeight = processingImageHeightSignal.get();
     const isDragOver = isDragOverSignal.get();
     const dailyChallengeImage = getDailyChallenge();
 
@@ -1144,23 +1150,19 @@ export class EaselBoard extends SignalElement {
               <div
                 style="display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; padding: 0.5rem; background-size: 0.5rem 0.5rem; background-image: ${transparentImgCss}; min-height: 40vh; overflow: hidden;"
               >
-                ${isProcessing
+                ${isProcessing && processingSrc
                   ? html`
                       <div
-                        style="display: flex; flex-direction: column; align-items: center; justify-content: center; text-align: center;"
+                        style="width: 100%; display: flex; flex-direction: column; align-items: center;"
                       >
                         <div
-                          style="position: relative; width: 2rem; height: 2rem; display: flex; border-radius: 100%; align-items: center; justify-content: center; animation: hue-loop 5s infinite"
+                          style="position: relative; width: 100%; aspect-ratio: ${processingWidth} / ${processingHeight}; border-radius: 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; background-color: transparent;"
                         >
-                          <div style="position: absolute;">
-                            ${iconSparkles(32, "#AA3311")}
-                          </div>
+                          <img
+                            src="${processingSrc}"
+                            style="width: 100%; height: 100%; object-fit: contain; animation: blur-pulse 2s infinite ease-in-out;"
+                          />
                         </div>
-                        <span
-                          style="font-size: 1.25rem; font-weight: 900; color: #3D2314; margin-bottom: 1.5rem; font-style: italic;"
-                        >
-                          Preparing Canvas...
-                        </span>
                       </div>
                     `
                   : ""}

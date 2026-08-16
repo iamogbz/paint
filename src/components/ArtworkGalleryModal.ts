@@ -40,7 +40,7 @@ export class ArtworkGalleryModal extends SignalElement {
       position: "fixed" as const,
       inset: 0,
       zIndex: 15000,
-      backgroundColor: "rgba(0, 0, 0, 0.6)",
+      backgroundColor: "rgba(255,255,255, 0.6)",
       backdropFilter: "blur(8px)",
       display: "flex",
       alignItems: "center",

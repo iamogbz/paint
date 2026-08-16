@@ -33,6 +33,7 @@ import {
 import { transparentImgCss } from "./constants";
 import { soundEffects } from "../utils/soundEffects";
 import { downloadImage, exportArtworkCleanDataUrl } from "../utils/download";
+import { hexToRgb, rgbToHsv } from "../utils/color";
 
 @customElement("painting-controls")
 export class PaintingControls extends SignalElement {
@@ -287,11 +288,16 @@ export class PaintingControls extends SignalElement {
       }
     }
 
-    // Sort regioned colors from highest region count to lowest
+    const getHue = (hexCode: string): number => {
+      const rgb = hexToRgb(hexCode);
+      if (!rgb) return 0;
+      const [h] = rgbToHsv(rgb[0], rgb[1], rgb[2]);
+      return h;
+    };
+
+    // Sort regioned colors by hue starting with red degrees (0 to 360)
     regionedStats.sort((sa, sb) => {
-      const countA = sa.count;
-      const countB = sb.count;
-      return countB - countA;
+      return getHue(sa.color.hexCode) - getHue(sb.color.hexCode);
     });
 
     // Un-regioned colors maintain their preserved order

@@ -12,6 +12,9 @@ const STORAGE_KEY_ALL_ARTWORKS = "paint_part_sd_artworks_v1";
 export const artworksSignal = signal<ProcessedArtwork[]>([]);
 export const currentArtworkSignal = signal<ProcessedArtwork | null>(null);
 export const isProcessingSignal = signal<boolean>(false);
+export const processingImageSrcSignal = signal<string | null>(null);
+export const processingImageWidthSignal = signal<number>(0);
+export const processingImageHeightSignal = signal<number>(0);
 export const soundEnabledSignal = signal<boolean>(true);
 export const activeHighlightColorSignal = signal<PaletteColor | null>(null);
 export const isGalleryOpenSignal = signal<boolean>(false);
@@ -29,7 +32,7 @@ export const isWindowFocusedSignal = signal<boolean>(true);
 
 // Dynamic Style Signals
 export const appBackgroundStyleSignal = computed(() => ({
-  background: `radial-gradient(circle at 50% 50%, ${"#FFE5D9"} 0%, ${"#FCD5AE"} 100%)`,
+  background: `radial-gradient(circle at 50% 50%, ${"#FFE5D9"} 0%, ${"#FFFFFF"} 20%)`,
   minHeight: "100vh",
   fontFamily: "'Plus Jakarta Sans', system-ui, sans-serif",
   position: "relative" as const,
@@ -94,6 +97,23 @@ export function handleSelectArtwork(artwork: ProcessedArtwork) {
 }
 
 export async function handleImageSelected(imageSrc: string, name: string = "Untitled") {
+  // Set processing source and measure dimensions first
+  processingImageSrcSignal.set(imageSrc);
+  const img = new Image();
+  await new Promise<void>((resolve) => {
+    img.onload = () => {
+      processingImageWidthSignal.set(img.naturalWidth || 800);
+      processingImageHeightSignal.set(img.naturalHeight || 800);
+      resolve();
+    };
+    img.onerror = () => {
+      processingImageWidthSignal.set(800);
+      processingImageHeightSignal.set(800);
+      resolve();
+    };
+    img.src = imageSrc;
+  });
+
   isProcessingSignal.set(true);
   try {
     const artworkName = name.substring(0, 32);
@@ -104,6 +124,7 @@ export async function handleImageSelected(imageSrc: string, name: string = "Unti
     undoStackSignal.set([]);
     currentArtworkSignal.set(newArtwork);
     isProcessingSignal.set(false);
+    processingImageSrcSignal.set(null);
     isWindowFocusedSignal.set(true);
 
     confetti({
@@ -121,6 +142,7 @@ export async function handleImageSelected(imageSrc: string, name: string = "Unti
   } catch (err) {
     console.error("Image processing failed:", err);
     isProcessingSignal.set(false);
+    processingImageSrcSignal.set(null);
     alert("Failed to process image. Please try another photo.");
   }
 }

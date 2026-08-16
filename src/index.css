@@ -65,3 +65,12 @@ button {
     transform: translateY(-70%); /* Second lower bounce */
   }
 }
+
+@keyframes blur-pulse {
+  0%, 100% {
+    filter: blur(4px);
+  }
+  50% {
+    filter: blur(8px);
+  }
+}
