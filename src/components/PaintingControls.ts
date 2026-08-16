@@ -24,6 +24,7 @@ import {
   iconCheck,
   iconFolderOpen,
   iconDownload,
+  iconLoader2,
   iconZoomIn,
   iconZoomOut,
   iconRotateCcw,
@@ -32,12 +33,14 @@ import {
 } from "./icons";
 import { DROPPER_BUFFER_PX, transparentImgCss } from "./constants";
 import { soundEffects } from "../utils/soundEffects";
-import { downloadImage, exportArtworkCleanDataUrl } from "../utils/download";
+import { downloadImage, exportArtworkCleanDataUrl, exportArtworkHighResPng } from "../utils/download";
 
 
 @customElement("painting-controls")
 export class PaintingControls extends SignalElement {
   @property({ type: Array }) colorStats: UsedColorStat[] = [];
+  
+  @property({ type: Boolean }) isDownloading = false;
 
   private timeoutId?: number;
   private panAnimationFrame: number | null = null;
@@ -215,17 +218,26 @@ export class PaintingControls extends SignalElement {
     window.addEventListener("pointercancel", onPointerCancel);
   };
 
-  private handleDownload = () => {
+  private handleDownload = async () => {
     const artwork = currentArtworkSignal.get();
-    if (!artwork) return;
-    const cleanDataUrl = exportArtworkCleanDataUrl(artwork);
-    downloadImage(
-      cleanDataUrl,
-      `paint_by_numbers_${artwork.name
-        .toLowerCase()
-        .replace(/[^a-z0-9]+/g, "-")
-        .replace(/(^-|-$)/g, "")}_paint.ogbizi.com.svg`
-    );
+    if (!artwork || this.isDownloading) return;
+    
+    this.isDownloading = true;
+    try {
+      const highResPngDataUrl = await exportArtworkHighResPng(artwork);
+      await downloadImage(
+        highResPngDataUrl,
+        `paint_by_numbers_${artwork.name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/(^-|-$)/g, "")}_8k.ogbizi.com.png`
+      );
+    } catch (err) {
+      console.error("Download failed:", err);
+      alert("Failed to generate high-resolution download. Please try again.");
+    } finally {
+      this.isDownloading = false;
+    }
   };
 
   render() {
@@ -423,9 +435,14 @@ export class PaintingControls extends SignalElement {
                     id="save-painting-btn"
                     title="Save Painting to Device"
                     @click=${this.handleDownload}
-                    style=${this.renderStyleObject(actionBtnStyle("#2A9D8F"))}
+                    style=${this.renderStyleObject({
+                      ...actionBtnStyle("#2A9D8F"),
+                      opacity: this.isDownloading ? "0.7" : "1",
+                      cursor: this.isDownloading ? "not-allowed" : "pointer"
+                    })}
+                    ?disabled=${this.isDownloading}
                   >
-                    ${iconDownload(18, "#FFFFFF")}
+                    ${this.isDownloading ? iconLoader2(18, "#FFFFFF") : iconDownload(18, "#FFFFFF")}
                   </button>
                 `
               : ""}

@@ -1,12 +1,14 @@
 import { ProcessedArtwork } from "../types";
 
-export function exportArtworkCleanDataUrl(artwork: ProcessedArtwork): string {
+export function exportArtworkCleanDataUrl(artwork: ProcessedArtwork, overrideWidth?: number, overrideHeight?: number): string {
   if (artwork.svgPaths) {
-    const w = artwork.width;
-    const h = artwork.height;
+    const originalW = artwork.width;
+    const originalH = artwork.height;
+    const w = overrideWidth || originalW;
+    const h = overrideHeight || originalH;
     const paintedState = artwork.paintedRegionsState || {};
 
-    let svgContent = `<svg version="1.1" xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">`;
+    let svgContent = `<svg version="1.1" xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${originalW} ${originalH}">`;
 
     const hasBrushStrokes = artwork.brushStrokePaths && Object.values(artwork.brushStrokePaths).some(
       (strokes) => strokes && strokes.length > 0
@@ -106,4 +108,53 @@ export async function downloadImage(dataUrl: string, filename: string): Promise<
       console.error("Direct link click download failed:", directErr);
     }
   }
+}
+
+export async function exportArtworkHighResPng(artwork: ProcessedArtwork): Promise<string> {
+  const TARGET_LONGEST_SIDE = 8192; // 8K resolution minimum
+  const aspect = artwork.width / artwork.height;
+  let targetWidth, targetHeight;
+  
+  if (artwork.width > artwork.height) {
+    targetWidth = TARGET_LONGEST_SIDE;
+    targetHeight = Math.round(TARGET_LONGEST_SIDE / aspect);
+  } else {
+    targetHeight = TARGET_LONGEST_SIDE;
+    targetWidth = Math.round(TARGET_LONGEST_SIDE * aspect);
+  }
+
+  // Generate SVG with the target high-resolution dimensions
+  const svgDataUrl = exportArtworkCleanDataUrl(artwork, targetWidth, targetHeight);
+  
+  return new Promise((resolve, reject) => {
+    const img = new Image();
+    img.onload = () => {
+      const canvas = document.createElement("canvas");
+      canvas.width = targetWidth;
+      canvas.height = targetHeight;
+      
+      const ctx = canvas.getContext("2d");
+      if (!ctx) {
+        reject(new Error("Could not get canvas context"));
+        return;
+      }
+      
+      ctx.fillStyle = "#FFFFFF"; // Ensure white background
+      ctx.fillRect(0, 0, canvas.width, canvas.height);
+      ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
+      
+      try {
+        const pngDataUrl = canvas.toDataURL("image/png");
+        resolve(pngDataUrl);
+      } catch (err) {
+        reject(err);
+      }
+    };
+    
+    img.onerror = () => {
+      reject(new Error("Failed to load SVG into image for rendering"));
+    };
+    
+    img.src = svgDataUrl;
+  });
 }
