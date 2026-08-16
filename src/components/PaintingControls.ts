@@ -293,8 +293,24 @@ export class PaintingControls extends SignalElement {
     }
 
     // Un-regioned colors maintain their preserved order
+    // Regioned colors maintain order but uncompleted show first
     const allColorsExceptTransparent = [
-      ...regionedStats.map((s) => s.color),
+      ...regionedStats
+        .map((v, i) => [v, i] as const)
+        .sort((a, b) => {
+          const aExpectedColor = expectedColorStatus.get(a[0].color.hexCode);
+          const aFullyPainted = aExpectedColor.total === aExpectedColor.painted;
+
+          const bExpectedColor = expectedColorStatus.get(b[0].color.hexCode);
+          const bFullyPainted = bExpectedColor.total === bExpectedColor.painted;
+
+          if (aFullyPainted && bFullyPainted) {
+            return a[1] - b[1];
+          }
+
+          return Number(aFullyPainted) - Number(bFullyPainted);
+        })
+        .map((s) => s[0].color),
       ...nonRegionedStats.map((s) => s.color),
     ];
     const allColors = [transparent, ...allColorsExceptTransparent];
