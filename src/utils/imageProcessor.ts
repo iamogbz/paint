@@ -1,10 +1,6 @@
 import init, { vectorize_rgba } from "../vtracer/vtracer_wasm.js";
 import { ProcessedArtwork, UsedColorStat, SvgPath } from "../types";
-import {
-  getColorProperties,
-  hexToRgb,
-  normalizeHex,
-} from "./color.js";
+import { getColorProperties, hexToRgb, normalizeHex } from "./color.js";
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -61,7 +57,7 @@ export async function processImageToCartoonPalette(
   artworkName: string
 ): Promise<ProcessedArtwork> {
   const isSvgImage = imageSrc.startsWith("data:image/svg+xml");
-  const defaultDimensionPx = "800";
+  const defaultDimensionPx = 800;
 
   let svgStr = "";
 
@@ -74,21 +70,25 @@ export async function processImageToCartoonPalette(
   } else {
     const img = await loadImage(imageSrc);
 
+    const imgWidth = Math.min(img.width, defaultDimensionPx);
+    const scaleRatio = defaultDimensionPx / img.width;
+    const imgHeight = img.height * scaleRatio;
+
     const origCanvas = document.createElement("canvas");
-    origCanvas.width = img.width;
-    origCanvas.height = img.height;
+    origCanvas.width = imgWidth;
+    origCanvas.height = imgHeight;
     const origCtx = origCanvas.getContext("2d", { willReadFrequently: true });
     if (!origCtx) throw new Error("Failed to initialize canvas 2D context");
 
-    origCtx.imageSmoothingEnabled = false;
+    origCtx.imageSmoothingEnabled = true;
     origCtx.imageSmoothingQuality = "high";
 
     // Fill with white background in case of transparency
     origCtx.fillStyle = "#FFFFFF";
-    origCtx.fillRect(0, 0, img.width, img.height);
-    origCtx.drawImage(img, 0, 0, img.width, img.height);
+    origCtx.fillRect(0, 0, imgWidth, imgHeight);
+    origCtx.drawImage(img, 0, 0, imgWidth, imgHeight);
 
-    const origImgData = origCtx.getImageData(0, 0, img.width, img.height);
+    const origImgData = origCtx.getImageData(0, 0, imgWidth, imgHeight);
     const rawPixels = origImgData.data;
 
     // Run vtracer
@@ -111,7 +111,7 @@ export async function processImageToCartoonPalette(
       /** Color difference between gradient layers (0..=255) */
       layerDifference: 48,
       /** Method for converting in to shapes. Values below only valid in spline */
-      mode: 'spline',
+      mode: "spline",
       /** default: 60, Minimum Momentary Angle (in degrees) to be considered a corner (to be kept after smoothing) - Higher = smoother */
       // cornerThreshold: 60,
       /** default: 4, Perform Iterative Subdivide Smooth until all segments are shorter than this length <3.5..=10> */
@@ -121,7 +121,7 @@ export async function processImageToCartoonPalette(
       /** default: off, Simplify curves: fewest cubics within this tolerance in px (try 1–2.5) */
       // simplify: 2,
     };
-    svgStr = vectorize_rgba(rawPixels, img.width, img.height, options);
+    svgStr = vectorize_rgba(rawPixels, imgWidth, imgHeight, options);
 
     if (!svgStr.includes("xmlns=")) {
       svgStr = svgStr.replace(
@@ -218,8 +218,8 @@ export async function processImageToCartoonPalette(
     });
   }
 
-  const width = parseInt(svgDoc.getAttribute("width") || defaultDimensionPx);
-  const height = parseInt(svgDoc.getAttribute("height") || defaultDimensionPx);
+  const width = svgDoc.clientWidth || defaultDimensionPx;
+  const height = svgDoc.clientHeight || defaultDimensionPx;
 
   const regionNeighbors: Record<number, number[]> = {};
   try {
@@ -234,7 +234,11 @@ export async function processImageToCartoonPalette(
     const domPaths = hiddenContainer.querySelectorAll("path");
     domPaths.forEach((path, i) => {
       if (regionExpectedColors[i]) {
-        try { bboxes[i] = path.getBBox(); } catch (e) { /* ignore */ }
+        try {
+          bboxes[i] = path.getBBox();
+        } catch (e) {
+          /* ignore */
+        }
       }
     });
     document.body.removeChild(hiddenContainer);
@@ -244,7 +248,7 @@ export async function processImageToCartoonPalette(
       const idA = svgPaths[i].id;
       const boxA = bboxes[idA];
       if (!boxA) continue;
-      
+
       const neighbors: number[] = [];
       for (let j = 0; j < svgPaths.length; j++) {
         if (i === j) continue;
@@ -252,8 +256,12 @@ export async function processImageToCartoonPalette(
         const boxB = bboxes[idB];
         if (!boxB) continue;
 
-        const intersectX = (boxA.x - expandPx <= boxB.x + boxB.width) && (boxA.x + boxA.width + expandPx >= boxB.x);
-        const intersectY = (boxA.y - expandPx <= boxB.y + boxB.height) && (boxA.y + boxA.height + expandPx >= boxB.y);
+        const intersectX =
+          boxA.x - expandPx <= boxB.x + boxB.width &&
+          boxA.x + boxA.width + expandPx >= boxB.x;
+        const intersectY =
+          boxA.y - expandPx <= boxB.y + boxB.height &&
+          boxA.y + boxA.height + expandPx >= boxB.y;
         if (intersectX && intersectY) {
           neighbors.push(idB);
         }
