@@ -298,9 +298,8 @@ export class EaselBoard extends SignalElement {
       this.hasPaintedInCurrentStroke = true;
     }
 
-    if (!isBrushMode) {
-      delete this.brushStrokePaths[regionId];
-    }
+    // Unconditionally remove all brush strokes clipped by this region when a fill is applied
+    delete this.brushStrokePaths[regionId];
 
     const newPaintedState = {
       ...(currentArtwork.paintedRegionsState || {}),
