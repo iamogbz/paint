@@ -1280,7 +1280,7 @@ export class EaselBoard extends SignalElement {
                           style="margin-top: 2rem; padding-top: 2rem; border-top: 2px solid rgba(0, 0, 0, 0.15); width: 100%;"
                         >
                           <div
-                            style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 2rem; width: 100%;"
+                            style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.5rem; width: 100%;"
                           >
                             ${artworksSignal.get().length > 0
                               ? html`
@@ -1314,8 +1314,8 @@ export class EaselBoard extends SignalElement {
                               }}
                               style="background-color: #FFFFFF; color: #000000; border: 2.5px solid #000000; padding: 0.625rem 0.875rem; border-radius: 16px; font-weight: 900; font-size: 0.875rem; display: flex; align-items: center; gap: 0.375rem; box-shadow: 2px 2px 0px 0px #000000; cursor: pointer;"
                             >
-                              ${iconPaintBucket(20, "#000000")} Or Try the Daily
-                              Challenge
+                              ${iconPaintBucket(20, "#000000")}
+                              Or Try the Daily Challenge
                             </button>
                           </div>
                         </div>

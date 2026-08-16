@@ -134,12 +134,12 @@ export class AppTour extends SignalElement {
       position: "fixed" as const,
       inset: 0,
       zIndex: 20000,
-      backgroundColor: "rgba(255,255,255, 0.75)",
+      backgroundColor: "rgba(255, 255, 255, 0.6)",
       backdropFilter: "blur(8px)",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
-      padding: "1rem",
+      padding: "0.75rem",
       boxSizing: "border-box" as const,
     };
 

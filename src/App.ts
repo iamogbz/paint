@@ -125,12 +125,12 @@ export class PaintApp extends SignalElement {
         ${!isFocused && currentArtwork
           ? html`
               <div
-                style="position: fixed; inset: 0; z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: rgba(255, 255, 255, 0.4); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); cursor: pointer;"
+                style="position: fixed; inset: 0; z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: rgba(255, 255, 255, 0.6); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); padding: 0.75rem; box-sizing: border-box; cursor: pointer;"
               >
-                <div style="background: white; padding: 2rem 3rem; border-radius: 24px; box-shadow: 0 20px 40px rgba(0,0,0,0.1); display: flex; flex-direction: column; align-items: center; gap: 1rem; border: 2px solid ${"#FCD5AE"};">
-                  ${iconPaintbrush(48, "#E63946")}
-                  <h2 style="margin: 0; font-family: 'Plus Jakarta Sans', sans-serif; font-weight: 800; color: ${"#4A2810"};">Resume painting</h2>
-                  <p style="margin: 0; font-size: 0.875rem; color: #666; font-family: 'Plus Jakarta Sans', sans-serif;">Click anywhere to continue</p>
+                <div style="background-color: rgba(255, 255, 255, 0.95); backdrop-filter: blur(16px); padding: 2.5rem 3.5rem; border-radius: 32px; box-shadow: 10px 10px 0px 0px #000000; display: flex; flex-direction: column; align-items: center; gap: 1rem; border: 4px solid #000000; max-width: 400px; text-align: center;">
+                  ${iconPaintbrush(48, "#000000")}
+                  <h2 style="margin: 0; font-family: 'Playfair Display', serif; font-style: italic; font-size: 1.75rem; font-weight: 900; color: #000000; letter-spacing: -0.02em;">Resume painting</h2>
+                  <p style="margin: 0; font-size: 0.875rem; font-weight: 800; text-transform: uppercase; color: #000000; font-family: 'Plus Jakarta Sans', sans-serif;">Click anywhere to continue</p>
                 </div>
               </div>
             `
