@@ -693,7 +693,7 @@ export class EaselBoard extends SignalElement {
   private updateTransformStyle() {
     const el = this.querySelector("#easel-transform-element") as HTMLElement;
     if (el) {
-      el.style.transform = `translate3d(${this.panX}px, ${this.panY}px, 0px) scale(${this.scale})`;
+      el.style.transform = `translate(${this.panX}px, ${this.panY}px) scale(${this.scale})`;
       const isAnimating = Date.now() < this.zoomAnimationEndTime;
       el.style.transition =
         !isAnimating && (this.isDragging || this.isPinching)
@@ -1165,12 +1165,12 @@ export class EaselBoard extends SignalElement {
         >
           <div
             id="easel-transform-element"
-            style="width: 100%; display: flex; flex-direction: column; align-items: center; transform: translate3d(${this
-              .panX}px, ${this.panY}px, 0px) scale(${this
+            style="width: 100%; display: flex; flex-direction: column; align-items: center; transform: translate(${this
+              .panX}px, ${this.panY}px) scale(${this
               .scale}); transform-origin: center center; transition: ${this
               .isDragging || this.isPinching
               ? "none"
-              : "transform 0.15s cubic-bezier(0.2, 0, 0, 1)"}; will-change: transform;"
+              : "transform 0.15s cubic-bezier(0.2, 0, 0, 1)"};"
           >
             <div style=${this.renderStyleObject(easelTopClampStyle)}></div>
             <div style=${this.renderStyleObject(mainFrameStyle)}>
