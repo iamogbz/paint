@@ -200,14 +200,79 @@ function simplifyPath(
   }
 }
 
+interface TracedContour {
+  pathD: string;
+  points: Array<{ x: number; y: number }>;
+}
+
+function isPointInPolygon(
+  p: { x: number; y: number },
+  polygon: Array<{ x: number; y: number }>
+): boolean {
+  let inside = false;
+  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
+    const xi = polygon[i].x, yi = polygon[i].y;
+    const xj = polygon[j].x, yj = polygon[j].y;
+
+    const intersect =
+      yi > p.y !== yj > p.y &&
+      p.x < ((xj - xi) * (p.y - yi)) / (yj - yi) + xi;
+    if (intersect) inside = !inside;
+  }
+  return inside;
+}
+
+interface ContourGroup {
+  outer: TracedContour;
+  holes: TracedContour[];
+}
+
+function groupContoursByHierarchy(contours: TracedContour[]): ContourGroup[] {
+  const getArea = (pts: Array<{ x: number; y: number }>) => {
+    let area = 0;
+    for (let i = 0; i < pts.length; i++) {
+      const j = (i + 1) % pts.length;
+      area += pts[i].x * pts[j].y - pts[j].x * pts[i].y;
+    }
+    return Math.abs(area) / 2;
+  };
+
+  const contoursWithArea = contours.map((c) => ({
+    contour: c,
+    area: getArea(c.points),
+  }));
+  contoursWithArea.sort((a, b) => b.area - a.area);
+
+  const groups: ContourGroup[] = [];
+
+  for (const item of contoursWithArea) {
+    const c = item.contour;
+    let parentGroup: ContourGroup | null = null;
+
+    for (const g of groups) {
+      if (isPointInPolygon(c.points[0], g.outer.points)) {
+        parentGroup = g;
+      }
+    }
+
+    if (parentGroup) {
+      parentGroup.holes.push(c);
+    } else {
+      groups.push({ outer: c, holes: [] });
+    }
+  }
+
+  return groups;
+}
+
 function findAndTraceContours(
   id: number,
   width: number,
   height: number,
   data32: Uint32Array,
   scale: number
-): string[] {
-  const paths: string[] = [];
+): TracedContour[] {
+  const contours: TracedContour[] = [];
   const visited = new Uint8Array(width * height);
 
   for (let y = 0; y < height; y++) {
@@ -250,7 +315,7 @@ function findAndTraceContours(
                       )}`
                   )
                   .join(" ") + " Z";
-              paths.push(pathD);
+              contours.push({ pathD, points: simplified });
             }
           }
         }
@@ -258,7 +323,7 @@ function findAndTraceContours(
     }
   }
 
-  return paths;
+  return contours;
 }
 
 interface DrawAction {
@@ -396,6 +461,11 @@ async function transformSVGForPainting(
 
     if (action.type === "fill") {
       ctx.fill(path2d);
+      // Symmetrically dilate by 1.0px to close any hairline gaps between adjacent regions
+      ctx.lineWidth = 1.0;
+      ctx.lineCap = "round";
+      ctx.lineJoin = "round";
+      ctx.stroke(path2d);
     } else {
       ctx.lineWidth = action.strokeWidth;
       ctx.lineCap = action.lineCap as CanvasLineCap;
@@ -435,7 +505,7 @@ async function transformSVGForPainting(
     if (!originalColor) return;
 
     // Trace contours of this ID
-    const pathsOfId = findAndTraceContours(
+    const contours = findAndTraceContours(
       id,
       canvasWidth,
       canvasHeight,
@@ -443,17 +513,27 @@ async function transformSVGForPainting(
       scale
     );
 
-    if (pathsOfId.length > 0) {
-      const combinedD = pathsOfId.join(" ");
+    // Group contours hierarchically so isolated islands are split into individual paths,
+    // while holes are properly combined inside their outer shapes using evenodd.
+    const groups = groupContoursByHierarchy(contours);
+
+    groups.forEach((g) => {
+      const subpaths = [g.outer.pathD];
+      g.holes.forEach((h) => {
+        subpaths.push(h.pathD);
+      });
+
       const pathEl = document.createElementNS(
         "http://www.w3.org/2000/svg",
         "path"
       );
-      pathEl.setAttribute("d", combinedD);
+      pathEl.setAttribute("d", subpaths.join(" "));
       pathEl.setAttribute("fill", originalColor);
-      pathEl.setAttribute("fill-rule", "evenodd");
+      if (g.holes.length > 0) {
+        pathEl.setAttribute("fill-rule", "evenodd");
+      }
       resultSvg.appendChild(pathEl);
-    }
+    });
   });
 
   return resultSvg;
