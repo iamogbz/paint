@@ -201,68 +201,21 @@ function simplifyPath(
 }
 
 interface TracedContour {
-  pathD: string;
   points: Array<{ x: number; y: number }>;
+  pathD: string;
 }
 
-function isPointInPolygon(
-  p: { x: number; y: number },
-  polygon: Array<{ x: number; y: number }>
-): boolean {
+function isPointInPolygon(p: { x: number; y: number }, poly: Array<{ x: number; y: number }>): boolean {
   let inside = false;
-  for (let i = 0, j = polygon.length - 1; i < polygon.length; j = i++) {
-    const xi = polygon[i].x, yi = polygon[i].y;
-    const xj = polygon[j].x, yj = polygon[j].y;
-
-    const intersect =
-      yi > p.y !== yj > p.y &&
-      p.x < ((xj - xi) * (p.y - yi)) / (yj - yi) + xi;
+  for (let i = 0, j = poly.length - 1; i < poly.length; j = i++) {
+    const xi = poly[i].x, yi = poly[i].y;
+    const xj = poly[j].x, yj = poly[j].y;
+    
+    const intersect = ((yi > p.y) !== (yj > p.y))
+        && (p.x < (xj - xi) * (p.y - yi) / (yj - yi) + xi);
     if (intersect) inside = !inside;
   }
   return inside;
-}
-
-interface ContourGroup {
-  outer: TracedContour;
-  holes: TracedContour[];
-}
-
-function groupContoursByHierarchy(contours: TracedContour[]): ContourGroup[] {
-  const getArea = (pts: Array<{ x: number; y: number }>) => {
-    let area = 0;
-    for (let i = 0; i < pts.length; i++) {
-      const j = (i + 1) % pts.length;
-      area += pts[i].x * pts[j].y - pts[j].x * pts[i].y;
-    }
-    return Math.abs(area) / 2;
-  };
-
-  const contoursWithArea = contours.map((c) => ({
-    contour: c,
-    area: getArea(c.points),
-  }));
-  contoursWithArea.sort((a, b) => b.area - a.area);
-
-  const groups: ContourGroup[] = [];
-
-  for (const item of contoursWithArea) {
-    const c = item.contour;
-    let parentGroup: ContourGroup | null = null;
-
-    for (const g of groups) {
-      if (isPointInPolygon(c.points[0], g.outer.points)) {
-        parentGroup = g;
-      }
-    }
-
-    if (parentGroup) {
-      parentGroup.holes.push(c);
-    } else {
-      groups.push({ outer: c, holes: [] });
-    }
-  }
-
-  return groups;
 }
 
 function findAndTraceContours(
@@ -315,7 +268,7 @@ function findAndTraceContours(
                       )}`
                   )
                   .join(" ") + " Z";
-              contours.push({ pathD, points: simplified });
+              contours.push({ points: simplified, pathD });
             }
           }
         }
@@ -461,11 +414,6 @@ async function transformSVGForPainting(
 
     if (action.type === "fill") {
       ctx.fill(path2d);
-      // Symmetrically dilate by 1.0px to close any hairline gaps between adjacent regions
-      ctx.lineWidth = 1.0;
-      ctx.lineCap = "round";
-      ctx.lineJoin = "round";
-      ctx.stroke(path2d);
     } else {
       ctx.lineWidth = action.strokeWidth;
       ctx.lineCap = action.lineCap as CanvasLineCap;
@@ -505,7 +453,7 @@ async function transformSVGForPainting(
     if (!originalColor) return;
 
     // Trace contours of this ID
-    const contours = findAndTraceContours(
+    const contoursOfId = findAndTraceContours(
       id,
       canvasWidth,
       canvasHeight,
@@ -513,27 +461,88 @@ async function transformSVGForPainting(
       scale
     );
 
-    // Group contours hierarchically so isolated islands are split into individual paths,
-    // while holes are properly combined inside their outer shapes using evenodd.
-    const groups = groupContoursByHierarchy(contours);
+    if (contoursOfId.length > 0) {
+      // Classify nested parent/child containment for holes vs. disjoint islands
+      interface ContourNode {
+        contour: TracedContour;
+        depth: number;
+        containedIn: number[];
+      }
 
-    groups.forEach((g) => {
-      const subpaths = [g.outer.pathD];
-      g.holes.forEach((h) => {
-        subpaths.push(h.pathD);
+      const nodes: ContourNode[] = contoursOfId.map((c) => ({
+        contour: c,
+        depth: 0,
+        containedIn: [],
+      }));
+
+      for (let i = 0; i < contoursOfId.length; i++) {
+        const p = contoursOfId[i].points[0];
+        for (let j = 0; j < contoursOfId.length; j++) {
+          if (i === j) continue;
+          if (isPointInPolygon(p, contoursOfId[j].points)) {
+            nodes[i].containedIn.push(j);
+          }
+        }
+      }
+
+      nodes.forEach((node) => {
+        node.depth = node.containedIn.length;
       });
 
-      const pathEl = document.createElementNS(
-        "http://www.w3.org/2000/svg",
-        "path"
-      );
-      pathEl.setAttribute("d", subpaths.join(" "));
-      pathEl.setAttribute("fill", originalColor);
-      if (g.holes.length > 0) {
-        pathEl.setAttribute("fill-rule", "evenodd");
+      // Group Holes (odd depth) under their respective immediate parent Islands (even depth)
+      interface IslandGroup {
+        islandNode: ContourNode;
+        holes: ContourNode[];
       }
-      resultSvg.appendChild(pathEl);
-    });
+
+      const islands: IslandGroup[] = [];
+      const islandMap = new Map<number, number>();
+
+      nodes.forEach((node, idx) => {
+        if (node.depth % 2 === 0) {
+          islandMap.set(idx, islands.length);
+          islands.push({ islandNode: node, holes: [] });
+        }
+      });
+
+      nodes.forEach((node, idx) => {
+        if (node.depth % 2 === 1) {
+          let parentIndex = -1;
+          let maxParentDepth = -1;
+          node.containedIn.forEach((parentIdx) => {
+            const parentNode = nodes[parentIdx];
+            if (parentNode.depth % 2 === 0 && parentNode.depth > maxParentDepth) {
+              maxParentDepth = parentNode.depth;
+              parentIndex = parentIdx;
+            }
+          });
+
+          if (parentIndex !== -1) {
+            const groupIdx = islandMap.get(parentIndex);
+            if (groupIdx !== undefined) {
+              islands[groupIdx].holes.push(node);
+            }
+          }
+        }
+      });
+
+      // Render each separate Island as an independent paintable <path>
+      islands.forEach((group) => {
+        const combinedD = [
+          group.islandNode.contour.pathD,
+          ...group.holes.map((h) => h.contour.pathD),
+        ].join(" ");
+
+        const pathEl = document.createElementNS(
+          "http://www.w3.org/2000/svg",
+          "path"
+        );
+        pathEl.setAttribute("d", combinedD);
+        pathEl.setAttribute("fill", originalColor);
+        pathEl.setAttribute("fill-rule", "evenodd");
+        resultSvg.appendChild(pathEl);
+      });
+    }
   });
 
   return resultSvg;
