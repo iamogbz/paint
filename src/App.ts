@@ -12,6 +12,7 @@ import {
 import "./components/EaselBoard";
 import "./components/PaintingControls";
 import "./components/ArtworkGalleryModal";
+import "./components/DownloadPopup";
 import "./components/RadialColorPickerModal";
 import "./components/TourGuide";
 import { transparentImgCss } from "./components/constants";
