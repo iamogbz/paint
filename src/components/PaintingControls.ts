@@ -595,7 +595,7 @@ export class PaintingControls extends SignalElement {
               <div style=${this.renderStyleObject(scrollRowStyle)}>
                 ${allColors.map((color) => {
                   const colorStatus = expectedColorStatus.get(color.hexCode);
-                  const isCoreColor = colorStatus?.total > 0;
+                  const isCoreColor = colorStatus? colorStatus.total > 0 : undefined;
                   const isFullyPainted = colorStatus
                     ? isCoreColor && colorStatus.total === colorStatus.painted
                     : false;
@@ -711,7 +711,7 @@ export class PaintingControls extends SignalElement {
                         ${color.hexCode === "#00000000"
                           ? "Eraser"
                           : isCoreColor
-                          ? `${colorStatus.painted}/${colorStatus.total}`
+                          ? `${colorStatus!.painted}/${colorStatus!.total}`
                           : isSelected
                           ? iconTrash2(12, "#E63946")
                           : "♾️"}

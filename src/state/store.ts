@@ -158,7 +158,7 @@ export function handleToggleSound() {
   }
 
 export function saveCurrentArtworkProgress(
-  paintedRegionsState: Record<number, string>,
+  paintedRegionsState?: Record<number, string>,
   brushStrokePaths?: Record<number, Array<{ points: Array<{ x: number, y: number }>; stroke: string; strokeWidth: number }>>
 ) {
   const current = currentArtworkSignal.get();

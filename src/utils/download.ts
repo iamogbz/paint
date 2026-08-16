@@ -1,18 +1,17 @@
 import { ProcessedArtwork } from "../types";
-import { soundEffects } from "./soundEffects";
 
 export function exportArtworkCleanDataUrl(artwork: ProcessedArtwork): string {
   if (artwork.svgPaths) {
     const w = artwork.width;
     const h = artwork.height;
     const paintedState = artwork.paintedRegionsState || {};
-    
+
     let svgContent = `<svg version="1.1" xmlns="http://www.w3.org/2000/svg" width="${w}" height="${h}" viewBox="0 0 ${w} ${h}">`;
-    
+
     const hasBrushStrokes = artwork.brushStrokePaths && Object.values(artwork.brushStrokePaths).some(
       (strokes) => strokes && strokes.length > 0
     );
-    
+
     if (hasBrushStrokes) {
       svgContent += "<defs>";
       for (const path of artwork.svgPaths) {
@@ -20,7 +19,7 @@ export function exportArtworkCleanDataUrl(artwork: ProcessedArtwork): string {
       }
       svgContent += "</defs>";
     }
-    
+
     for (const path of artwork.svgPaths) {
         const paintedColor = paintedState[path.id];
         const expectedColor = artwork.regionExpectedColors?.[path.id];
@@ -30,7 +29,7 @@ export function exportArtworkCleanDataUrl(artwork: ProcessedArtwork): string {
         }
         svgContent += `<path xmlns="http://www.w3.org/2000/svg" d="${path.d}" fill="${fill}" />`;
     }
-    
+
     if (hasBrushStrokes && artwork.brushStrokePaths) {
       for (const path of artwork.svgPaths) {
         const strokes = artwork.brushStrokePaths[path.id] || [];
@@ -47,7 +46,7 @@ export function exportArtworkCleanDataUrl(artwork: ProcessedArtwork): string {
         }
       }
     }
-    
+
     svgContent += `</svg>`;
     return "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgContent)));
   }

@@ -82,7 +82,7 @@ export function hexToRgb(hexCode: string) {
   if (strippedHexCode.length !== 3 && strippedHexCode.length < 6) {
     return null;
   }
-  const rbga = [];
+  const rbga: number[] = [];
   for (let i = 0; i < 4; i++) {
     rbga.push(
       parseInt(

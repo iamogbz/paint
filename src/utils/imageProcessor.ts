@@ -26,11 +26,11 @@ async function transformSVGForPainting(
     console.error(errorMsg, svgDoc.documentElement);
     throw Error(errorMsg);
 
-  // TODO
-  // 1. turn all the strokes with >0 widths into paths, the stroke color is now the fill and the new path has no stroke
-  // 2. check all the paths in the document including the strokes that just got turned to paths and divide them into unique islands until they are no overlapping paths
-  // 3. make sure that the fills for all paths even if was assigned by inheritance are preserved during the previous step
-  // 4. parse the generated svg and return it for processing
+    // TODO
+    // 1. turn all the strokes with >0 widths into paths, the stroke color is now the fill and the new path has no stroke
+    // 2. check all the paths in the document including the strokes that just got turned to paths and divide them into unique islands until they are no overlapping paths
+    // 3. make sure that the fills for all paths even if was assigned by inheritance are preserved during the previous step
+    // 4. parse the generated svg and return it for processing
   }
 
   // assign black fill to all elements without a fill attribute
@@ -147,7 +147,7 @@ export async function processImageToCartoonPalette(
 
     let parent = path.parentElement;
     while ((!fill || fill === "none") && parent) {
-      fill = parent.getAttribute("fill");
+      fill = parent.getAttribute("fill") || "";
       parent = parent.tagName === "svg" ? null : parent.parentElement;
     }
 
@@ -166,11 +166,13 @@ export async function processImageToCartoonPalette(
 
   for (const [hexCode, count] of colorCounts.entries()) {
     const rgba = hexToRgb(hexCode);
-    colorStats.push({
-      color: { hexCode, rgba },
-      count,
-      percentage: Math.max(1, Math.round((count / totalRegions) * 100)),
-    });
+    if (rgba) {
+      colorStats.push({
+        color: { hexCode, rgba },
+        count,
+        percentage: Math.max(1, Math.round((count / totalRegions) * 100)),
+      });
+    }
   }
 
   // Sort by count descending

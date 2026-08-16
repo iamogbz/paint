@@ -23,7 +23,7 @@ import { iconImage, iconSparkles, iconUpload, iconPaintBucket } from "./icons";
 import { BASE_BRUSH_RADIUS, transparentImgCss } from "./constants";
 import { deepCopy } from "../utils/object";
 import { normalizeHex } from "../utils/color";
-import { ProcessedArtwork } from "../types";
+import { BrushStrokePaths, ProcessedArtwork } from "../types";
 
 function erasePointsFromStrokePath(
   points: Array<{ x: number; y: number }>,
@@ -212,9 +212,9 @@ export class EaselBoard extends SignalElement {
   private activeStrokeIdx = -1;
   private currentStrokeRegionId: number | null = null;
   // faster buffering of painted paths without waiting for save logic
-  private brushStrokePaths = {} as ProcessedArtwork["brushStrokePaths"];
+  private brushStrokePaths = {} as BrushStrokePaths;
   private brushPositionBuffer =
-    [] as ProcessedArtwork["brushStrokePaths"][number][number]["points"];
+    [] as BrushStrokePaths[number][number]["points"];
 
   public triggerFilePicker = () => {
     const input = document.getElementById(
@@ -510,8 +510,8 @@ export class EaselBoard extends SignalElement {
 
     if (currentBrushRegionId !== null) {
       const isSameExpectedColor =
-        currentArtwork.regionExpectedColors[currentBrushRegionId] ===
-        currentArtwork.regionExpectedColors[this.brushTargetRegionId!];
+        currentArtwork.regionExpectedColors?.[currentBrushRegionId] ===
+        currentArtwork.regionExpectedColors?.[this.brushTargetRegionId!];
       if (isSameExpectedColor) {
         if (currentBrushRegionId !== this.brushTargetRegionId) {
           // Reset active stroke index when moving to a different region with the same expected color
