@@ -221,6 +221,49 @@ export async function processImageToCartoonPalette(
   const width = parseInt(svgDoc.getAttribute("width") || defaultDimensionPx);
   const height = parseInt(svgDoc.getAttribute("height") || defaultDimensionPx);
 
+  const regionNeighbors: Record<number, number[]> = {};
+  try {
+    const hiddenContainer = document.createElement("div");
+    hiddenContainer.style.position = "absolute";
+    hiddenContainer.style.visibility = "hidden";
+    hiddenContainer.style.pointerEvents = "none";
+    hiddenContainer.appendChild(svgDoc.cloneNode(true));
+    document.body.appendChild(hiddenContainer);
+
+    const bboxes: Record<number, DOMRect> = {};
+    const domPaths = hiddenContainer.querySelectorAll("path");
+    domPaths.forEach((path, i) => {
+      if (regionExpectedColors[i]) {
+        try { bboxes[i] = path.getBBox(); } catch (e) { /* ignore */ }
+      }
+    });
+    document.body.removeChild(hiddenContainer);
+
+    const expandPx = 12;
+    for (let i = 0; i < svgPaths.length; i++) {
+      const idA = svgPaths[i].id;
+      const boxA = bboxes[idA];
+      if (!boxA) continue;
+      
+      const neighbors: number[] = [];
+      for (let j = 0; j < svgPaths.length; j++) {
+        if (i === j) continue;
+        const idB = svgPaths[j].id;
+        const boxB = bboxes[idB];
+        if (!boxB) continue;
+
+        const intersectX = (boxA.x - expandPx <= boxB.x + boxB.width) && (boxA.x + boxA.width + expandPx >= boxB.x);
+        const intersectY = (boxA.y - expandPx <= boxB.y + boxB.height) && (boxA.y + boxA.height + expandPx >= boxB.y);
+        if (intersectX && intersectY) {
+          neighbors.push(idB);
+        }
+      }
+      regionNeighbors[idA] = neighbors;
+    }
+  } catch (e) {
+    console.error("Failed to compute region neighbors", e);
+  }
+
   return {
     id: `art-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
     name: artworkName,
@@ -234,6 +277,7 @@ export async function processImageToCartoonPalette(
     modifiedAt: Date.now(),
     colorStats,
     regionExpectedColors,
+    regionNeighbors,
     svgPaths,
   };
 }

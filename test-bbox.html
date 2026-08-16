@@ -1,0 +1,16 @@
+<!DOCTYPE html>
+<html>
+<body>
+<script>
+  const parser = new DOMParser();
+  const svgStr = `<svg xmlns="http://www.w3.org/2000/svg" width="100" height="100">
+    <path id="p1" d="M10,10 L50,10 L50,50 L10,50 Z" />
+  </svg>`;
+  const doc = parser.parseFromString(svgStr, "image/svg+xml");
+  const svg = doc.documentElement;
+  document.body.appendChild(svg);
+  const path = svg.querySelector("path");
+  console.log(path.getBBox());
+</script>
+</body>
+</html>

@@ -1,0 +1,107 @@
+diff --git a/src/components/EaselBoard.ts b/src/components/EaselBoard.ts
+index 3217e0f..a37fab4 100644
+--- a/src/components/EaselBoard.ts
++++ b/src/components/EaselBoard.ts
+@@ -349,18 +349,50 @@ export class EaselBoard extends SignalElement {
+     const targetX = clientX;
+     const targetY = isDragging ? clientY - this.dropperBufferPx : clientY;
+ 
+-    const elementUnderneath = document.elementFromPoint(targetX, targetY);
+-    if (
+-      elementUnderneath &&
+-      elementUnderneath.tagName.toLowerCase() === "path"
+-    ) {
+-      const regionIdStr = elementUnderneath.getAttribute("data-region-id");
+-      if (regionIdStr) {
+-        return parseInt(regionIdStr, 10);
++    const getRegionAt = (x: number, y: number): number | null => {
++      const el = document.elementFromPoint(x, y);
++      if (el && el.tagName.toLowerCase() === "path") {
++        const idStr = el.getAttribute("data-region-id");
++        if (idStr) return parseInt(idStr, 10);
++      }
++      return null;
++    };
++
++    const regionA = getRegionAt(targetX, targetY);
++
++    if (regionA !== null && selectedColorHex) {
++      const regionAExpectedColor = currentArtwork.regionExpectedColors?.[regionA];
++      if (regionAExpectedColor !== selectedColorHex) {
++        let closestRegion: number | null = null;
++        let minDistance = Infinity;
++
++        const searchRadius = 8;
++        const step = 2;
++        for (let dx = -searchRadius; dx <= searchRadius; dx += step) {
++          for (let dy = -searchRadius; dy <= searchRadius; dy += step) {
++            const dist = Math.hypot(dx, dy);
++            if (dist > searchRadius || dist === 0) continue;
++
++            const nRegion = getRegionAt(targetX + dx, targetY + dy);
++            if (nRegion !== null && nRegion !== regionA) {
++              const nExpectedColor = currentArtwork.regionExpectedColors?.[nRegion];
++              if (nExpectedColor === selectedColorHex) {
++                if (dist < minDistance) {
++                  minDistance = dist;
++                  closestRegion = nRegion;
++                }
++              }
++            }
++          }
++        }
++
++        if (closestRegion !== null) {
++          return closestRegion;
++        }
+       }
+     }
+ 
+-    return null;
++    return regionA;
+   }
+ 
+   private handleColorDragMove = (e: Event) => {
+@@ -693,7 +725,7 @@ export class EaselBoard extends SignalElement {
+   private updateTransformStyle() {
+     const el = this.querySelector("#easel-transform-element") as HTMLElement;
+     if (el) {
+-      el.style.transform = `translate3d(${this.panX}px, ${this.panY}px, 0px) scale(${this.scale})`;
++      el.style.transform = `translate(${this.panX}px, ${this.panY}px) scale(${this.scale})`;
+       const isAnimating = Date.now() < this.zoomAnimationEndTime;
+       el.style.transition =
+         !isAnimating && (this.isDragging || this.isPinching)
+@@ -907,7 +939,7 @@ export class EaselBoard extends SignalElement {
+       zoomScaleSignal.set(this.scale);
+       this.updateTransformStyle();
+     } else if (e.touches.length === 1) {
+-      if (isBrushModeSignal.get()) {
++      if (isBrushModeSignal.get() || this.pinchActiveInGesture) {
+         return;
+       }
+       const dx = e.touches[0].clientX - this.pointerDownX;
+@@ -993,7 +1025,7 @@ export class EaselBoard extends SignalElement {
+       this.hasDragged = false;
+       this.updateTransformStyle();
+     }
+-    if (this.isPinching || !this.isDragging) return;
++    if (this.isPinching || this.pinchActiveInGesture || !this.isDragging) return;
+     const dist = Math.hypot(
+       e.clientX - this.pointerDownX,
+       e.clientY - this.pointerDownY
+@@ -1165,12 +1197,12 @@ export class EaselBoard extends SignalElement {
+         >
+           <div
+             id="easel-transform-element"
+-            style="width: 100%; display: flex; flex-direction: column; align-items: center; transform: translate3d(${this
+-              .panX}px, ${this.panY}px, 0px) scale(${this
++            style="width: 100%; display: flex; flex-direction: column; align-items: center; transform: translate(${this
++              .panX}px, ${this.panY}px) scale(${this
+               .scale}); transform-origin: center center; transition: ${this
+               .isDragging || this.isPinching
+               ? "none"
+-              : "transform 0.15s cubic-bezier(0.2, 0, 0, 1)"}; will-change: transform;"
++              : "transform 0.15s cubic-bezier(0.2, 0, 0, 1)"};"
+           >
+             <div style=${this.renderStyleObject(easelTopClampStyle)}></div>
+             <div style=${this.renderStyleObject(mainFrameStyle)}>

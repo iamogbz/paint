@@ -363,31 +363,51 @@ export class EaselBoard extends SignalElement {
     if (regionA !== null && selectedColorHex) {
       const regionAExpectedColor = currentArtwork.regionExpectedColors?.[regionA];
       if (regionAExpectedColor !== selectedColorHex) {
-        let closestRegion: number | null = null;
-        let minDistance = Infinity;
+        const neighbors = currentArtwork.regionNeighbors?.[regionA];
+        let shouldScan = false;
 
-        const searchRadius = 8;
-        const step = 2;
-        for (let dx = -searchRadius; dx <= searchRadius; dx += step) {
-          for (let dy = -searchRadius; dy <= searchRadius; dy += step) {
-            const dist = Math.hypot(dx, dy);
-            if (dist > searchRadius || dist === 0) continue;
+        if (neighbors) {
+          for (const nId of neighbors) {
+            if (currentArtwork.regionExpectedColors?.[nId] === selectedColorHex) {
+              shouldScan = true;
+              break;
+            }
+          }
+        } else {
+          // Fallback if regionNeighbors wasn't computed
+          shouldScan = true;
+        }
 
-            const nRegion = getRegionAt(targetX + dx, targetY + dy);
-            if (nRegion !== null && nRegion !== regionA) {
-              const nExpectedColor = currentArtwork.regionExpectedColors?.[nRegion];
-              if (nExpectedColor === selectedColorHex) {
-                if (dist < minDistance) {
-                  minDistance = dist;
-                  closestRegion = nRegion;
+        if (shouldScan) {
+          let closestRegion: number | null = null;
+          let minDistance = Infinity;
+
+          // Radial scan checks only 12 points instead of 81, dramatically improving performance
+          const radii = [4, 8];
+          for (const r of radii) {
+            const steps = r === 4 ? 4 : 8;
+            for (let i = 0; i < steps; i++) {
+              const angle = (i * Math.PI * 2) / steps;
+              const dx = Math.round(Math.cos(angle) * r);
+              const dy = Math.round(Math.sin(angle) * r);
+
+              const dist = Math.hypot(dx, dy);
+              const nRegion = getRegionAt(targetX + dx, targetY + dy);
+              if (nRegion !== null && nRegion !== regionA) {
+                const nExpectedColor = currentArtwork.regionExpectedColors?.[nRegion];
+                if (nExpectedColor === selectedColorHex) {
+                  if (dist < minDistance) {
+                    minDistance = dist;
+                    closestRegion = nRegion;
+                  }
                 }
               }
             }
           }
-        }
 
-        if (closestRegion !== null) {
-          return closestRegion;
+          if (closestRegion !== null) {
+            return closestRegion;
+          }
         }
       }
     }

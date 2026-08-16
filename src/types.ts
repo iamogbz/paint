@@ -34,6 +34,7 @@ export interface ProcessedArtwork {
   paintedCanvasDataUrl?: string;
   regionMapData?: Int32Array | number[];
   regionExpectedColors?: Record<number, string>;
+  regionNeighbors?: Record<number, number[]>;
   svgPaths?: SvgPath[];
   brushStrokePaths?: BrushStrokePaths;
 }
