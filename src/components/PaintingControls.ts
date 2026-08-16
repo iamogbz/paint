@@ -33,7 +33,7 @@ import {
 } from "./icons";
 import { DROPPER_BUFFER_PX, transparentImgCss } from "./constants";
 import { soundEffects } from "../utils/soundEffects";
-import { downloadImage, exportArtworkCleanDataUrl, exportArtworkHighResPng } from "../utils/download";
+import { downloadImage, exportArtworkCleanDataUrl, exportArtworkHighResPng, exportArtworkPdfDataUrl } from "../utils/download";
 
 
 @customElement("painting-controls")
@@ -41,6 +41,7 @@ export class PaintingControls extends SignalElement {
   @property({ type: Array }) colorStats: UsedColorStat[] = [];
   
   @property({ type: Boolean }) isDownloading = false;
+  @property({ type: Boolean }) showDownloadPopup = false;
 
   private timeoutId?: number;
   private panAnimationFrame: number | null = null;
@@ -218,10 +219,17 @@ export class PaintingControls extends SignalElement {
     window.addEventListener("pointercancel", onPointerCancel);
   };
 
-  private handleDownload = async () => {
+  private handleDownloadClick = () => {
+    const artwork = currentArtworkSignal.get();
+    if (!artwork || this.isDownloading) return;
+    this.showDownloadPopup = true;
+  };
+
+  private downloadAsPng = async () => {
     const artwork = currentArtworkSignal.get();
     if (!artwork || this.isDownloading) return;
     
+    this.showDownloadPopup = false;
     this.isDownloading = true;
     try {
       const highResPngDataUrl = await exportArtworkHighResPng(artwork);
@@ -234,7 +242,30 @@ export class PaintingControls extends SignalElement {
       );
     } catch (err) {
       console.error("Download failed:", err);
-      alert("Failed to generate high-resolution download. Please try again.");
+      alert("Failed to generate high-resolution PNG. Please try again.");
+    } finally {
+      this.isDownloading = false;
+    }
+  };
+
+  private downloadAsPdf = async () => {
+    const artwork = currentArtworkSignal.get();
+    if (!artwork || this.isDownloading) return;
+    
+    this.showDownloadPopup = false;
+    this.isDownloading = true;
+    try {
+      const pdfDataUrl = await exportArtworkPdfDataUrl(artwork);
+      await downloadImage(
+        pdfDataUrl,
+        `paint_by_numbers_${artwork.name
+          .toLowerCase()
+          .replace(/[^a-z0-9]+/g, "-")
+          .replace(/(^-|-$)/g, "")}.ogbizi.com.pdf`
+      );
+    } catch (err) {
+      console.error("Download failed:", err);
+      alert("Failed to generate PDF. Please try again.");
     } finally {
       this.isDownloading = false;
     }
@@ -434,7 +465,7 @@ export class PaintingControls extends SignalElement {
                   <button
                     id="save-painting-btn"
                     title="Save Painting to Device"
-                    @click=${this.handleDownload}
+                    @click=${this.handleDownloadClick}
                     style=${this.renderStyleObject({
                       ...actionBtnStyle("#2A9D8F"),
                       opacity: this.isDownloading ? "0.7" : "1",
@@ -818,6 +849,46 @@ export class PaintingControls extends SignalElement {
               </div>
             `
           : ""}
+      </div>
+      ${this.showDownloadPopup ? this.renderDownloadPopup() : ""}
+    `;
+  }
+
+  private renderDownloadPopup() {
+    return html`
+      <div style="position: fixed; top: 0; left: 0; width: 100%; height: 100%; background: rgba(0,0,0,0.5); display: flex; align-items: center; justify-content: center; z-index: 10000;" @click=${() => (this.showDownloadPopup = false)}>
+        <div style="background: #FFF; padding: 24px; border-radius: 16px; box-shadow: 0 4px 20px rgba(0,0,0,0.15); display: flex; flex-direction: column; gap: 16px; min-width: 280px; max-width: 90vw;" @click=${(e: Event) => e.stopPropagation()}>
+          <h3 style="margin: 0; font-family: 'Playfair Display', serif; color: #3D2314; font-size: 1.25rem;">Download Options</h3>
+          <p style="margin: 0; color: #666; font-size: 0.9rem; font-family: 'Plus Jakarta Sans', sans-serif;">Select a format for your artwork.</p>
+          
+          <div style="display: flex; flex-direction: column; gap: 12px; margin-top: 8px;">
+            <button
+              @click=${this.downloadAsPng}
+              style="padding: 12px 16px; border: none; border-radius: 8px; background: #2A9D8F; color: white; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; font-family: 'Plus Jakarta Sans', sans-serif; transition: opacity 0.2s;"
+              onmouseover="this.style.opacity='0.9'"
+              onmouseout="this.style.opacity='1'"
+            >
+              ${this.isDownloading ? iconLoader2(18, "#FFF") : ""}
+              Download as High-Res PNG
+            </button>
+            <button
+              @click=${this.downloadAsPdf}
+              style="padding: 12px 16px; border: 2px solid #2A9D8F; border-radius: 8px; background: white; color: #2A9D8F; font-weight: bold; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; font-family: 'Plus Jakarta Sans', sans-serif; transition: background 0.2s;"
+              onmouseover="this.style.background='#f0f9f8'"
+              onmouseout="this.style.background='white'"
+            >
+              ${this.isDownloading ? iconLoader2(18, "#2A9D8F") : ""}
+              Download as Vector PDF
+            </button>
+          </div>
+          
+          <button
+            @click=${() => (this.showDownloadPopup = false)}
+            style="margin-top: 8px; padding: 8px; border: none; background: transparent; color: #999; cursor: pointer; font-size: 0.85rem; font-family: 'Plus Jakarta Sans', sans-serif;"
+          >
+            Cancel
+          </button>
+        </div>
       </div>
     `;
   }

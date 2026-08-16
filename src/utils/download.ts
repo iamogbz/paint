@@ -1,3 +1,5 @@
+import { jsPDF } from "jspdf";
+import "svg2pdf.js";
 import { ProcessedArtwork } from "../types";
 
 export function exportArtworkCleanDataUrl(artwork: ProcessedArtwork, overrideWidth?: number, overrideHeight?: number): string {
@@ -157,4 +159,43 @@ export async function exportArtworkHighResPng(artwork: ProcessedArtwork): Promis
     
     img.src = svgDataUrl;
   });
+}
+
+
+
+
+export async function exportArtworkPdfDataUrl(artwork: ProcessedArtwork): Promise<string> {
+  // Use exact SVG dimensions
+  const w = artwork.width;
+  const h = artwork.height;
+  
+  // Create jsPDF instance with exact points
+  // 'pt' unit means 1 point = 1 pixel at 72dpi. 
+  // Custom format using the exact dimensions of the artwork
+  const doc = new jsPDF({
+    orientation: w > h ? "landscape" : "portrait",
+    unit: "px", // Use pixels as units so it maps 1:1 with SVG
+    format: [w, h]
+  });
+
+  // Get raw SVG
+  const svgDataUrl = exportArtworkCleanDataUrl(artwork);
+  // Decode base64 to get string
+  const base64Str = svgDataUrl.split(",")[1];
+  const svgString = decodeURIComponent(escape(atob(base64Str)));
+  
+  // Parse into DOM element
+  const parser = new DOMParser();
+  const svgDoc = parser.parseFromString(svgString, "image/svg+xml");
+  const svgElement = svgDoc.documentElement;
+
+  // Render SVG to PDF
+  await doc.svg(svgElement, {
+    x: 0,
+    y: 0,
+    width: w,
+    height: h
+  });
+
+  return doc.output("dataurlstring");
 }
