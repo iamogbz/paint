@@ -78,7 +78,7 @@ export class DownloadPopup extends SignalElement {
         >
           <div style="display: flex; align-items: center; gap: 0.625rem; margin-bottom: 0.5rem;">
             <div
-              style="width: 2.5rem; height: 2.5rem; border-radius: 18px; background-color: #4EA8DE; border: 3px solid #000000; display: flex; align-items: center; justify-content: center; color: #000000; box-shadow: 2px 2px 0px 0px #000000;"
+              style="width: 2.5rem; height: 2.5rem; border-radius: 18px; background-color: #2A9D8F; border: 3px solid #000000; display: flex; align-items: center; justify-content: center; color: #000000; box-shadow: 2px 2px 0px 0px #000000;"
             >
               ${iconDownload(20, "#000000")}
             </div>
@@ -99,7 +99,7 @@ export class DownloadPopup extends SignalElement {
           <div style="display: flex; flex-direction: column; gap: 12px;">
             <button
               @click=${this.downloadAsPng}
-              style="padding: 12px 16px; border: 3px solid #000000; border-radius: 16px; background: #2A9D8F; color: #FFFFFF; font-weight: 900; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; font-family: 'Plus Jakarta Sans', sans-serif; box-shadow: 4px 4px 0px 0px #000000; transition: transform 0.1s ease, box-shadow 0.1s ease;"
+              style="padding: 12px 16px; border: 3px solid #000000; border-radius: 16px; background: #4EA8DE; color: #FFFFFF; font-weight: 900; cursor: pointer; display: flex; align-items: center; justify-content: center; gap: 8px; font-family: 'Plus Jakarta Sans', sans-serif; box-shadow: 4px 4px 0px 0px #000000; transition: transform 0.1s ease, box-shadow 0.1s ease;"
               onmousedown="this.style.transform='translate(2px, 2px)'; this.style.boxShadow='2px 2px 0px 0px #000000';"
               onmouseup="this.style.transform='none'; this.style.boxShadow='4px 4px 0px 0px #000000';"
               onmouseleave="this.style.transform='none'; this.style.boxShadow='4px 4px 0px 0px #000000';"

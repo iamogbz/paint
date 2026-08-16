@@ -344,11 +344,16 @@ export class RadialColorPickerModal extends SignalElement {
               >
                 ${iconPalette(18, "#000000")}
               </div>
-              <h2
-                style="margin: 0; font-size: 1.125rem; font-weight: 800; color: #3D2314; letter-spacing: -0.01em;"
-              >
-                Pick a Colour
-              </h2>
+              <div>
+                <h2
+                  style="margin: 0; font-size: 1.125rem; font-weight: 800; color: #3D2314; letter-spacing: -0.02em;"
+                >
+                  Pick a Colour
+                </h2>
+                <p style="font-size: 0.75rem; font-weight: 800; text-transform: uppercase; color: #4A2810; margin: 0;">
+                  OR ENTER YOUR HEX CODE
+                </p>
+              </div>
             </div>
             <button
               title="Close"
