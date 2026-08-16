@@ -1150,17 +1150,17 @@ export class EaselBoard extends SignalElement {
               <div
                 style="display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; padding: 0.5rem; background-size: 0.5rem 0.5rem; background-image: ${transparentImgCss}; min-height: 40vh; overflow: hidden;"
               >
-                ${isProcessing && processingSrc
+                ${currentArtwork
                   ? html`
                       <div
-                        style="width: 100%; display: flex; flex-direction: column; align-items: center;"
+                        style="min-width: 100%; min-height: 100%; aspect-ratio: ${processingWidth} / ${processingHeight}; display: flex; flex-direction: column; justify-content: center; align-items: center; position: absolute; animation: blur-pulse 2s infinite ease-in-out; transition: opacity 5s ease-out; opacity: ${isProcessing ?  1 : 0}"
                       >
                         <div
-                          style="position: relative; width: 100%; aspect-ratio: ${processingWidth} / ${processingHeight}; border-radius: 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; background-color: transparent;"
+                          style="position: relative; width: 100%; height: 100%; border-radius: 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; background-color: transparent;"
                         >
                           <img
-                            src="${processingSrc}"
-                            style="width: 100%; height: 100%; object-fit: contain; animation: blur-pulse 2s infinite ease-in-out;"
+                            src="${processingSrc || currentArtwork.originalDataUrl}"
+                            style="width: 100%; height: 100%; object-fit: cover;"
                           />
                         </div>
                       </div>
@@ -1256,7 +1256,7 @@ export class EaselBoard extends SignalElement {
                 ${currentArtwork && !isProcessing
                   ? html`
                       <div
-                        style="width: 100%; display: flex; flex-direction: column; align-items: center;"
+                        style="width: 100%; display: flex; flex-direction: column; align-items: center; transition: opacity 1s ease-in-out; opacity: ${isProcessing ? 0 : 1};"
                       >
                         <div
                           style="position: relative; width: 100%; aspect-ratio: ${currentArtwork.width} / ${currentArtwork.height}; border-radius: 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; background-color: transparent;"
