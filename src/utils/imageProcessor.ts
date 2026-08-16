@@ -1,5 +1,6 @@
-import { ProcessedArtwork, UsedColorStat, SvgPath } from "../types";
 import init, { vectorize_rgba } from "../vtracer/vtracer_wasm.js";
+import { ProcessedArtwork, UsedColorStat, SvgPath } from "../types";
+import { hexToRgb, normalizeHex } from "./color.js";
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -11,32 +12,38 @@ function loadImage(src: string): Promise<HTMLImageElement> {
   });
 }
 
+/**
+ * Turns svg outlines into paths and fragments overlapping shapes into non-overlapping islands.
+ */
+async function transformSVGForPainting(
+  rawSvgString: string
+): Promise<SVGElement> {
+  const parser = new DOMParser();
+  const svgDoc = parser.parseFromString(rawSvgString, "image/svg+xml");
+
+  if (!(svgDoc.documentElement instanceof SVGElement)) {
+    const errorMsg = "Failed to parse SVG document";
+    console.error(errorMsg, svgDoc.documentElement);
+    throw Error(errorMsg);
+  }
+
+  // TODO
+  // 1. turn all the strokes with >0 widths into paths, the stroke color is now the fill and the new path has no stroke
+  // 2. check all the paths in the document including the strokes that just got turned to paths and divide them into unique islands until they are no overlapping paths
+  // 3. make sure that the fills for all paths even if was assigned by inheritance are preserved during the previous step
+  // 4. parse the generated svg and return it for processing
+
+  const svgElement = svgDoc.documentElement;
+
+  return svgElement;
+}
+
 export async function processImageToCartoonPalette(
   imageSrc: string,
   artworkName: string
 ): Promise<ProcessedArtwork> {
   const isSvgImage = imageSrc.startsWith("data:image/svg+xml");
-
-  const img = await loadImage(imageSrc);
-  let { width, height } = img;
-
-  const origCanvas = document.createElement("canvas");
-  origCanvas.width = width;
-  origCanvas.height = height;
-  const origCtx = origCanvas.getContext("2d", { willReadFrequently: true });
-  if (!origCtx) throw new Error("Failed to initialize canvas 2D context");
-
-  origCtx.imageSmoothingEnabled = false;
-  origCtx.imageSmoothingQuality = "high";
-
-  // Fill with white background in case of transparency
-  origCtx.fillStyle = "#FFFFFF";
-  origCtx.fillRect(0, 0, width, height);
-  origCtx.drawImage(img, 0, 0, width, height);
-
-  const originalDataUrl = imageSrc;
-  const origImgData = origCtx.getImageData(0, 0, width, height);
-  const rawPixels = origImgData.data;
+  const defaultDimensionPx = "800";
 
   let svgStr = "";
 
@@ -47,6 +54,25 @@ export async function processImageToCartoonPalette(
       svgStr = decodeURIComponent(imageSrc.split(",")[1]);
     }
   } else {
+    const img = await loadImage(imageSrc);
+
+    const origCanvas = document.createElement("canvas");
+    origCanvas.width = img.width;
+    origCanvas.height = img.height;
+    const origCtx = origCanvas.getContext("2d", { willReadFrequently: true });
+    if (!origCtx) throw new Error("Failed to initialize canvas 2D context");
+
+    origCtx.imageSmoothingEnabled = false;
+    origCtx.imageSmoothingQuality = "high";
+
+    // Fill with white background in case of transparency
+    origCtx.fillStyle = "#FFFFFF";
+    origCtx.fillRect(0, 0, img.width, img.height);
+    origCtx.drawImage(img, 0, 0, img.width, img.height);
+
+    const origImgData = origCtx.getImageData(0, 0, img.width, img.height);
+    const rawPixels = origImgData.data;
+
     // Run vtracer
     await init(
       "https://unpkg.com/@visioncortex/vtracer@1.0.0-alpha.3/pkg/vtracer_wasm_bg.wasm"
@@ -57,11 +83,11 @@ export async function processImageToCartoonPalette(
       /** shapes disjoint with others */
       hierarchical: "cutout",
       /** Auto-quantize target color count */
-      // maxColors: maxColors,
+      maxColors: 24,
       /** If a pallete is defined maps colors to this */
       // palette: palette,
       /** Discard patches smaller than X px in size (0..=128) */
-      // filterSpeckle: Math.min(Math.round(Math.max(width, height) / 1920 * 4), 128),
+      // filterSpeckle: Math.min(Math.round(Math.max(img.width, img.height) / 1920 * 4), 128),
       /** default: 8 (best) - Significant bits per RGB channel (1..=8)  */
       // colorPrecision: 8,
       /** Color difference between gradient layers (0..=255) */
@@ -77,7 +103,7 @@ export async function processImageToCartoonPalette(
       /** default: off, Simplify curves: fewest cubics within this tolerance in px (try 1–2.5) */
       // simplify: 2,
     };
-    svgStr = vectorize_rgba(rawPixels, width, height, options);
+    svgStr = vectorize_rgba(rawPixels, img.width, img.height, options);
 
     if (!svgStr.includes("xmlns=")) {
       svgStr = svgStr.replace(
@@ -88,60 +114,46 @@ export async function processImageToCartoonPalette(
   }
 
   // Parse output SVG
-  const parser = new DOMParser();
-  const doc = parser.parseFromString(svgStr, "image/svg+xml");
-
-  // assign black fill to all elements without a fill attribute
-  doc.querySelectorAll("*:not([fill])").forEach((el) => {
-    el.setAttribute("fill", "#000000FF");
-  });
-
-  // assign transparent fill to all elements with fill="none"
-  doc.querySelectorAll("[fill='none']").forEach((el) => {
-    el.setAttribute("fill", "#00000000");
-  });
+  const svgDoc = await transformSVGForPainting(svgStr);
 
   const uniqueColors = new Set<string>();
-  doc.querySelectorAll("[fill]").forEach((el) => {
+  svgDoc.querySelectorAll("[fill]").forEach((el) => {
     const fill = el.getAttribute("fill");
     if (fill && fill.startsWith("#")) uniqueColors.add(fill.toUpperCase());
   });
 
   const svgPaths: SvgPath[] = [];
   const regionExpectedColors: Record<number, string> = {};
+  const colorCounts = new Map<string, number>();
 
-  const paths = Array.from(doc.querySelectorAll("path"));
+  const paths = Array.from(svgDoc.querySelectorAll("path"));
   paths.forEach((path, i) => {
     const d = path.getAttribute("d") || "";
     let fill = path.getAttribute("fill") || "";
-    if (fill.length === 7) {
-      fill = fill.toUpperCase() + "FF"; // #RRGGBBAA
-    } else {
-      fill = fill.toUpperCase();
+
+    let parent = path.parentElement;
+    while ((!fill || fill === "none") && parent) {
+      fill = parent.getAttribute("fill");
+      parent = parent.tagName === "svg" ? null : parent.parentElement;
     }
 
-    svgPaths.push({ id: i, d });
-    regionExpectedColors[i] = fill;
-  });
-
-  const colorCounts = new Map<string, number>();
-
-  paths.forEach((path, i) => {
-    let fill = path.getAttribute("fill") || "";
-    if (fill.length === 7) fill = fill.toUpperCase() + "FF";
-    else fill = fill.toUpperCase();
-    colorCounts.set(fill, (colorCounts.get(fill) || 0) + 1);
+    const finalFill = normalizeHex(fill);
+    // this is a safety check to ensure that we only include paths with valid fill colors
+    // should not happen but just in case
+    if (finalFill) {
+      svgPaths.push({ id: i, d });
+      regionExpectedColors[i] = finalFill;
+      colorCounts.set(finalFill, (colorCounts.get(finalFill) || 0) + 1);
+    }
   });
 
   const colorStats: UsedColorStat[] = [];
   const totalRegions = paths.length;
 
   for (const [hexCode, count] of colorCounts.entries()) {
-    const r = parseInt(hexCode.substring(1, 3), 16);
-    const g = parseInt(hexCode.substring(3, 5), 16);
-    const b = parseInt(hexCode.substring(5, 7), 16);
+    const rgba = hexToRgb(hexCode);
     colorStats.push({
-      color: { hexCode, rgba: [r, g, b, 255] },
+      color: { hexCode, rgba },
       count,
       percentage: Math.max(1, Math.round((count / totalRegions) * 100)),
     });
@@ -159,18 +171,21 @@ export async function processImageToCartoonPalette(
     });
   }
 
+  const width = parseInt(svgDoc.getAttribute("width") || defaultDimensionPx);
+  const height = parseInt(svgDoc.getAttribute("height") || defaultDimensionPx);
+
   return {
     id: `art-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
     name: artworkName,
-    originalDataUrl,
+    originalDataUrl: imageSrc,
     cartoonDataUrl:
-      "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgStr))),
+      "data:image/svg+xml;base64," +
+      btoa(unescape(encodeURIComponent(svgDoc.outerHTML))),
     width,
     height,
     createdAt: Date.now(),
     modifiedAt: Date.now(),
     colorStats,
-    totalPixels: width * height,
     regionExpectedColors,
     svgPaths,
   };

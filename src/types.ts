@@ -1,4 +1,3 @@
-
 export interface PaletteColor {
   hexCode: string;
   rgba: readonly [number, number, number, number];
@@ -29,7 +28,6 @@ export interface ProcessedArtwork {
   createdAt: number;
   modifiedAt: number;
   colorStats: UsedColorStat[];
-  totalPixels: number;
   paintedRegionsState?: Record<number, string>;
   paintedCanvasDataUrl?: string;
   regionMapData?: Int32Array | number[];

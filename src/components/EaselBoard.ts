@@ -22,6 +22,7 @@ import { soundEffects } from "../utils/soundEffects";
 import { iconImage, iconSparkles, iconUpload, iconPaintBucket } from "./icons";
 import { BASE_BRUSH_RADIUS, transparentImgCss } from "./constants";
 import { deepCopy } from "../utils/object";
+import { normalizeHex } from "../utils/color";
 import { ProcessedArtwork } from "../types";
 
 function erasePointsFromStrokePath(
@@ -1377,20 +1378,6 @@ export class EaselBoard extends SignalElement {
                                       1,
                                       currentArtwork.width / 400 / this.scale
                                     );
-
-                                    const normalizeHex = (
-                                      hex: string | undefined
-                                    ): string => {
-                                      if (!hex) return "";
-                                      let h = hex.trim().toUpperCase();
-                                      if (!h.startsWith("#")) {
-                                        h = "#" + h;
-                                      }
-                                      if (h.length === 7) {
-                                        h = h + "FF";
-                                      }
-                                      return h;
-                                    };
 
                                     const targetHexUpper =
                                       normalizeHex(targetHex);
