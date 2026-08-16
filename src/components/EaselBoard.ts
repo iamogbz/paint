@@ -814,7 +814,9 @@ export class EaselBoard extends SignalElement {
         this.isBrushPainting = false;
         const currentArtwork = currentArtworkSignal.get();
         if (currentArtwork) {
-          this.brushStrokePaths = deepCopy(currentArtwork.brushStrokePaths ?? {});
+          this.brushStrokePaths = deepCopy(
+            currentArtwork.brushStrokePaths ?? {}
+          );
         }
         this.activeStrokeIdx = -1;
       }
@@ -1178,13 +1180,19 @@ export class EaselBoard extends SignalElement {
                 ${currentArtwork || isProcessing
                   ? html`
                       <div
-                        id="original-image" style="width: 100%; aspect-ratio: ${processingWidth} / ${processingHeight}; display: flex; flex-direction: column; justify-content: center; align-items: center; position: ${isProcessing ? 'relative' : 'absolute'}; animation: blur-pulse 2s infinite ease-in-out; transition: opacity 1s ease-out; opacity: ${isProcessing ?  1 : 0}; z-index: 1000; pointer-events: none;"
+                        id="original-image"
+                        style="width: 100%; aspect-ratio: ${processingWidth} / ${processingHeight}; display: flex; flex-direction: column; justify-content: center; align-items: center; position: ${isProcessing
+                          ? "relative"
+                          : "absolute"}; animation: blur-pulse 2s infinite ease-in-out; transition: opacity 1s ease-out; opacity: ${isProcessing
+                          ? 1
+                          : 0}; z-index: 1000; pointer-events: none;"
                       >
                         <div
                           style="position: relative; width: 100%; height: 100%; border-radius: 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; background-color: transparent;"
                         >
                           <img
-                            src="${processingSrc || currentArtwork.originalDataUrl}"
+                            src="${processingSrc ||
+                            currentArtwork.originalDataUrl}"
                             style="width: 100%; height: 100%; object-fit: cover;"
                           />
                         </div>
@@ -1281,7 +1289,9 @@ export class EaselBoard extends SignalElement {
                 ${currentArtwork && !isProcessing
                   ? html`
                       <div
-                        style="width: 100%; display: flex; flex-direction: column; align-items: center; transition: opacity 1s ease-in-out; opacity: ${isProcessing ? 0 : 1};"
+                        style="width: 100%; display: flex; flex-direction: column; align-items: center; transition: opacity 1s ease-in-out; opacity: ${isProcessing
+                          ? 0
+                          : 1};"
                       >
                         <div
                           style="position: relative; width: 100%; aspect-ratio: ${currentArtwork.width} / ${currentArtwork.height}; border-radius: 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; background-color: transparent;"
@@ -1449,6 +1459,14 @@ export class EaselBoard extends SignalElement {
                                           strokeWidth = strokeWidth;
                                           mixBlendMode = "difference";
                                         }
+                                      } else if (
+                                        !this.hoveredRegionId &&
+                                        !targetHexUpper
+                                      ) {
+                                        stroke = "#00000088";
+                                        strokeWidth =
+                                          baseStrokeWidth.toString();
+                                        mixBlendMode = "normal";
                                       }
                                     }
 
