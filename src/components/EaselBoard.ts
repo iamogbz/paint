@@ -349,18 +349,50 @@ export class EaselBoard extends SignalElement {
     const targetX = clientX;
     const targetY = isDragging ? clientY - this.dropperBufferPx : clientY;
 
-    const elementUnderneath = document.elementFromPoint(targetX, targetY);
-    if (
-      elementUnderneath &&
-      elementUnderneath.tagName.toLowerCase() === "path"
-    ) {
-      const regionIdStr = elementUnderneath.getAttribute("data-region-id");
-      if (regionIdStr) {
-        return parseInt(regionIdStr, 10);
+    const getRegionAt = (x: number, y: number): number | null => {
+      const el = document.elementFromPoint(x, y);
+      if (el && el.tagName.toLowerCase() === "path") {
+        const idStr = el.getAttribute("data-region-id");
+        if (idStr) return parseInt(idStr, 10);
+      }
+      return null;
+    };
+
+    const regionA = getRegionAt(targetX, targetY);
+
+    if (regionA !== null && selectedColorHex) {
+      const regionAExpectedColor = currentArtwork.regionExpectedColors?.[regionA];
+      if (regionAExpectedColor !== selectedColorHex) {
+        let closestRegion: number | null = null;
+        let minDistance = Infinity;
+
+        const searchRadius = 8;
+        const step = 2;
+        for (let dx = -searchRadius; dx <= searchRadius; dx += step) {
+          for (let dy = -searchRadius; dy <= searchRadius; dy += step) {
+            const dist = Math.hypot(dx, dy);
+            if (dist > searchRadius || dist === 0) continue;
+
+            const nRegion = getRegionAt(targetX + dx, targetY + dy);
+            if (nRegion !== null && nRegion !== regionA) {
+              const nExpectedColor = currentArtwork.regionExpectedColors?.[nRegion];
+              if (nExpectedColor === selectedColorHex) {
+                if (dist < minDistance) {
+                  minDistance = dist;
+                  closestRegion = nRegion;
+                }
+              }
+            }
+          }
+        }
+
+        if (closestRegion !== null) {
+          return closestRegion;
+        }
       }
     }
 
-    return null;
+    return regionA;
   }
 
   private handleColorDragMove = (e: Event) => {
