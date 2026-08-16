@@ -133,32 +133,3 @@ export function getColorProperties(hexCode: string) {
   const isGray = s < 0.08 || v < 0.08 || (s < 0.15 && v > 0.9);
   return { isGray, h, s, v };
 }
-
-export function calculateColorComplexity(imageData: ImageData["data"]): number {
-  // P (Total Pixels)
-  const P = imageData.length / 4;
-
-  // Handle the edge case of an image with 1 or 0 pixels
-  if (P <= 1) return 1;
-
-  // Cast the underlying ArrayBuffer to a 32-bit unsigned integer array.
-  // This packs the RGBA (Red Green Blue Alpha) channels of each pixel
-  // into a single number, making iteration and Set storage significantly faster.
-  const buffer32 = new Uint32Array(imageData.buffer);
-  const uniqueColors = new Set<number>();
-
-  for (let i = 0; i < P; i++) {
-    uniqueColors.add(buffer32[i]);
-  }
-
-  // U (Unique Colors)
-  const U = uniqueColors.size;
-
-  // Ensure a 1-color image correctly returns 0 before we hit logarithmic math
-  if (U === 1) return 0;
-
-  // Apply non-linear logarithmic progression
-  const CC = Math.log(U) / Math.log(P);
-
-  return CC;
-}

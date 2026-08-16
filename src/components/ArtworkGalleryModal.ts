@@ -143,7 +143,7 @@ export class ArtworkGalleryModal extends SignalElement {
                   (s) => s.count > 0 && s.color.hexCode !== "#00000000"
                 )
                 .sort((a, b) => b.count - a.count);
-              
+
               const categoryMap = new Map<string, typeof validStats>();
               for (const stat of validStats) {
                 if (!categoryMap.has(stat.color.hexCode)) {
@@ -153,7 +153,7 @@ export class ArtworkGalleryModal extends SignalElement {
               }
 
               const displayStats: typeof validStats = [];
-              
+
               // 1. Pick at least one from each category present
               for (const stats of categoryMap.values()) {
                 if (displayStats.length < 8) {
@@ -175,7 +175,7 @@ export class ArtworkGalleryModal extends SignalElement {
                 padding: "0.75rem",
                 borderRadius: "24px",
                 border: isActive ? "3px solid #E63946" : "3px solid #000000",
-                boxShadow: isActive ? "4px 4px 0px 0px #E63946" : "3px 3px 0px 0px #000000",
+                boxShadow: isActive ? "0px 4px 0px 0px #E63946" : "0px 3px 0px 0px #000000",
                 display: "flex",
                 flexDirection: "row" as const,
                 alignItems: "center",
@@ -263,7 +263,7 @@ export class ArtworkGalleryModal extends SignalElement {
                             />
                           `
                         : html`
-                            <h3 
+                            <h3
                               style="display: flex; align-items: center; font-weight: 900; color: #000000; font-size: 1rem; margin: 0; cursor: pointer; width: 100%;"
                               @click="${() => {
                                 if (!art.name.startsWith('Daily Challenge')) {
@@ -273,9 +273,9 @@ export class ArtworkGalleryModal extends SignalElement {
                               }}"
                             >
                               <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${art.name}</span>
-                              ${!art.name.startsWith('Daily Challenge') 
+                              ${!art.name.startsWith('Daily Challenge')
                                 ? html`
-                                    <button 
+                                    <button
                                       style="margin-left: 0.5rem; background: none; border: none; cursor: pointer; padding: 0; display: flex; align-items: center; flex-shrink: 0;"
                                       title="Rename"
                                       @click="${(e: Event) => {

@@ -1,6 +1,10 @@
 import init, { vectorize_rgba } from "../vtracer/vtracer_wasm.js";
 import { ProcessedArtwork, UsedColorStat, SvgPath } from "../types";
-import { getColorProperties, hexToRgb, normalizeHex } from "./color.js";
+import {
+  getColorProperties,
+  hexToRgb,
+  normalizeHex,
+} from "./color.js";
 
 function loadImage(src: string): Promise<HTMLImageElement> {
   return new Promise((resolve, reject) => {
@@ -97,15 +101,15 @@ export async function processImageToCartoonPalette(
       /** shapes disjoint with others */
       hierarchical: "cutout",
       /** Auto-quantize target color count */
-      maxColors: 64,
+      maxColors: 24,
       /** If a pallete is defined maps colors to this */
       // palette: palette,
       /** Discard patches smaller than X px in size (0..=128) */
-      // filterSpeckle: Math.min(Math.round(Math.max(img.width, img.height) / 1920 * 4), 128),
+      filterSpeckle: 0,
       /** default: 8 (best) - Significant bits per RGB channel (1..=8)  */
       colorPrecision: 8,
       /** Color difference between gradient layers (0..=255) */
-      // layerDifference: 48,
+      layerDifference: 64,
       /** Method for converting in to shapes. Values below only valid in spline */
       // mode: 'spline',
       /** default: 60, Minimum Momentary Angle (in degrees) to be considered a corner (to be kept after smoothing) */
