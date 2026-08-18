@@ -220,7 +220,26 @@ export class EaselBoard extends SignalElement {
     window.clearTimeout(this.wheelSpinningTimeoutId);
     e.preventDefault();
 
-    this.zoomScale = zoom(this.zoomScale, e.deltaY > 0);
+    const newZoomScale = zoom(this.zoomScale, e.deltaY > 0);
+    
+    if (newZoomScale !== this.zoomScale) {
+      const rect = this.containerElement?.getBoundingClientRect();
+      if (rect) {
+        const hw = rect.width / 2;
+        const hh = rect.height / 2;
+        const mx = e.clientX - rect.left - hw;
+        const my = e.clientY - rect.top - hh;
+        
+        const scaleRatio = newZoomScale / this.zoomScale;
+        
+        this.panX = mx - (mx - this.panX) * scaleRatio;
+        this.panY = my - (my - this.panY) * scaleRatio;
+        
+        this.panX = this.clampPanX(this.panX, newZoomScale);
+        this.panY = this.clampPanY(this.panY, newZoomScale);
+      }
+      this.zoomScale = newZoomScale;
+    }
 
     this.wheelSpinningTimeoutId = window.setTimeout(() => {
       this.wheelSpinningTimeoutId = null;
