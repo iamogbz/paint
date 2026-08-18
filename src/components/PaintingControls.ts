@@ -277,6 +277,7 @@ export class PaintingControls extends SignalElement {
       flexDirection: "column" as const,
       justifyContent: "flex-start",
       userSelect: "none",
+      touchAction: "none" as const,
       // this is to provide a buffer for end of page rendering scroll up
       paddingBottom: "10vh",
       marginBottom: "-10vh",
