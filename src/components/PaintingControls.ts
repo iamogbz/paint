@@ -197,6 +197,7 @@ export class PaintingControls extends SignalElement {
     const regionedColors: string[] = [];
     const nonRegionedColors: string[] = [];
     const allColors = [TRANSPARENT_HEX];
+    const dirtyRegions = new Set(currentArtwork?.regionsCurrentFillInfo.keys().filter((regionId) => currentArtwork?.brushStrokePaths[regionId]?.length > 0) ?? []);
 
     if (currentArtwork) {
       // use the stat count directly since painting in the image does not change this value
@@ -221,8 +222,8 @@ export class PaintingControls extends SignalElement {
           const expectedTotalA = colorRegionsA.size;
           const expectedTotalB = colorRegionsB.size;
 
-          const correctRegionsA = colorRegionsA.intersection(currentArtwork.colorsFilledInRegions.get(hexCodeA) ?? new Set());
-          const correctRegionsB = colorRegionsB.intersection(currentArtwork.colorsFilledInRegions.get(hexCodeB) ?? new Set());
+          const correctRegionsA = colorRegionsA.difference(dirtyRegions).intersection(currentArtwork.colorsFilledInRegions.get(hexCodeA) ?? new Set());
+          const correctRegionsB = colorRegionsB.difference(dirtyRegions).intersection(currentArtwork.colorsFilledInRegions.get(hexCodeB) ?? new Set());
 
           const correctTotalA = correctRegionsA.size;
           const correctTotalB = correctRegionsB.size;
@@ -526,7 +527,7 @@ export class PaintingControls extends SignalElement {
                 ${allColors.map((hexCode) => {
                   const assignedRegions = currentArtwork.colorsAssignedToRegions.get(hexCode) ?? new Set();
                   const assignedRegionCount = assignedRegions.size;
-                  const paintedRegionCount = currentArtwork.colorsFilledInRegions.get(hexCode)?.intersection(assignedRegions).size ?? 0;
+                  const paintedRegionCount = currentArtwork.colorsFilledInRegions.get(hexCode)?.intersection(assignedRegions)?.difference(dirtyRegions).size ?? 0;
                   const isCoreColor = assignedRegionCount > 0;
                   const isFullyPainted = isCoreColor ? assignedRegionCount === paintedRegionCount : false;
 

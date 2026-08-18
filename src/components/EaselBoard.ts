@@ -366,11 +366,6 @@ export class EaselBoard extends SignalElement {
     const currentBrushRegionExpectedColor = currentArtwork.regionsDrawingInfo.get(currentBrushRegionId)?.fillColor;
     const currentBrushRegionCurrentColor = currentArtwork.regionsCurrentFillInfo.get(currentBrushRegionId);
 
-    const activeColorIsSameAsRegionExpectedColor = currentBrushRegionExpectedColor === activeColor;
-    if (!activeColorIsSameAsRegionExpectedColor) {
-      // reduce the color completion count
-    }
-
     const activeColorIsSameAsRegionCurrentColor = currentBrushRegionCurrentColor === activeColor;
     const targetRegionIsAlreadyInDirtyState = currentArtwork.brushStrokePaths?.[currentBrushRegionId]?.length > 0;
 
