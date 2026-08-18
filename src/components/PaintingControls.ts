@@ -1,4 +1,4 @@
-import { html } from "lit";
+import { html, PropertyValues } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import { SignalElement } from "../utils/SignalElement";
 import { activeHighlightColorSignal, copiedHexSignal, artworksSignal, currentArtworkSignal, isProcessingSignal, isGalleryOpenSignal, isColorPickerOpenSignal, zoomScaleSignal, draggedColorPositionSignal, undoStackSignal, handleUndo, handleDeleteSwatchColor, isBrushModeSignal, panDragActiveSignal } from "../state/store";
@@ -177,6 +177,23 @@ export class PaintingControls extends SignalElement {
     if (!artwork) return;
     this.showDownloadPopup = true;
   };
+
+  private lastActiveColor: string | null = null;
+
+  updated(changedProperties: PropertyValues) {
+    super.updated(changedProperties);
+    const activeColor = activeHighlightColorSignal.get();
+    if (activeColor && this.lastActiveColor !== activeColor) {
+      this.lastActiveColor = activeColor;
+      const btnId = `swatch-btn-${activeColor.replace("#", "")}`;
+      const btn = this.querySelector(`#${btnId}`) || this.renderRoot.querySelector(`#${btnId}`);
+      if (btn) {
+        btn.scrollIntoView({ behavior: "smooth", block: "nearest", inline: "center" });
+      }
+    } else if (!activeColor) {
+      this.lastActiveColor = null;
+    }
+  }
 
   render() {
     const activeColor = activeHighlightColorSignal.get();
