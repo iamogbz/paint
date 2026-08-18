@@ -5,11 +5,12 @@ import { currentArtworkSignal, isProcessingSignal, processingImageSrcSignal, pro
 import { getDailyChallenge } from "../data/dailyChallenge";
 import { soundEffects } from "../utils/soundEffects";
 import { iconImage, iconUpload, iconPaintBucket } from "./icons";
-import { DROPPER_BUFFER_PX, FILLABLE_SVG_ELEMENTS, TRANSPARENT_HEX, transparentImgCss } from "../utils/constants";
+import { BASE_BRUSH_RADIUS, FILLABLE_SVG_ELEMENTS, TRANSPARENT_HEX, transparentImgCss } from "../utils/constants";
 import { normalizeHex } from "../utils/color";
 import { BrushStrokePaths } from "../types";
 import { clamp, zoom } from "../utils/ui";
 import { unsafeSVG } from "lit/directives/unsafe-svg.js";
+import { updateArtworkSvgWithUserPaints } from "../utils/imageProcessor";
 
 function erasePointsFromStrokePath(points: Array<{ x: number; y: number }>, cx: number, cy: number, r: number): Array<Array<{ x: number; y: number }>> {
   if (points.length === 0) return [];
@@ -177,7 +178,6 @@ export class EaselBoard extends SignalElement {
   // Brush Painting State
   private isBrushPainting = false;
   private brushTargetRegionId: string | null = null;
-  private hasPaintedInCurrentStroke = false;
   private activeStrokeIdx = -1;
   // faster buffering of painted paths without waiting for save logic
   private brushPositionBuffer = [] as BrushStrokePaths[number][number]["points"];
@@ -238,18 +238,26 @@ export class EaselBoard extends SignalElement {
     this.isDragCanvasAction = false;
     this.touchStartX = e.clientX;
     this.touchStartY = e.clientY;
+    this.isBrushPainting = isBrushModeSignal.get() && (e.pointerType === "mouse" || e.button === 0);
+
     window.addEventListener("pointercancel", this.handlePointerUp);
   };
 
   private handlePointerMove = (e: PointerEvent) => {
-    const dragDistanceThresholdPx = 4;
+    // if there is no current artwork then nothing to do
+    if (!this.artworkId) return;
 
     if (this.isPointerDown) {
       const dx = e.clientX - this.touchStartX;
       const dy = e.clientY - this.touchStartY;
       const distance = Math.hypot(dx, dy);
+      const dragDistanceThresholdPx = 4;
 
-      if (!this.isDragCanvasAction && distance > dragDistanceThresholdPx) {
+      const isBrushMode = isBrushModeSignal.get();
+      if (isBrushMode) {
+        e.preventDefault();
+        this.handleBrushPointerMove(e);
+      } else if (!this.isDragCanvasAction && distance > dragDistanceThresholdPx) {
         this.containerElement?.setPointerCapture(e.pointerId);
         this.isDragCanvasAction = true;
       }
@@ -284,8 +292,20 @@ export class EaselBoard extends SignalElement {
     // down action did not necessarily start in this component
     if (this.hoveredRegionId && !this.isDragCanvasAction) {
       const activeColor = activeHighlightColorSignal.get();
-      const dragDropColorPosition = draggedColorPositionSignal.get();
-      if (activeColor && (this.isPointerDown || dragDropColorPosition)) this.fillRegion(this.hoveredRegionId, activeColor);
+      if (activeColor) {
+        const dragDropColorPosition = draggedColorPositionSignal.get();
+        if (activeColor && (this.isPointerDown || dragDropColorPosition)) this.fillRegion(this.hoveredRegionId, activeColor);
+      } else {
+        // helpfully select the color of the clicked region
+        // but do nothing else incase the user forgot to tap on a color
+        const currentArtwork = currentArtworkSignal.get();
+        activeHighlightColorSignal.set(currentArtwork.regionsCurrentFillInfo.get(this.hoveredRegionId) || TRANSPARENT_HEX);
+      }
+    } else if (this.isBrushPainting && this.brushTargetRegionId) {
+      // These should be disparate actions since the user can not drag the canvas in brush mode
+      // if the user was just done painting with brush strokes then save the art
+      const currentArtwork = currentArtworkSignal.get();
+      saveCurrentArtworkProgress(currentArtwork);
     }
 
     this.isPointerDown = false;
@@ -294,6 +314,10 @@ export class EaselBoard extends SignalElement {
     this.isDragCanvasAction = false;
     this.dragDeltaX = 0;
     this.dragDeltaY = 0;
+    this.isBrushPainting = false;
+    this.brushTargetRegionId = null;
+    this.activeStrokeIdx = -1;
+    this.brushPositionBuffer = [];
 
     this.containerElement?.releasePointerCapture(e.pointerId);
     window.removeEventListener("pointercancel", this.handlePointerUp);
@@ -314,6 +338,97 @@ export class EaselBoard extends SignalElement {
       this.animationFrame = null;
       this.redrawArtboard();
     });
+  };
+
+  private handleBrushPointerMove = (e: PointerEvent) => {
+    if (!this.isBrushPainting) return;
+
+    // TODO: decide if when there is no active color default to transparent
+    // NOTE: using transparent triggers the erase brush strokes action
+    const activeColor = activeHighlightColorSignal.get();
+    if (!activeColor) return;
+
+    this.brushPositionBuffer.push({ x: e.clientX, y: e.clientY });
+
+    const svgEl = this.querySelector<SVGSVGElement>("#fill-layer>svg");
+    const currentArtwork = currentArtworkSignal.get();
+    if (!svgEl || !currentArtwork) return;
+
+    const rect = svgEl.getBoundingClientRect();
+    // clear the buffer now that the element has been found to place the stroke path
+    const strokePoints = this.brushPositionBuffer.splice(0).map((pos) => ({
+      x: ((pos.x - rect.left) / rect.width) * currentArtwork.width,
+      y: ((pos.y - rect.top) / rect.height) * currentArtwork.height,
+    }));
+
+    // Find the region under the pointer using getRegionIdAtPoint
+    const currentBrushRegionId = this.getRegionIdAtPoint(e.clientX, e.clientY);
+    const currentBrushRegionExpectedColor = currentArtwork.regionsDrawingInfo.get(currentBrushRegionId)?.fillColor;
+    const currentBrushRegionCurrentColor = currentArtwork.regionsCurrentFillInfo.get(currentBrushRegionId);
+
+    const activeColorIsSameAsRegionExpectedColor = currentBrushRegionExpectedColor === activeColor;
+    if (!activeColorIsSameAsRegionExpectedColor) {
+      // reduce the color completion count
+    }
+
+    const activeColorIsSameAsRegionCurrentColor = currentBrushRegionCurrentColor === activeColor;
+    const targetRegionIsAlreadyInDirtyState = currentArtwork.brushStrokePaths?.[currentBrushRegionId]?.length > 0;
+
+    if (currentBrushRegionId !== null && (!activeColorIsSameAsRegionCurrentColor || targetRegionIsAlreadyInDirtyState)) {
+      // If there was no active brush target region reset it to where the user was hovering over
+      if (!this.brushTargetRegionId) {
+        this.brushTargetRegionId = currentBrushRegionId;
+        console.log({ activeColorIsSameAsRegionCurrentColor, targetRegionIsAlreadyInDirtyState });
+        pushUndoState(currentArtwork);
+      }
+      const regionsShareTheSameExpectedColor = currentBrushRegionExpectedColor === currentArtwork.regionsDrawingInfo.get(this.brushTargetRegionId!)?.fillColor;
+      if (regionsShareTheSameExpectedColor) {
+        if (currentBrushRegionId !== this.brushTargetRegionId) {
+          // Reset active stroke index when moving to a different region with the same expected color
+          this.activeStrokeIdx = -1;
+        }
+
+        // do not bother starting a new stroke if there are no points for it
+        if (strokePoints.length > 0) {
+          if (this.activeStrokeIdx >= 0) {
+            // Still inside same region, append point to active stroke
+            currentArtwork.brushStrokePaths[currentBrushRegionId][this.activeStrokeIdx].points.push(...strokePoints);
+          } else {
+            // Start a new active stroke in the entered region
+            this.brushTargetRegionId = currentBrushRegionId;
+            const strokeWidth = Math.max(1, BASE_BRUSH_RADIUS / this.zoomScale);
+            if (activeColor) {
+              // If the active color is transparent, do not create a new stroke
+              if (activeColor === TRANSPARENT_HEX) {
+                // instead remove from any strokes in the region
+                if (currentArtwork.brushStrokePaths[currentBrushRegionId]) {
+                  currentArtwork.brushStrokePaths[currentBrushRegionId] = eraseFromStrokesList(currentArtwork.brushStrokePaths[currentBrushRegionId], strokePoints, strokeWidth / 2);
+                }
+              } else {
+                const startNewStrokePoint = {
+                  points: strokePoints,
+                  stroke: activeColor,
+                  strokeWidth,
+                };
+                if (!currentArtwork.brushStrokePaths[currentBrushRegionId]) {
+                  currentArtwork.brushStrokePaths[currentBrushRegionId] = [];
+                }
+                this.activeStrokeIdx = currentArtwork.brushStrokePaths[currentBrushRegionId].length;
+                currentArtwork.brushStrokePaths[currentBrushRegionId].push(startNewStrokePoint);
+              }
+            }
+          }
+        }
+      } else {
+        // Not over a colorable region, terminate active stroke
+        this.activeStrokeIdx = -1;
+      }
+    } else {
+      // Out of bounds or not over any region path, terminate active stroke
+      this.activeStrokeIdx = -1;
+    }
+
+    this.requestUpdate();
   };
 
   private handleFileInput = (file: File) => {
@@ -345,16 +460,19 @@ export class EaselBoard extends SignalElement {
     const currentArtwork = currentArtworkSignal.get();
     if (!currentArtwork) return;
 
+    // bucket fills can not happen in brush mode
+    const isBrushMode = isBrushModeSignal.get();
+    if (isBrushMode) return;
+
     const currentColor = currentArtwork.regionsCurrentFillInfo.get(regionId);
     const expected = currentArtwork.regionsDrawingInfo.get(regionId).fillColor;
+    // TODO: decide if original artwork transparent regions can be painted in
     if (!expected || expected === TRANSPARENT_HEX) return;
-    if (currentColor === colorHex) return;
 
-    const isBrushMode = isBrushModeSignal.get();
-    if (!isBrushMode || (isBrushMode && !this.hasPaintedInCurrentStroke)) {
-      pushUndoState(currentArtwork);
-      this.hasPaintedInCurrentStroke = true;
-    }
+    const regionHasBrushStrokes = currentArtwork.brushStrokePaths[regionId]?.length > 0;
+    // no color change, no brushes to replace
+    if (currentColor === colorHex && !regionHasBrushStrokes) return;
+    pushUndoState(currentArtwork);
 
     // Unconditionally remove all brush strokes clipped by this region when a fill is applied
     if (currentArtwork.brushStrokePaths) delete currentArtwork.brushStrokePaths[regionId];
@@ -541,9 +659,13 @@ export class EaselBoard extends SignalElement {
     const guideLayer = document.getElementById("guide-layer");
     const activeColor = activeHighlightColorSignal.get();
     const currentArtwork = currentArtworkSignal.get();
+
+    // update the artwork to show the current paint interaction state
+    if (!currentArtwork || !fillLayer) return;
+    updateArtworkSvgWithUserPaints(fillLayer.querySelector("svg"), currentArtwork);
+    // update the guide layer with current user interaction
     currentArtwork?.regionsDrawingInfo.values().forEach((region) => {
       const expectedColorHex = region.fillColor;
-      const currentColorHex = currentArtwork.regionsCurrentFillInfo.get(region.id);
 
       let stroke = "none";
       let strokeWidth = 0;
@@ -553,11 +675,11 @@ export class EaselBoard extends SignalElement {
 
       const targetHexUpper = normalizeHex(activeColor);
       const expectedHexUpper = normalizeHex(expectedColorHex);
-      const currentHexUpper = normalizeHex(currentColorHex);
+      const currentHexUpper = fillLayer.querySelector(`[data-region-id="${region.id}"]`).getAttribute("fill").toUpperCase();
 
       const isTarget = !!targetHexUpper && expectedHexUpper === targetHexUpper;
-      const isPaintedCorrect = !!currentColorHex && currentHexUpper === expectedHexUpper;
-      const isPaintedWrong = !!currentColorHex && currentHexUpper !== expectedHexUpper;
+      const isPaintedCorrect = !!currentHexUpper && currentHexUpper === expectedHexUpper;
+      const isPaintedWrong = !!currentHexUpper && currentHexUpper !== expectedHexUpper;
       const isHovered = region.id === this.hoveredRegionId;
       strokeWidth = baseStrokeWidth * (isPaintedWrong ? 1.2 : 1.0);
 
@@ -589,11 +711,6 @@ export class EaselBoard extends SignalElement {
       guideElem.setAttribute("stroke", stroke);
       guideElem.setAttribute("stroke-width", strokeWidth.toString());
       guideElem.style.mixBlendMode = mixBlendMode;
-
-      const fillElem = fillLayer.querySelector(`[data-region-id=${region.id}]`) as SVGElement;
-      fillElem.setAttribute("fill", currentHexUpper || TRANSPARENT_HEX);
-      fillElem.setAttribute("pointer-events", expectedHexUpper === TRANSPARENT_HEX ? "none" : "all");
-      fillElem.setAttribute("touch-actions", expectedHexUpper === TRANSPARENT_HEX ? "none" : "all");
     });
   }
 

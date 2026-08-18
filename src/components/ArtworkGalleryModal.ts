@@ -121,8 +121,11 @@ export class ArtworkGalleryModal extends SignalElement {
                 .filter(([size, hexCode]) => hexCode !== TRANSPARENT_HEX && size !== 0);
               const usedColorsSorted = Array.from(usedColorsByCount).sort();
               const colorCountToDisplay = 8;
-              const stepSize = Math.floor(usedColorsSorted.length / colorCountToDisplay);
-              const colorsToDisplay = new Array(8).fill(null).map((_, i) => usedColorsSorted[i * stepSize][1]);
+              const stepSize = Math.max(1, Math.floor(usedColorsSorted.length / colorCountToDisplay));
+              const colorsToDisplay = new Array(8)
+                .fill(null)
+                .map((_, i) => usedColorsSorted[i * stepSize]?.[1])
+                .filter(Boolean);
 
               const itemCardStyle = {
                 padding: "0.75rem",

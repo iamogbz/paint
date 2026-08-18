@@ -2,8 +2,8 @@ import { FALLBACK_IMAGE_SIZE_PX, FILLABLE_SVG_ELEMENTS_SELECTOR, TRANSPARENT_HEX
 import { processingImageHeightSignal, processingImageWidthSignal } from "../state/store.js";
 import { MutableMap, ProcessedArtwork } from "../types";
 import init, { vectorize_rgba } from "../vtracer/vtracer_wasm.js";
-import { getHexCode } from "./color.js";
-import { parseSVG } from "./html.js";
+import { getHexCode, normalizeHex } from "./color.js";
+import { parseSVG, XML_NS } from "./html.js";
 
 function parseSvgDimension(value) {
   if (!value) return 0;
@@ -158,7 +158,7 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
       // simplify: 2,
     };
     const svgStr = vectorize_rgba(rawPixels, imgWidth, imgHeight, options);
-    svgDoc = parseSVG(svgStr.includes("xmlns=") ? svgStr : svgStr.replace("<svg", '<svg xmlns="http://www.w3.org/2000/svg"'));
+    svgDoc = parseSVG(svgStr.includes("xmlns=") ? svgStr : svgStr.replace("<svg", `<svg xmlns="${XML_NS}"`));
   } else if (maybeImage.type === "err") {
     console.error(maybeImage);
     throw new Error(maybeImage.format);
@@ -171,6 +171,8 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
   const regionsDrawingInfo: MutableMap<ProcessedArtwork["regionsDrawingInfo"]> = new Map();
   const colorsAssignedToRegions: ProcessedArtwork["colorsAssignedToRegions"] = new Map();
   const regionsCurrentFillInfo: ProcessedArtwork["regionsCurrentFillInfo"] = new Map();
+  /** Region ID to the elements for creating brush stroke clipping paths */
+  const regionSVGElements: Map<string, SVGElement> = new Map();
 
   // Add transparent color default mapping
   colorsAssignedToRegions.set(TRANSPARENT_HEX, new Set());
@@ -192,6 +194,7 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     const fillRegionId = `region-${key}`;
     fillElement.setAttribute("data-region-id", fillRegionId);
     fillElement.setAttribute(PRESERVE_ELEMENT_MARKER, "true");
+    regionSVGElements.set(fillRegionId, fillElement);
 
     // preserve the tree of this path
     let topElem = fillElement.parentElement;
@@ -264,6 +267,30 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
   renderNode.setAttribute("height", "100%");
   renderNode.setAttribute("width", "100%");
 
+  // add clip paths and containers for brush strokes
+  const brushStrokeDefElem = document.createElement("defs");
+  renderNode.prepend(brushStrokeDefElem);
+  regionSVGElements.forEach((regionSVG, regionId) => {
+    const clipMaskId = `mask-${regionId}`;
+    const clipPath = document.createElementNS(XML_NS, "clipPath") as SVGClipPathElement;
+    clipPath.setAttribute("id", clipMaskId);
+    const maskElem = regionSVG.cloneNode() as SVGElement;
+    maskElem.removeAttribute("id");
+    maskElem.removeAttribute("class");
+    maskElem.removeAttribute("data-region-id");
+    maskElem.setAttribute("fill", "none");
+    maskElem.setAttribute("stroke", "none");
+    maskElem.setAttribute("touch-actions", "none");
+    maskElem.setAttribute("pointer-events", "none");
+    clipPath.appendChild(maskElem);
+    brushStrokeDefElem.append(clipPath);
+
+    const brushStrokesContainer = document.createElementNS(XML_NS, "g") as SVGGElement;
+    brushStrokesContainer.setAttribute("id", `brush-strokes-${regionId}`);
+    brushStrokesContainer.setAttribute("clip-path", `url(#${clipMaskId})`);
+    renderNode.append(brushStrokesContainer);
+  });
+
   try {
     const expandPx = 12;
     for (const regionA of regionsDrawingInfo) {
@@ -311,9 +338,48 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
 }
 
 export function renderArtworkToSVG(artwork: ProcessedArtwork) {
-  const svgElem = parseSVG(artwork.cartoonSVG);
-  artwork.regionsCurrentFillInfo.entries().forEach(([regionId, currentFill]) => {
-    svgElem.querySelector(`[data-region-id="${regionId}"]`)?.setAttribute("fill", currentFill);
-  });
+  const svgElem = parseSVG(artwork.cartoonSVG) as SVGSVGElement;
+  updateArtworkSvgWithUserPaints(svgElem, artwork);
   return svgElem;
+}
+
+export function updateArtworkSvgWithUserPaints(svgElem: SVGSVGElement, artwork: ProcessedArtwork) {
+  artwork.regionsCurrentFillInfo.forEach((currentFill, regionId) => {
+    const fillElem = svgElem.querySelector(`[data-region-id="${regionId}"]`) as SVGElement;
+    if (!fillElem) return;
+    const fill = normalizeHex(currentFill) || TRANSPARENT_HEX;
+    fillElem.setAttribute("fill", fill);
+
+    const strokesContainer = svgElem.querySelector(`#brush-strokes-${regionId}`) as SVGGElement;
+    const strokes = artwork.brushStrokePaths[regionId];
+    if (!strokes || strokes.length === 0) {
+      // clear all the rendered strokes
+      strokesContainer.innerHTML = "";
+      return;
+    }
+    if (strokesContainer.childElementCount > strokes.length) {
+      for (let i = strokes.length; i < strokesContainer.childElementCount; i++) {
+        strokesContainer.children.item(i).remove();
+      }
+    }
+    strokes.forEach((stroke, idx) => {
+      if (stroke.points.length <= 0) return; // this should not happen but in case
+      const strokePathElemId = `stroke-${regionId}_${idx}`;
+      let strokePathElem = strokesContainer.querySelector(`#${strokePathElemId}`) as SVGPathElement;
+      if (!strokePathElem) {
+        strokePathElem = document.createElementNS(XML_NS, "path");
+        strokePathElem.setAttribute("fill", "none");
+        strokePathElem.setAttribute("stroke-linecap", "round");
+        strokePathElem.setAttribute("stroke-linejoin", "round");
+        strokePathElem.setAttribute("pointer-events", "none");
+        strokePathElem.setAttribute("touch-actions", "none");
+        strokesContainer.append(strokePathElem);
+      }
+      strokePathElem.setAttribute("id", strokePathElemId);
+      strokePathElem.setAttribute("stroke", stroke.stroke);
+      strokePathElem.setAttribute("stroke-width", stroke.strokeWidth.toString());
+      const strokePathStr = stroke.points.map((p, idx) => `${idx === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
+      strokePathElem.setAttribute("d", strokePathStr);
+    });
+  });
 }

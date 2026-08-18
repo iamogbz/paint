@@ -1,5 +1,4 @@
-import { TemplateResult } from "lit";
-
+/** Region IDs to list of brush strokes */
 export type BrushStrokePaths = Record<
   string,
   Array<{
