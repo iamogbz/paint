@@ -6,6 +6,7 @@ import { isGalleryOpenSignal, artworksSignal, currentArtworkSignal, handleSelect
 import { iconGalleryVertical, iconX, iconCheckCircle2, iconDownload, iconTrash2, iconImage, iconEdit2 } from "./icons";
 import { exportArtworkSvgDataUrl } from "../utils/download";
 import { TRANSPARENT_HEX, transparentImgCss } from "../utils/constants";
+import "./DownloadPopup";
 
 @customElement("artwork-gallery-modal")
 export class ArtworkGalleryModal extends SignalElement {

@@ -6,6 +6,7 @@ import { iconPaintBucket, iconPaintbrush, iconCheck, iconFolderOpen, iconDownloa
 import { DROPPER_BUFFER_PX, TRANSPARENT_HEX, transparentImgCss } from "../utils/constants";
 import { soundEffects } from "../utils/soundEffects";
 import { zoom } from "../utils/ui";
+import "./DownloadPopup";
 
 export interface PanCanvasDeltaEvent {
   dx: number;
