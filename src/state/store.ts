@@ -1,34 +1,40 @@
 import { signal, computed } from "@lit-labs/signals";
 import { get, set } from "idb-keyval";
-import { ProcessedArtwork, PaletteColor, UndoHistoryItem, UsedColorStat } from "../types";
+import { ProcessedArtwork, UndoHistoryItem } from "../types";
 import { processImageToCartoonPalette } from "../utils/imageProcessor";
 import { soundEffects } from "../utils/soundEffects";
 import confetti from "canvas-confetti";
-import { deepCopy } from "../utils/object";
+import { copyMapSet, deepCopy } from "../utils/object";
+import { TRANSPARENT_HEX } from "../utils/constants";
+import { normalizeHex } from "../utils/color";
 
 const STORAGE_KEY_ALL_ARTWORKS = "paint_part_sd_artworks_v1";
 
 // Core State Signals using Lit Signals
-export const artworksSignal = signal<ProcessedArtwork[]>([]);
+export const artworkIdsSortedSignal = signal<string[]>([]);
+export const artworksSignal = signal<Map<string, ProcessedArtwork>>(new Map());
 export const currentArtworkSignal = signal<ProcessedArtwork | null>(null);
 export const isProcessingSignal = signal<boolean>(false);
 export const processingImageSrcSignal = signal<string | null>(null);
 export const processingImageWidthSignal = signal<number>(0);
 export const processingImageHeightSignal = signal<number>(0);
 export const soundEnabledSignal = signal<boolean>(true);
-export const activeHighlightColorSignal = signal<PaletteColor | null>(null);
+export const dragToOpenFileSignal = signal<boolean>(false);
 export const isGalleryOpenSignal = signal<boolean>(false);
+export const undoStackSignal = signal<UndoHistoryItem[]>([]);
+export const zoomScaleSignal = signal<number>(1.0);
+export const canvasPositionDeltaSignal = signal<{ x: number; y: number }>({ x: 0, y: 0 });
+export const isBrushModeSignal = signal<boolean>(false);
+export const isWindowFocusedSignal = signal<boolean>(true);
+
+// Color selection and dropping
+export const activeHighlightColorSignal = signal<string | null>(null);
+export const draggedColorPositionSignal = signal<{ targetX: number; targetY: number } | null>(null);
 export const isColorPickerOpenSignal = signal<boolean>(false);
 export const copiedHexSignal = signal<string | null>(null);
-export const undoStackSignal = signal<UndoHistoryItem[]>([]);
-export const isDragOverSignal = signal<boolean>(false);
-export const zoomScaleSignal = signal<number>(1);
-export const isBrushModeSignal = signal<boolean>(false);
 
-// Drag and drop colors
-export const draggedColorSignal = signal<string | null>(null);
-export const draggedPositionSignal = signal<{x: number, y: number} | null>(null);
-export const isWindowFocusedSignal = signal<boolean>(true);
+// Drag move button pan navigation
+export const panDragActiveSignal = signal(false);
 
 // Dynamic Style Signals
 export const appBackgroundStyleSignal = computed(() => ({
@@ -59,216 +65,159 @@ export async function loadSavedArtworks() {
       localStorage.removeItem(STORAGE_KEY_ALL_ARTWORKS);
     }
 
-    const parsed = await get<ProcessedArtwork[]>(STORAGE_KEY_ALL_ARTWORKS);
-    if (parsed && parsed.length > 0) {
-      const sorted = parsed.sort((a, b) => (b.modifiedAt || 0) - (a.modifiedAt || 0));
-      artworksSignal.set(sorted);
+    const parsed = await get<Map<string, ProcessedArtwork>>(STORAGE_KEY_ALL_ARTWORKS);
+    if (parsed && parsed.size > 0) {
+      const sorted = Array.from(parsed.keys()).sort((a, b) => (parsed.get(b).modifiedAt || 0) - (parsed.get(a).modifiedAt || 0));
+      artworkIdsSortedSignal.set(sorted);
+      artworksSignal.set(parsed);
     }
   } catch (e) {
     console.warn("Could not restore saved artworks from idb", e);
   }
 }
 
-export function saveArtworksList(newList: ProcessedArtwork[]) {
-  artworksSignal.set(newList);
-  set(STORAGE_KEY_ALL_ARTWORKS, newList).catch((e) => {
+/**
+ * This triggers a rerender because the art ids return a new reference for sorting
+ * But only for components listening to the `artworkIdsSortedSignal`
+ */
+export function saveArtworks(data: Map<string, ProcessedArtwork>) {
+  artworksSignal.set(data);
+  const existingArtIdsSorted = Array.from(data.keys()).sort((a, b) => data.get(b).modifiedAt - data.get(a).modifiedAt);
+  artworkIdsSortedSignal.set(existingArtIdsSorted);
+
+  set(STORAGE_KEY_ALL_ARTWORKS, data).catch((e) => {
     console.warn("Could not save to idb", e);
   });
 }
 
-export function handleSelectArtwork(artwork: ProcessedArtwork) {
-  const current = currentArtworkSignal.get();
-  if (current && current.id !== artwork.id) {
-    undoStackSignal.set([]);
+export function handleSelectArtwork(selectedArtwork?: ProcessedArtwork) {
+  const currentArtwork = currentArtworkSignal.get();
+  if (currentArtwork?.id === selectedArtwork?.id) {
+    return;
   }
-  const updatedArtwork = {
-    ...artwork,
-    modifiedAt: Date.now(),
-  };
-  const list = [...artworksSignal.get()];
-  const artworkIdx = list.findIndex((a) => a.id === artwork.id);
-  if (artworkIdx === -1) {
-    list.unshift(updatedArtwork);
-  } else {
-    list[artworkIdx] = updatedArtwork;
-  }
-  saveArtworksList(list);
-  currentArtworkSignal.set(updatedArtwork);
+
+  undoStackSignal.set([]);
+  isBrushModeSignal.set(false);
+  zoomScaleSignal.set(1.0);
+  canvasPositionDeltaSignal.set({ x: 0, y: 0 });
+  activeHighlightColorSignal.set(null);
+
+  saveCurrentArtworkProgress(selectedArtwork);
 }
 
 export async function handleImageSelected(imageSrc: string, name: string = "Untitled") {
-  // Set processing source and measure dimensions first
+  // Set processing source first dimensions are loaded in the first step of image processing
   processingImageSrcSignal.set(imageSrc);
-  const img = new Image();
-  await new Promise<void>((resolve) => {
-    img.onload = () => {
-      processingImageWidthSignal.set(img.naturalWidth || 800);
-      processingImageHeightSignal.set(img.naturalHeight || 800);
-      resolve();
-    };
-    img.onerror = () => {
-      processingImageWidthSignal.set(800);
-      processingImageHeightSignal.set(800);
-      resolve();
-    };
-    img.src = imageSrc;
-  });
 
   isProcessingSignal.set(true);
   try {
     const artworkName = name.substring(0, 32);
     const newArtwork = await processImageToCartoonPalette(imageSrc, artworkName);
 
-    const updatedList = [newArtwork, ...artworksSignal.get()];
-    saveArtworksList(updatedList);
-    undoStackSignal.set([]);
-    currentArtworkSignal.set(newArtwork);
-    isProcessingSignal.set(false);
-    processingImageSrcSignal.set(null);
-    isWindowFocusedSignal.set(true);
+    handleSelectArtwork(newArtwork);
 
     confetti({
       particleCount: 50,
       spread: 70,
       origin: { y: 0.6 },
-      colors: [
-        "#E63946",
-        "#FFD166",
-        "#06D6A0",
-        "#4EA8DE",
-        "#B5179E",
-      ],
+      colors: ["#E63946", "#FFD166", "#06D6A0", "#4EA8DE", "#B5179E"],
     });
   } catch (err) {
     console.error("Image processing failed:", err);
+    alert("Failed to process image. Please try another photo.");
+  } finally {
     isProcessingSignal.set(false);
     processingImageSrcSignal.set(null);
-    alert("Failed to process image. Please try another photo.");
   }
 }
 
 export function handleRenameArtwork(id: string, newName: string) {
-  const updated = artworksSignal.get().map((art) => {
-    if (art.id === id) {
-      return { ...art, name: newName, modifiedAt: Date.now() };
-    }
-    return art;
-  });
-  saveArtworksList(updated);
-  const current = currentArtworkSignal.get();
-  if (current?.id === id) {
-    currentArtworkSignal.set({ ...current, name: newName, modifiedAt: Date.now() });
-  }
+  const existingArtworks = artworksSignal.get();
+  const targetArtwork = existingArtworks.get(id);
+  if (!targetArtwork) return;
+  targetArtwork.name = newName;
+  targetArtwork.modifiedAt = Date.now();
+  saveArtworks(existingArtworks);
 }
 
 export function handleDeleteArtwork(id: string) {
-  const updated = artworksSignal.get().filter((art) => art.id !== id);
+  const existingArtworks = artworksSignal.get();
+  existingArtworks.delete(id);
+  saveArtworks(existingArtworks);
+
   if (currentArtworkSignal.get()?.id === id) {
-    const nextFirst = updated.length > 0 ? updated[0] : null;
-    if (nextFirst) {
-      nextFirst.modifiedAt = Date.now();
-    }
-    currentArtworkSignal.set(nextFirst);
+    handleSelectArtwork(null);
   }
-  saveArtworksList(updated);
 }
 
 export function handleToggleSound() {
   const next = !soundEnabledSignal.get();
   soundEnabledSignal.set(next);
   soundEffects.enabled = next;
-  }
-
-export function saveCurrentArtworkProgress(
-  paintedRegionsState?: Record<number, string>,
-  brushStrokePaths?: Record<number, Array<{ points: Array<{ x: number, y: number }>; stroke: string; strokeWidth: number }>>
-) {
-  const current = currentArtworkSignal.get();
-  if (!current) return;
-
-  const updatedArtwork: ProcessedArtwork = {
-    ...current,
-    paintedRegionsState: { ...paintedRegionsState },
-    brushStrokePaths: brushStrokePaths ? deepCopy(brushStrokePaths) : current.brushStrokePaths,
-    modifiedAt: Date.now(),
-  };
-
-  const list = [...artworksSignal.get()];
-  const artworkIdx = list.findIndex((a) => a.id === updatedArtwork.id);
-  if (artworkIdx !== -1) {
-    list[artworkIdx] = updatedArtwork;
-    saveArtworksList(list);
-  }
-  currentArtworkSignal.set(updatedArtwork);
 }
 
-export function pushUndoState(
-  paintedRegionsState?: Record<number, string>,
-  colorStats?: UsedColorStat[],
-  brushStrokePaths?: Record<number, Array<{ points: Array<{ x: number, y: number }>; stroke: string; strokeWidth: number }>>
-) {
-  const current = currentArtworkSignal.get();
-  const stats = colorStats || current?.colorStats;
-  const strokes = brushStrokePaths || current?.brushStrokePaths;
+export function saveCurrentArtworkProgress(currentArtwork: ProcessedArtwork) {
+  if (currentArtwork) {
+    currentArtwork.modifiedAt = Date.now();
+    const existingArtworks = artworksSignal.get();
+    existingArtworks.set(currentArtwork.id, currentArtwork);
+    saveArtworks(existingArtworks);
+  }
+  // Even though references are used we want to trigger a render of other components
+  // calling set with the exact same object reference does not trigger a rerender
+  // This should be the only place we do this update references of mutable properties
+  currentArtworkSignal.set(currentArtwork && { ...currentArtwork });
+}
+
+/**
+ * Save only the diffable between states not the full artwork
+ */
+export function pushUndoState(currentArtwork: ProcessedArtwork) {
   undoStackSignal.set([
     ...undoStackSignal.get(),
     {
-      paintedRegionsState: { ...paintedRegionsState },
-      colorStats: stats ? deepCopy(stats) : undefined,
-      paintedCanvasDataUrl: undefined,
-      brushStrokePaths: strokes ? deepCopy(strokes) : undefined,
+      /** For the swatch counts */
+      colorsAssignedToRegions: copyMapSet(currentArtwork.colorsAssignedToRegions),
+      /** For the swatch counts */
+      colorsFilledInRegions: copyMapSet(currentArtwork.colorsFilledInRegions),
+      /** For the painting state */
+      regionsCurrentFillInfo: new Map(currentArtwork.regionsCurrentFillInfo),
+      /** For the custom brush strokes */
+      brushStrokePaths: deepCopy(currentArtwork.brushStrokePaths),
     },
   ]);
 }
 
-export function handleDeleteSwatchColor(color: PaletteColor) {
-  if (!color || color.hexCode === "#00000000") return;
+export function handleDeleteSwatchColor(color: string) {
+  const hexCode = normalizeHex(color);
+  if (!hexCode || hexCode === TRANSPARENT_HEX) return;
   const current = currentArtworkSignal.get();
   if (!current) return;
 
-  const colorHexUpper = color.hexCode.toUpperCase();
-  const currentPainted = current.paintedRegionsState || {};
-
   // Check if this is a core color (stat.count > 0 in original image)
-  const stat = (current.colorStats || []).find(
-    (s) => s.color.hexCode.toUpperCase() === colorHexUpper
-  );
-  if (stat && stat.count > 0) {
+  const isCoreColor = current.colorsAssignedToRegions.get(hexCode)?.size > 0;
+  if (isCoreColor) {
     // Core color with regions in original artwork cannot be deleted
     return;
   }
 
   // Push current painted state and current colorStats to undo stack before modifying
-  pushUndoState(currentPainted, current.colorStats);
+  pushUndoState(current);
 
   // Unpaint any region that was painted with this color
-  const newPaintedState: Record<number, string> = {};
-  for (const [regionIdStr, paintedHex] of Object.entries(currentPainted)) {
-    if (paintedHex.toUpperCase() !== colorHexUpper) {
-      newPaintedState[Number(regionIdStr)] = paintedHex;
-    }
+  for (const regionId of current.colorsFilledInRegions.get(hexCode) ?? []) {
+    current.regionsCurrentFillInfo.delete(regionId);
   }
-
-  // Remove the swatch from colorStats
-  const newColorStats = (current.colorStats || []).filter(
-    (s) => s.color.hexCode.toUpperCase() !== colorHexUpper
-  );
+  current.colorsAssignedToRegions.delete(hexCode);
 
   // If the active highlight color is this deleted color, deselect it
-  if (activeHighlightColorSignal.get()?.hexCode.toUpperCase() === colorHexUpper) {
+  if (normalizeHex(activeHighlightColorSignal.get()) === hexCode) {
     activeHighlightColorSignal.set(null);
   }
 
-  const updatedArtwork: ProcessedArtwork = {
-    ...current,
-    colorStats: newColorStats,
-    paintedRegionsState: newPaintedState,
-    paintedCanvasDataUrl: undefined,
-    modifiedAt: Date.now(),
-  };
+  current.modifiedAt = Date.now();
+  saveCurrentArtworkProgress(current);
 
-  handleSelectArtwork(updatedArtwork);
-  window.dispatchEvent(new CustomEvent("easel-redraw-artboard"));
   soundEffects.playPop();
 }
 
@@ -278,27 +227,11 @@ export function handleUndo() {
   const current = currentArtworkSignal.get();
   if (!current) return;
 
-  const previousState = stack[stack.length - 1];
-  const newStack = stack.slice(0, stack.length - 1);
-  undoStackSignal.set(newStack);
+  const [previousState] = stack.slice(-1);
+  // creating a new object to trigger the rerender pipeline
+  undoStackSignal.set(stack.slice(0, -1));
 
-  const updatedArtwork: ProcessedArtwork = {
-    ...current,
-    paintedRegionsState: previousState.paintedRegionsState,
-    colorStats: previousState.colorStats
-      ? previousState.colorStats
-      : current.colorStats,
-    brushStrokePaths: previousState.brushStrokePaths,
-    paintedCanvasDataUrl: undefined,
-    modifiedAt: Date.now(),
-  };
-
-  const list = [...artworksSignal.get()];
-  const artworkIdx = list.findIndex((a) => a.id === updatedArtwork.id);
-  if (artworkIdx !== -1) {
-    list[artworkIdx] = updatedArtwork;
-    saveArtworksList(list);
-  }
-  currentArtworkSignal.set(updatedArtwork);
-  window.dispatchEvent(new CustomEvent("easel-redraw-artboard"));
+  // the previous state was already a clone so we can use the references since its now the present
+  Object.assign(current, previousState);
+  saveCurrentArtworkProgress(current);
 }

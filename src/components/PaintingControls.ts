@@ -1,44 +1,19 @@
 import { html } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import { SignalElement } from "../utils/SignalElement";
-import { PaletteColor, UsedColorStat } from "../types";
-import {
-  activeHighlightColorSignal,
-  copiedHexSignal,
-  artworksSignal,
-  currentArtworkSignal,
-  isProcessingSignal,
-  isGalleryOpenSignal,
-  isColorPickerOpenSignal,
-  zoomScaleSignal,
-  draggedColorSignal,
-  draggedPositionSignal,
-  undoStackSignal,
-  handleUndo,
-  handleDeleteSwatchColor,
-  isBrushModeSignal,
-} from "../state/store";
-import {
-  iconPaintBucket,
-  iconPaintbrush,
-  iconCheck,
-  iconFolderOpen,
-  iconDownload,
-  iconLoader2,
-  iconZoomIn,
-  iconZoomOut,
-  iconRotateCcw,
-  iconMove,
-  iconTrash2,
-} from "./icons";
-import { DROPPER_BUFFER_PX, transparentImgCss } from "./constants";
+import { activeHighlightColorSignal, copiedHexSignal, artworksSignal, currentArtworkSignal, isProcessingSignal, isGalleryOpenSignal, isColorPickerOpenSignal, zoomScaleSignal, draggedColorPositionSignal, undoStackSignal, handleUndo, handleDeleteSwatchColor, isBrushModeSignal, panDragActiveSignal } from "../state/store";
+import { iconPaintBucket, iconPaintbrush, iconCheck, iconFolderOpen, iconDownload, iconZoomIn, iconZoomOut, iconRotateCcw, iconMove, iconTrash2 } from "./icons";
+import { DROPPER_BUFFER_PX, TRANSPARENT_HEX, transparentImgCss } from "../utils/constants";
 import { soundEffects } from "../utils/soundEffects";
+import { zoom } from "../utils/ui";
 
+export interface PanCanvasDeltaEvent {
+  dx: number;
+  dy: number;
+}
 
 @customElement("painting-controls")
 export class PaintingControls extends SignalElement {
-  @property({ type: Array }) colorStats: UsedColorStat[] = [];
-  
   @property({ type: Boolean }) showDownloadPopup = false;
 
   private timeoutId?: number;
@@ -51,6 +26,7 @@ export class PaintingControls extends SignalElement {
 
     const target = e.currentTarget as HTMLElement;
     target.setPointerCapture(e.pointerId);
+    panDragActiveSignal.set(true);
 
     const startX = e.clientX;
     const startY = e.clientY;
@@ -58,28 +34,12 @@ export class PaintingControls extends SignalElement {
     let currentDx = 0;
     let currentDy = 0;
 
-    const cleanup = () => {
-      target.removeEventListener("pointermove", onPointerMove);
-      target.removeEventListener("pointerup", onPointerUp);
-      target.removeEventListener("pointercancel", onPointerCancel);
-      try {
-        target.releasePointerCapture(e.pointerId);
-      } catch (err) {
-        // ignore if already released
-      }
-      if (this.panAnimationFrame !== null) {
-        cancelAnimationFrame(this.panAnimationFrame);
-        this.panAnimationFrame = null;
-      }
-      this.isPanning = false;
-    };
-
     const panLoop = () => {
       if (!this.isPanning) return;
       if (hasDragged) {
-        const speedFactor = 0.1;
+        const speedFactor = 0.2;
         window.dispatchEvent(
-          new CustomEvent("easel-pan-delta", {
+          new CustomEvent<PanCanvasDeltaEvent>("easel-pan-delta", {
             detail: {
               dx: currentDx * speedFactor,
               dy: currentDy * speedFactor,
@@ -105,11 +65,9 @@ export class PaintingControls extends SignalElement {
     const onPointerUp = () => {
       cleanup();
       if (!hasDragged) {
-        const currentScale = zoomScaleSignal.get();
-        const nextScale = currentScale === 1 ? 2 : 1;
-        window.dispatchEvent(
-          new CustomEvent("easel-zoom-set", { detail: { scale: nextScale } })
-        );
+        const currentZoom = zoomScaleSignal.get();
+        const nextScale = currentZoom === 1 ? 2 : 1;
+        zoomScaleSignal.set(nextScale);
       }
     };
 
@@ -118,22 +76,39 @@ export class PaintingControls extends SignalElement {
     target.addEventListener("pointermove", onPointerMove);
     target.addEventListener("pointerup", onPointerUp);
     target.addEventListener("pointercancel", onPointerCancel);
+
+    const cleanup = () => {
+      panDragActiveSignal.set(false);
+      target.removeEventListener("pointermove", onPointerMove);
+      target.removeEventListener("pointerup", onPointerUp);
+      target.removeEventListener("pointercancel", onPointerCancel);
+      try {
+        target.releasePointerCapture(e.pointerId);
+      } catch (err) {
+        // ignore if already released
+      }
+      if (this.panAnimationFrame !== null) {
+        cancelAnimationFrame(this.panAnimationFrame);
+        this.panAnimationFrame = null;
+      }
+      this.isPanning = false;
+    };
   };
 
-  private handleColorClick = (color: PaletteColor) => {
+  private handleColorClick = (hexCode: string) => {
     soundEffects.playPop();
-    const active = activeHighlightColorSignal.get();
+    const activeColor = activeHighlightColorSignal.get();
 
-    if (active?.hexCode === color.hexCode) {
+    if (activeColor === hexCode) {
       activeHighlightColorSignal.set(null);
     } else {
       window.clearTimeout(this.timeoutId);
-      activeHighlightColorSignal.set(color);
+      activeHighlightColorSignal.set(hexCode);
 
       navigator.clipboard
-        .writeText(color.hexCode)
+        .writeText(hexCode)
         .then(() => {
-          copiedHexSignal.set(color.hexCode);
+          copiedHexSignal.set(hexCode);
           this.timeoutId = window.setTimeout(() => {
             copiedHexSignal.set(null);
           }, 1500);
@@ -142,17 +117,19 @@ export class PaintingControls extends SignalElement {
     }
   };
 
-  private handleSwatchPointerDown = (e: PointerEvent, color: PaletteColor) => {
+  private handleSwatchPointerDown = (e: PointerEvent, hexCode: string) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
 
     const activeColor = activeHighlightColorSignal.get();
-    const isActive = activeColor?.hexCode === color.hexCode;
+    const isActive = activeColor === hexCode;
 
     const startX = e.clientX;
     const startY = e.clientY;
     let isDragging = false;
 
     const cleanup = () => {
+      draggedColorPositionSignal.set(null);
+
       window.removeEventListener("pointermove", onPointerMove);
       window.removeEventListener("pointerup", onPointerUp);
       window.removeEventListener("pointercancel", onPointerCancel);
@@ -167,49 +144,26 @@ export class PaintingControls extends SignalElement {
 
       if (!isDragging && Math.hypot(dx, dy) > 10) {
         isDragging = true;
-        draggedColorSignal.set(color.hexCode);
-        activeHighlightColorSignal.set(color);
       }
 
       if (isDragging) {
         // offset by certain amount on the Y axis for better visibility
-        draggedPositionSignal.set({
-          x: moveEvent.clientX,
-          y: moveEvent.clientY - DROPPER_BUFFER_PX,
+        draggedColorPositionSignal.set({
+          targetX: moveEvent.clientX,
+          targetY: moveEvent.clientY - DROPPER_BUFFER_PX,
         });
-        const moveEvt = new CustomEvent("color-drag-move", {
-          detail: { x: moveEvent.clientX, y: moveEvent.clientY },
-        });
-        window.dispatchEvent(moveEvt);
       }
     };
 
     const onPointerUp = (upEvent: PointerEvent) => {
-      cleanup();
-
-      if (isDragging) {
-        const dropEvent = new CustomEvent("color-drop", {
-          detail: {
-            x: upEvent.clientX,
-            y: upEvent.clientY,
-            color: color.hexCode,
-          },
-        });
-        window.dispatchEvent(dropEvent);
-
-        draggedColorSignal.set(null);
-        draggedPositionSignal.set(null);
-      } else {
-        this.handleColorClick(color);
+      if (!isDragging) {
+        this.handleColorClick(hexCode);
       }
+      setTimeout(cleanup, 150);
     };
 
     const onPointerCancel = () => {
       cleanup();
-      if (isDragging) {
-        draggedColorSignal.set(null);
-        draggedPositionSignal.set(null);
-      }
     };
 
     window.addEventListener("pointermove", onPointerMove);
@@ -228,9 +182,9 @@ export class PaintingControls extends SignalElement {
     const copiedHex = copiedHexSignal.get();
     const currentArtwork = currentArtworkSignal.get();
     const canUndo = undoStackSignal.get().length > 0;
-    const hasArtworks = artworksSignal.get().length > 0;
+    const hasArtworks = artworksSignal.get().size > 0;
     const isProcessing = isProcessingSignal.get();
-    const zoomScale = zoomScaleSignal.get();
+    const currentZoom = zoomScaleSignal.get();
     const isBrushMode = isBrushModeSignal.get();
 
     const showPhotoControls = Boolean(currentArtwork && !isProcessing);
@@ -240,75 +194,51 @@ export class PaintingControls extends SignalElement {
       return html``;
     }
 
-    // Map stats by color ID
-    const statsMap = new Map<string, UsedColorStat>();
-    (this.colorStats || []).forEach((stat) =>
-      statsMap.set(stat.color.hexCode, stat)
-    );
+    const regionedColors: string[] = [];
+    const nonRegionedColors: string[] = [];
+    const allColors = [TRANSPARENT_HEX];
 
-    // Check which colors are fully painted
-    const paintedRegionsState = currentArtwork?.paintedRegionsState || {};
-    const expectedColorStatus = new Map<
-      string,
-      { total: number; painted: number }
-    >();
-
-    if (currentArtwork?.regionExpectedColors) {
-      for (const [regionIdStr, expectedHex] of Object.entries(
-        currentArtwork.regionExpectedColors
-      )) {
-        if (!expectedColorStatus.has(expectedHex)) {
-          expectedColorStatus.set(expectedHex, { total: 0, painted: 0 });
+    if (currentArtwork) {
+      // use the stat count directly since painting in the image does not change this value
+      for (const [colorHex, regionsIds] of currentArtwork.colorsAssignedToRegions) {
+        if (colorHex === TRANSPARENT_HEX) {
+          continue;
         }
-        const status = expectedColorStatus.get(expectedHex)!;
-        status.total += 1;
-
-        const regionId = parseInt(regionIdStr, 10);
-        if (paintedRegionsState[regionId] === expectedHex) {
-          status.painted += 1;
+        if (regionsIds.size > 0) {
+          regionedColors.push(colorHex);
+        } else {
+          nonRegionedColors.push(colorHex);
         }
       }
-    }
 
-    const transparent = { hexCode: "#00000000", rgba: [0, 0, 0, 0] as const };
-    const nonTransparentStats = (this.colorStats || []).filter(
-      (s) => s.color.hexCode !== transparent.hexCode
-    );
+      // Un-regioned colors maintain their preserved order
+      // Regioned colors maintain order but uncompleted show first
+      allColors.push(
+        ...regionedColors.sort((hexCodeA, hexCodeB) => {
+          const colorRegionsA = currentArtwork.colorsAssignedToRegions.get(hexCodeA) ?? new Set();
+          const colorRegionsB = currentArtwork.colorsAssignedToRegions.get(hexCodeB) ?? new Set();
 
-    const regionedStats: UsedColorStat[] = [];
-    const nonRegionedStats: UsedColorStat[] = [];
+          const expectedTotalA = colorRegionsA.size;
+          const expectedTotalB = colorRegionsB.size;
 
-    // use the stat count directly since painting in the image does not change this value
-    for (const stat of nonTransparentStats) {
-      if (stat?.count > 0) {
-        regionedStats.push(stat);
-      } else {
-        nonRegionedStats.push(stat);
-      }
-    }
+          const correctRegionsA = colorRegionsA.intersection(currentArtwork.colorsFilledInRegions.get(hexCodeA) ?? new Set());
+          const correctRegionsB = colorRegionsB.intersection(currentArtwork.colorsFilledInRegions.get(hexCodeB) ?? new Set());
 
-    // Un-regioned colors maintain their preserved order
-    // Regioned colors maintain order but uncompleted show first
-    const allColorsExceptTransparent = [
-      ...regionedStats
-        .map((v, i) => [v, i] as const)
-        .sort((a, b) => {
-          const aExpectedColor = expectedColorStatus.get(a[0].color.hexCode);
-          const aFullyPainted = aExpectedColor.total === aExpectedColor.painted;
+          const correctTotalA = correctRegionsA.size;
+          const correctTotalB = correctRegionsB.size;
 
-          const bExpectedColor = expectedColorStatus.get(b[0].color.hexCode);
-          const bFullyPainted = bExpectedColor.total === bExpectedColor.painted;
+          const correctlyFinishedA = expectedTotalA === correctTotalA;
+          const correctlyFinishedB = expectedTotalB === correctTotalB;
 
-          if (aFullyPainted && bFullyPainted) {
-            return a[1] - b[1];
+          if (correctlyFinishedA === correctlyFinishedB) {
+            return parseInt(hexCodeA.replace("#", ""), 16) - parseInt(hexCodeB.replace("#", ""));
           }
 
-          return Number(aFullyPainted) - Number(bFullyPainted);
-        })
-        .map((s) => s[0].color),
-      ...nonRegionedStats.map((s) => s.color),
-    ];
-    const allColors = [transparent, ...allColorsExceptTransparent];
+          return Number(correctlyFinishedA) - Number(correctlyFinishedB);
+        }),
+        ...nonRegionedColors
+      );
+    }
 
     const containerStyle = {
       position: "fixed" as const,
@@ -327,6 +257,7 @@ export class PaintingControls extends SignalElement {
       display: "flex",
       flexDirection: "column" as const,
       justifyContent: "flex-start",
+      userSelect: "none",
       // this is to provide a buffer for end of page rendering scroll up
       paddingBottom: "10vh",
       marginBottom: "-10vh",
@@ -338,9 +269,7 @@ export class PaintingControls extends SignalElement {
       justifyContent: "space-between",
       gap: "0.5rem",
       padding: "0.5rem",
-      borderBottom: showPhotoControls
-        ? "2px solid rgba(0, 0, 0, 0.15)"
-        : "none",
+      borderBottom: showPhotoControls ? "2px solid rgba(0, 0, 0, 0.15)" : "none",
       flexShrink: 0,
     };
 
@@ -390,10 +319,7 @@ export class PaintingControls extends SignalElement {
     };
 
     return html`
-      <div
-        id="color-palette-section"
-        style=${this.renderStyleObject(containerStyle)}
-      >
+      <div id="color-palette-section" style=${this.renderStyleObject(containerStyle)}>
         <!-- Header Controls: Action Buttons (Left), Zoom (Middle) & Category Toggles (Right) -->
         <div style=${this.renderStyleObject(headerStyle)}>
           <!-- Left Group: Action Buttons -->
@@ -431,15 +357,13 @@ export class PaintingControls extends SignalElement {
           <!-- Middle Group: Canvas Zoom Controls (Only when image is loaded) -->
           ${showPhotoControls
             ? html`
-                <div
-                  id="easel-zoom-container"
-                  style="display: flex; align-items: center; gap: 0.5rem;"
-                >
+                <div id="easel-zoom-container" style="display: flex; align-items: center; gap: 0.5rem;">
                   <!-- Zoom Out Button -->
                   <button
                     title="Zoom Out"
-                    @click=${() =>
-                      window.dispatchEvent(new CustomEvent("easel-zoom-out"))}
+                    @click=${() => {
+                      zoomScaleSignal.set(zoom(currentZoom, true, 4));
+                    }}
                     style=${this.renderStyleObject({
                       width: "36px",
                       height: "36px",
@@ -467,9 +391,9 @@ export class PaintingControls extends SignalElement {
                       width: "36px",
                       height: "36px",
                       borderRadius: "50%",
-                      backgroundColor: zoomScale !== 1 ? "#000000" : "#FFFFFF",
+                      backgroundColor: "#000000",
                       border: "2.5px solid #000000",
-                      boxShadow: "2px 2px 0px 0px #000000",
+                      boxShadow: "2px 2px 0px 0px #E63946",
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -479,14 +403,15 @@ export class PaintingControls extends SignalElement {
                       transition: "transform 0.15s ease, box-shadow 0.15s ease",
                     })}
                   >
-                    ${iconMove(18, zoomScale !== 1 ? "#FFFFFF" : "#000000")}
+                    ${iconMove(18, "#FFFFFF")}
                   </button>
 
                   <!-- Zoom In Button -->
                   <button
                     title="Zoom In"
-                    @click=${() =>
-                      window.dispatchEvent(new CustomEvent("easel-zoom-in"))}
+                    @click=${() => {
+                      zoomScaleSignal.set(zoom(currentZoom, false, 4));
+                    }}
                     style=${this.renderStyleObject({
                       width: "36px",
                       height: "36px",
@@ -511,10 +436,7 @@ export class PaintingControls extends SignalElement {
           <!-- Right Group: Color Category Buttons (Only when image is loaded) -->
           ${showPhotoControls
             ? html`
-                <div
-                  id="palette-mode-toggles"
-                  style="display: flex; align-items: center; gap: 0.5rem;"
-                >
+                <div id="palette-mode-toggles" style="display: flex; align-items: center; gap: 0.5rem;">
                   <!-- Undo Button -->
                   <button
                     id="undo-btn"
@@ -556,9 +478,7 @@ export class PaintingControls extends SignalElement {
                       borderRadius: "50%",
                       backgroundColor: isBrushMode ? "#FFFFFF" : "#000000",
                       border: "2.5px solid #000000",
-                      boxShadow: `2px 2px 0px 0px ${
-                        isBrushMode ? "#000000" : "#E63946"
-                      }`,
+                      boxShadow: `2px 2px 0px 0px ${isBrushMode ? "#000000" : "#E63946"}`,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -582,9 +502,7 @@ export class PaintingControls extends SignalElement {
                       borderRadius: "50%",
                       backgroundColor: isBrushMode ? "#000000" : "#FFFFFF",
                       border: "2.5px solid #000000",
-                      boxShadow: `2px 2px 0px 0px ${
-                        isBrushMode ? "#E63946" : "#000000"
-                      }`,
+                      boxShadow: `2px 2px 0px 0px ${isBrushMode ? "#E63946" : "#000000"}`,
                       display: "flex",
                       alignItems: "center",
                       justifyContent: "center",
@@ -605,17 +523,15 @@ export class PaintingControls extends SignalElement {
         ${showPhotoControls
           ? html`
               <div style=${this.renderStyleObject(scrollRowStyle)}>
-                ${allColors.map((color) => {
-                  const colorStatus = expectedColorStatus.get(color.hexCode);
-                  const isCoreColor = colorStatus
-                    ? colorStatus.total > 0
-                    : undefined;
-                  const isFullyPainted = colorStatus
-                    ? isCoreColor && colorStatus.total === colorStatus.painted
-                    : false;
+                ${allColors.map((hexCode) => {
+                  const assignedRegions = currentArtwork.colorsAssignedToRegions.get(hexCode) ?? new Set();
+                  const assignedRegionCount = assignedRegions.size;
+                  const paintedRegionCount = currentArtwork.colorsFilledInRegions.get(hexCode)?.intersection(assignedRegions).size ?? 0;
+                  const isCoreColor = assignedRegionCount > 0;
+                  const isFullyPainted = isCoreColor ? assignedRegionCount === paintedRegionCount : false;
 
-                  const isSelected = activeColor?.hexCode === color.hexCode;
-                  const isCopied = copiedHex === color.hexCode;
+                  const isSelected = activeColor === hexCode;
+                  const isCopied = copiedHex === hexCode;
 
                   const colorCardStyle = {
                     flex: "0 0 auto",
@@ -627,13 +543,9 @@ export class PaintingControls extends SignalElement {
                     borderRadius: "1rem",
                     transition: "all 0.15s ease",
                     cursor: "pointer",
-                    border: isSelected
-                      ? "3px solid #E63946"
-                      : "3px solid transparent",
+                    border: isSelected ? "3px solid #E63946" : "3px solid transparent",
                     backgroundColor: "transparent",
-                    boxShadow: isSelected
-                      ? "3px 3px 0px 0px #E63946"
-                      : "0px 0px 0px 0px rgba(0,0,0,0.08)",
+                    boxShadow: isSelected ? "3px 3px 0px 0px #E63946" : "0px 0px 0px 0px rgba(0,0,0,0.08)",
                     transform: isSelected ? "scale(1.05)" : "scale(1)",
                     opacity: isSelected ? "1" : "0.85",
                     touchAction: isSelected ? "none" : "auto",
@@ -649,55 +561,31 @@ export class PaintingControls extends SignalElement {
                     alignItems: "center",
                     justifyContent: "center",
                     position: "relative" as const,
-                    backgroundColor: color.hexCode,
+                    backgroundColor: hexCode,
                     backgroundSize: "1.5rem 1.5rem",
                     backgroundRepeat: "repeat",
-                    backgroundImage:
-                      color.hexCode === "#00000000"
-                        ? transparentImgCss
-                        : color.hexCode,
+                    backgroundImage: hexCode === TRANSPARENT_HEX ? transparentImgCss : hexCode,
                     transition: "transform 0.15s ease",
                   };
 
                   return html`
-                    <button
-                      id="swatch-btn-${color.hexCode.replace("#", "")}"
-                      @pointerdown=${(e: PointerEvent) =>
-                        this.handleSwatchPointerDown(e, color)}
-                      style=${this.renderStyleObject(colorCardStyle)}
-                    >
+                    <button id="swatch-btn-${hexCode.replace("#", "")}" @pointerdown=${(e: PointerEvent) => this.handleSwatchPointerDown(e, hexCode)} style=${this.renderStyleObject(colorCardStyle)}>
                       <!-- Color Circle -->
                       <div style=${this.renderStyleObject(circleStyle)}>
-                        ${isFullyPainted
-                          ? html`
-                              <div
-                                style="position: absolute; top: -4px; right: -4px; width: 20px; height: 20px; background-color: #000000; border-radius: 9999px; border: 2px solid #FFFFFF; display: flex; align-items: center; justify-content: center; color: #FFFFFF;"
-                              >
-                                ${iconCheck(12, "#FFFFFF")}
-                              </div>
-                            `
-                          : ""}
+                        ${isFullyPainted ? html` <div style="position: absolute; top: -4px; right: -4px; width: 20px; height: 20px; background-color: #000000; border-radius: 9999px; border: 2px solid #FFFFFF; display: flex; align-items: center; justify-content: center; color: #FFFFFF;">${iconCheck(12, "#FFFFFF")}</div> ` : ""}
 
                         <!-- Copied Feedback -->
-                        <div
-                          style="position: absolute; inset: 0; width: 50%; height: 50%; margin: auto; background-color: #FFFFFF; border-radius: 9999px; display: flex; align-items: center; justify-content: center; opacity: ${isCopied
-                            ? 1
-                            : 0}; transition: opacity 0.3s;"
-                        >
-                          ${iconPaintbrush(14, "#000000")}
-                        </div>
+                        <div style="position: absolute; inset: 0; width: 50%; height: 50%; margin: auto; background-color: #FFFFFF; border-radius: 9999px; display: flex; align-items: center; justify-content: center; opacity: ${isCopied ? 1 : 0}; transition: opacity 0.3s;">${iconPaintbrush(14, "#000000")}</div>
                       </div>
 
                       <!-- Color Label/Progress -->
                       <span
-                        id="swatch-action-${color.hexCode.replace("#", "")}"
+                        id="swatch-action-${hexCode.replace("#", "")}"
                         @pointerdown=${(e: PointerEvent) => {
-                          if (isCoreColor || color.hexCode === "#00000000")
-                            return;
-                          if (e.pointerType === "mouse" && e.button !== 0)
-                            return;
+                          if (isCoreColor || hexCode === TRANSPARENT_HEX) return;
+                          if (e.pointerType === "mouse" && e.button !== 0) return;
                           e.stopPropagation();
-                          handleDeleteSwatchColor(color);
+                          handleDeleteSwatchColor(hexCode);
                         }}
                         style="font-size: 0.6875rem;
                           font-weight: 900;
@@ -712,23 +600,11 @@ export class PaintingControls extends SignalElement {
                           display: inline-flex;
                           border-radius: 100%;
                           justify-content: center;
-                          cursor: ${!isCoreColor && isSelected
-                          ? "pointer"
-                          : "inherit"};
-                          pointer-events: ${isSelected && !isCoreColor
-                          ? "auto"
-                          : "none"};"
-                        title=${!isCoreColor && isSelected
-                          ? "Delete colour swatch"
-                          : ""}
+                          cursor: ${!isCoreColor && isSelected ? "pointer" : "inherit"};
+                          pointer-events: ${isSelected && !isCoreColor ? "auto" : "none"};"
+                        title=${!isCoreColor && isSelected ? "Delete colour swatch" : ""}
                       >
-                        ${color.hexCode === "#00000000"
-                          ? "Eraser"
-                          : isCoreColor
-                          ? `${colorStatus!.painted}/${colorStatus!.total}`
-                          : isSelected
-                          ? iconTrash2(12, "#E63946")
-                          : "♾️"}
+                        ${hexCode === TRANSPARENT_HEX ? "Eraser" : isCoreColor ? `${paintedRegionCount}/${assignedRegionCount}` : isSelected ? iconTrash2(12, "#E63946") : "♾️"}
                       </span>
                     </button>
                   `;
@@ -783,32 +659,23 @@ export class PaintingControls extends SignalElement {
                       animation: "hue-loop linear 5s infinite",
                     })}
                   >
-                    <div
-                      style="position: absolute; inset: 0; width: 0; height: 0; margin: auto; background-color: #FFFFFF; border: solid 2px #FFFFFF; border-radius: 100%; corner-shape: round !important; display: flex; align-items: center; justify-content: center;"
-                    ></div>
+                    <div style="position: absolute; inset: 0; width: 0; height: 0; margin: auto; background-color: #FFFFFF; border: solid 2px #FFFFFF; border-radius: 100%; corner-shape: round !important; display: flex; align-items: center; justify-content: center;"></div>
                   </div>
 
                   <!-- Color Label/Progress -->
-                  <span
-                    style="font-size: 0.6875rem; font-weight: 900; color: #3D2314; margin-top: 0.375rem; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; line-height: 1.2;"
-                  >
-                    Picker
-                  </span>
+                  <span style="font-size: 0.6875rem; font-weight: 900; color: #3D2314; margin-top: 0.375rem; text-align: center; white-space: nowrap; overflow: hidden; text-overflow: ellipsis; width: 100%; line-height: 1.2;"> Picker </span>
                 </button>
               </div>
             `
           : ""}
       </div>
-      <download-popup .artwork=${currentArtwork} ?isOpen=${this.showDownloadPopup} @close=${() => this.showDownloadPopup = false}></download-popup>
+      <download-popup .artwork=${currentArtwork} ?isOpen=${this.showDownloadPopup} @close=${() => (this.showDownloadPopup = false)}></download-popup>
     `;
   }
 
   private renderStyleObject(styleObj: Record<string, string | number>): string {
     return Object.entries(styleObj)
-      .map(
-        ([k, v]) =>
-          `${k.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}: ${v};`
-      )
+      .map(([k, v]) => `${k.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}: ${v};`)
       .join(" ");
   }
 }

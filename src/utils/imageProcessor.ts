@@ -1,78 +1,116 @@
+import { FALLBACK_IMAGE_SIZE_PX, FILLABLE_SVG_ELEMENTS_SELECTOR, TRANSPARENT_HEX } from "./constants.js";
+import { processingImageHeightSignal, processingImageWidthSignal } from "../state/store.js";
+import { MutableMap, ProcessedArtwork } from "../types";
 import init, { vectorize_rgba } from "../vtracer/vtracer_wasm.js";
-import { ProcessedArtwork, UsedColorStat, SvgPath } from "../types";
-import { getColorProperties, hexToRgb, normalizeHex } from "./color.js";
+import { getHexCode } from "./color.js";
+import { parseSVG } from "./html.js";
 
-function loadImage(src: string): Promise<HTMLImageElement> {
-  return new Promise((resolve, reject) => {
-    const img = new Image();
-    img.crossOrigin = "anonymous";
-    img.onload = () => resolve(img);
-    img.onerror = reject;
-    img.src = src;
-  });
+function parseSvgDimension(value) {
+  if (!value) return 0;
+
+  // Handle percentage strings explicitly if needed
+  if (String(value).endsWith("%")) {
+    return FALLBACK_IMAGE_SIZE_PX; // since we would be scaling the SVG regardless
+  }
+
+  const num = parseFloat(value);
+  return isNaN(num) ? 0 : num;
+}
+
+async function loadImage(src: string): Promise<Readonly<({ type: "err"; data: unknown } | { type: "svg"; data: SVGElement } | { type: "bin"; data: HTMLImageElement }) & { format: string }>> {
+  const response = await fetch(src);
+  const contentType = response.headers.get("content-type");
+  if (contentType && contentType.includes("image/")) {
+    if (contentType.includes("image/svg+xml")) {
+      const text = await response.text();
+      const svgElement = parseSVG(text);
+      if (svgElement) {
+        processingImageWidthSignal.set(parseSvgDimension(svgElement.getAttribute("width")) || FALLBACK_IMAGE_SIZE_PX);
+        processingImageHeightSignal.set(parseSvgDimension(svgElement.getAttribute("height")) || FALLBACK_IMAGE_SIZE_PX);
+        return {
+          type: "svg",
+          format: contentType,
+          data: svgElement,
+        } as const;
+      }
+      return {
+        type: "err",
+        format: contentType,
+        data: text,
+      } as const;
+    } else {
+      const blob = await response.blob();
+      return new Promise((resolve) => {
+        const img = new Image();
+        img.crossOrigin = "anonymous";
+        img.onload = () => {
+          processingImageWidthSignal.set(img.naturalWidth || FALLBACK_IMAGE_SIZE_PX);
+          processingImageHeightSignal.set(img.naturalHeight || FALLBACK_IMAGE_SIZE_PX);
+          resolve({
+            type: "bin",
+            format: contentType,
+            data: img,
+          } as const);
+        };
+        img.onerror = () => {
+          processingImageWidthSignal.set(FALLBACK_IMAGE_SIZE_PX);
+          processingImageHeightSignal.set(FALLBACK_IMAGE_SIZE_PX);
+          resolve({
+            type: "err",
+            format: contentType,
+            data: blob,
+          } as const);
+        };
+        img.src = URL.createObjectURL(blob);
+      });
+    }
+  } else {
+    return {
+      type: "err",
+      format: contentType,
+      data: null,
+    } as const;
+  }
 }
 
 /**
  * Turns svg outlines into paths and fragments overlapping shapes into non-overlapping islands.
  */
-async function transformSVGForPainting(
-  rawSvgString: string
-): Promise<SVGElement> {
-  const parser = new DOMParser();
-  const svgDoc = parser.parseFromString(rawSvgString, "image/svg+xml");
-
-  if (!(svgDoc.documentElement instanceof SVGElement)) {
-    const errorMsg = "Failed to parse SVG document";
-    console.error(errorMsg, svgDoc.documentElement);
-    throw Error(errorMsg);
-
-    // TODO
-    // 1. turn all the strokes with >0 widths into paths, the stroke color is now the fill and the new path has no stroke
-    // 2. check all the paths in the document including the strokes that just got turned to paths and divide them into unique islands until they are no overlapping paths
-    // 3. make sure that the fills for all paths even if was assigned by inheritance are preserved during the previous step
-    // 4. parse the generated svg and return it for processing
-  }
+async function transformSVGForPainting(svg: SVGElement): Promise<SVGElement> {
+  // TODO
+  // 1. turn all the strokes with >0 widths into paths, the stroke color is now the fill and the new path has no stroke
+  // 2. check all the paths in the document including the strokes that just got turned to paths and divide them into unique islands until they are no overlapping paths
+  // 3. make sure that the fills for all paths even if was assigned by inheritance are preserved during the previous step
+  // 4. parse the generated svg and return it for processing
 
   // assign black fill to all elements without a fill attribute
   // this solve the issue of some paths needing to be rendered as black by default
   // but introduces an issue where elements that can not be painted are added to the region count
-  svgDoc.querySelectorAll("*:not([fill])").forEach((el) => {
+  svg.querySelectorAll(`:is(${FILLABLE_SVG_ELEMENTS_SELECTOR}):not([fill])`).forEach((el) => {
     el.setAttribute("fill", "#000000FF");
   });
 
   // assign transparent fill to all elements with fill="none"
   // this solve the issue of including transparent regions as places that can be filled in
   // however when the splitting of overlapping region occurs transparent sections should not win over coloured sections
-  svgDoc.querySelectorAll("[fill='none']").forEach((el) => {
-    el.setAttribute("fill", "#00000000");
+  svg.querySelectorAll(`[fill="none"]`).forEach((el) => {
+    el.setAttribute("fill", TRANSPARENT_HEX);
   });
 
-  const svgElement = svgDoc.documentElement;
-
-  return svgElement;
+  return svg;
 }
 
-export async function processImageToCartoonPalette(
-  imageSrc: string,
-  artworkName: string
-): Promise<ProcessedArtwork> {
-  const isSvgImage = imageSrc.startsWith("data:image/svg+xml");
-  const defaultDimensionPx = 800;
+export async function processImageToCartoonPalette(imageSrc: string, artworkName: string): Promise<ProcessedArtwork> {
+  const maybeImage = await loadImage(imageSrc);
 
-  let svgStr = "";
+  let svgDoc: SVGElement | null = null;
 
-  if (isSvgImage) {
-    if (imageSrc.includes(";base64,")) {
-      svgStr = atob(imageSrc.split(";base64,")[1]);
-    } else {
-      svgStr = decodeURIComponent(imageSrc.split(",")[1]);
-    }
-  } else {
-    const img = await loadImage(imageSrc);
-
-    const imgWidth = Math.min(img.width, defaultDimensionPx);
-    const scaleRatio = defaultDimensionPx / img.width;
-    const imgHeight = img.height * scaleRatio;
+  if (maybeImage.type === "svg") {
+    svgDoc = maybeImage.data;
+  } else if (maybeImage.type === "bin") {
+    const img = maybeImage.data;
+    const imgWidth = img.width;
+    const imgHeight = img.height;
 
     const origCanvas = document.createElement("canvas");
     origCanvas.width = imgWidth;
@@ -80,7 +118,7 @@ export async function processImageToCartoonPalette(
     const origCtx = origCanvas.getContext("2d", { willReadFrequently: true });
     if (!origCtx) throw new Error("Failed to initialize canvas 2D context");
 
-    origCtx.imageSmoothingEnabled = true;
+    origCtx.imageSmoothingEnabled = false;
     origCtx.imageSmoothingQuality = "high";
 
     // Fill with white background in case of transparency
@@ -92,9 +130,7 @@ export async function processImageToCartoonPalette(
     const rawPixels = origImgData.data;
 
     // Run vtracer
-    await init(
-      "https://unpkg.com/@visioncortex/vtracer@1.0.0-alpha.3/pkg/vtracer_wasm_bg.wasm"
-    );
+    await init("https://unpkg.com/@visioncortex/vtracer@1.0.0-alpha.3/pkg/vtracer_wasm_bg.wasm");
     const options = {
       /** default: color-cluster for true color image */
       clustering: "color-cluster",
@@ -121,171 +157,163 @@ export async function processImageToCartoonPalette(
       /** default: off, Simplify curves: fewest cubics within this tolerance in px (try 1–2.5) */
       // simplify: 2,
     };
-    svgStr = vectorize_rgba(rawPixels, imgWidth, imgHeight, options);
-
-    if (!svgStr.includes("xmlns=")) {
-      svgStr = svgStr.replace(
-        "<svg",
-        '<svg xmlns="http://www.w3.org/2000/svg"'
-      );
-    }
+    const svgStr = vectorize_rgba(rawPixels, imgWidth, imgHeight, options);
+    svgDoc = parseSVG(svgStr.includes("xmlns=") ? svgStr : svgStr.replace("<svg", '<svg xmlns="http://www.w3.org/2000/svg"'));
+  } else if (maybeImage.type === "err") {
+    console.error(maybeImage);
+    throw new Error(maybeImage.format);
   }
 
   // Parse output SVG
-  const svgDoc = await transformSVGForPainting(svgStr);
+  svgDoc = await transformSVGForPainting(svgDoc);
 
-  const uniqueColors = new Set<string>();
-  svgDoc.querySelectorAll("[fill]").forEach((el) => {
-    const fill = el.getAttribute("fill");
-    if (fill && fill.startsWith("#")) uniqueColors.add(fill.toUpperCase());
-  });
+  // all the path/region
+  const regionsDrawingInfo: MutableMap<ProcessedArtwork["regionsDrawingInfo"]> = new Map();
+  const colorsAssignedToRegions: ProcessedArtwork["colorsAssignedToRegions"] = new Map();
+  const regionsCurrentFillInfo: ProcessedArtwork["regionsCurrentFillInfo"] = new Map();
 
-  const svgPaths: SvgPath[] = [];
-  const regionExpectedColors: Record<number, string> = {};
-  const colorCounts = new Map<string, number>();
+  // Add transparent color default mapping
+  colorsAssignedToRegions.set(TRANSPARENT_HEX, new Set());
 
-  const paths = Array.from(svgDoc.querySelectorAll("path"));
-  paths.forEach((path, i) => {
-    const d = path.getAttribute("d") || "";
-    let fill = path.getAttribute("fill") || "";
+  const renderNode = svgDoc.cloneNode(true) as typeof svgDoc;
+  const hiddenContainer = document.createElement("div");
+  hiddenContainer.style.position = "absolute";
+  hiddenContainer.style.visibility = "hidden";
+  hiddenContainer.style.pointerEvents = "none";
+  hiddenContainer.appendChild(renderNode);
+  document.body.appendChild(hiddenContainer);
 
-    let parent = path.parentElement;
-    while ((!fill || fill === "none") && parent) {
-      fill = parent.getAttribute("fill") || "";
-      parent = parent.tagName === "svg" ? null : parent.parentElement;
-    }
+  const PRESERVE_ELEMENT_MARKER = "paint-preserve";
+  const selectorNotInDefElement = `:is(${FILLABLE_SVG_ELEMENTS_SELECTOR})`;
 
-    const finalFill = normalizeHex(fill);
-    // this is a safety check to ensure that we only include paths with valid fill colors
-    // should not happen but just in case
-    if (finalFill) {
-      svgPaths.push({ id: i, d });
-      regionExpectedColors[i] = finalFill;
-      colorCounts.set(finalFill, (colorCounts.get(finalFill) || 0) + 1);
-    }
-  });
+  const preservedTreeElements = new Set<SVGElement>();
+  const allFillableElements = renderNode.querySelectorAll<SVGElementTagNameMap[typeof FILLABLE_SVG_ELEMENTS_SELECTOR]>(selectorNotInDefElement);
+  allFillableElements.forEach((fillElement, key) => {
+    const fillRegionId = `region-${key}`;
+    fillElement.setAttribute("data-region-id", fillRegionId);
+    fillElement.setAttribute(PRESERVE_ELEMENT_MARKER, "true");
 
-  const colorStats: UsedColorStat[] = [];
-  const totalRegions = paths.length;
-
-  for (const [hexCode, count] of colorCounts.entries()) {
-    const rgba = hexToRgb(hexCode);
-    if (rgba) {
-      colorStats.push({
-        color: { hexCode, rgba },
-        count,
-        percentage: Math.max(1, Math.round((count / totalRegions) * 100)),
-      });
-    }
-  }
-
-  // Sort by count descending
-  colorStats.sort((a, b) => {
-    const colorA = getColorProperties(a.color.hexCode);
-    const colorB = getColorProperties(b.color.hexCode);
-
-    if (colorA.isGray !== colorB.isGray) {
-      return colorA.isGray ? 1 : -1; // Grays last
-    }
-
-    if (colorA.isGray) {
-      // Both are grays. Sort by brightness (value/luminance) ascending (dark to light)
-      return colorA.v - colorB.v;
-    }
-
-    // Both are chromatic colors.
-    // Group by Hue in 15-degree bands for stable and smooth gradient flows
-    const hueGroupA = Math.floor(colorA.h / 15);
-    const hueGroupB = Math.floor(colorB.h / 15);
-
-    if (hueGroupA !== hueGroupB) {
-      return hueGroupA - hueGroupB;
-    }
-
-    // Within the same hue group, sort by Saturation descending, then Value descending
-    if (Math.abs(colorA.s - colorB.s) > 0.05) {
-      return colorB.s - colorA.s;
-    }
-    return colorB.v - colorA.v;
-  });
-
-  // Add transparent color if missing (app assumes it might exist)
-  if (!colorStats.some((s) => s.color.hexCode === "#00000000")) {
-    colorStats.unshift({
-      color: { hexCode: "#00000000", rgba: [0, 0, 0, 0] },
-      count: 0,
-      percentage: 0,
-    });
-  }
-
-  const width = svgDoc.clientWidth || defaultDimensionPx;
-  const height = svgDoc.clientHeight || defaultDimensionPx;
-
-  const regionNeighbors: Record<number, number[]> = {};
-  try {
-    const hiddenContainer = document.createElement("div");
-    hiddenContainer.style.position = "absolute";
-    hiddenContainer.style.visibility = "hidden";
-    hiddenContainer.style.pointerEvents = "none";
-    hiddenContainer.appendChild(svgDoc.cloneNode(true));
-    document.body.appendChild(hiddenContainer);
-
-    const bboxes: Record<number, DOMRect> = {};
-    const domPaths = hiddenContainer.querySelectorAll("path");
-    domPaths.forEach((path, i) => {
-      if (regionExpectedColors[i]) {
-        try {
-          bboxes[i] = path.getBBox();
-        } catch (e) {
-          /* ignore */
-        }
+    // preserve the tree of this path
+    let topElem = fillElement.parentElement;
+    while (topElem !== null && topElem instanceof SVGElement) {
+      if (preservedTreeElements.has(topElem)) break;
+      if (!topElem.hasAttribute(PRESERVE_ELEMENT_MARKER)) {
+        topElem.setAttribute(PRESERVE_ELEMENT_MARKER, "true");
       }
-    });
-    document.body.removeChild(hiddenContainer);
+      preservedTreeElements.add(topElem);
+      topElem = topElem.parentElement;
+    }
 
+    const computedStyle = fillElement.computedStyleMap();
+    const elementFill = computedStyle.get("fill").toString();
+
+    // skip elements in defintions
+    if (fillElement.closest("defs") !== null) {
+      return;
+    }
+
+    const drawingInfo = {
+      id: fillRegionId,
+      neighbourRegionIds: new Set<string>(),
+    };
+    if (elementFill === "none") {
+      // element was specifically instructed to not have a fill
+      // still we add the region and assign it a transparent target fill
+      regionsDrawingInfo.set(fillRegionId, {
+        ...drawingInfo,
+        fillColor: TRANSPARENT_HEX,
+        boundingBox: null,
+      });
+      colorsAssignedToRegions.get(TRANSPARENT_HEX).add(fillRegionId);
+    } else {
+      // a fill was set, normalise the hex value and add it
+      // but it starts as white to be filled in
+      const fillColor = getHexCode(elementFill);
+      const { width, height, x, y } = fillElement.getBBox();
+      regionsDrawingInfo.set(fillRegionId, {
+        ...drawingInfo,
+        fillColor,
+        boundingBox: { width, height, x, y },
+      });
+      if (!colorsAssignedToRegions.has(fillColor)) {
+        colorsAssignedToRegions.set(fillColor, new Set());
+      }
+      regionsCurrentFillInfo.set(fillRegionId, "#FFFFFFFF");
+      colorsAssignedToRegions.get(fillColor).add(fillRegionId);
+    }
+
+    // prepare for blank rendering colors will be applied afterwards
+    const isTransparentRegion = regionsDrawingInfo.get(fillRegionId).fillColor === TRANSPARENT_HEX;
+    const fill = regionsCurrentFillInfo.get(fillRegionId) || (isTransparentRegion ? "none" : "#FFFFFF");
+
+    fillElement.setAttribute("fill", fill);
+    fillElement.setAttribute("stroke", "none");
+    fillElement.setAttribute("stroke-linejoin", "round");
+    // TODO: decide if transparent regions should be interactable
+    // For deferring setting them as not interactable to when the svg is rendered to the user
+    // fillElement.setAttribute("touch-actions", isTransparentRegion ? "none" : "all");
+    // fillElement.setAttribute("pointer-events", isTransparentRegion ? "none" : "all");
+  });
+  document.body.removeChild(hiddenContainer);
+
+  // remove all style elements after processing of layout and colors is done.
+  renderNode.querySelectorAll("style").forEach((elem) => elem.remove());
+  // remove all other elements from the perserved SVG
+  renderNode.querySelectorAll(`*:not([${PRESERVE_ELEMENT_MARKER}]`).forEach((elem) => elem.remove());
+  // ensure final svg scales to container;
+  renderNode.setAttribute("height", "100%");
+  renderNode.setAttribute("width", "100%");
+
+  try {
     const expandPx = 12;
-    for (let i = 0; i < svgPaths.length; i++) {
-      const idA = svgPaths[i].id;
-      const boxA = bboxes[idA];
+    for (const regionA of regionsDrawingInfo) {
+      const idA = regionA[0];
+      const boxA = regionA[1].boundingBox;
       if (!boxA) continue;
 
-      const neighbors: number[] = [];
-      for (let j = 0; j < svgPaths.length; j++) {
-        if (i === j) continue;
-        const idB = svgPaths[j].id;
-        const boxB = bboxes[idB];
+      for (const regionB of regionsDrawingInfo) {
+        const idB = regionB[0];
+        if (idA === idB) continue;
+        const boxB = regionB[1].boundingBox;
         if (!boxB) continue;
 
-        const intersectX =
-          boxA.x - expandPx <= boxB.x + boxB.width &&
-          boxA.x + boxA.width + expandPx >= boxB.x;
-        const intersectY =
-          boxA.y - expandPx <= boxB.y + boxB.height &&
-          boxA.y + boxA.height + expandPx >= boxB.y;
+        const intersectX = boxA.x - expandPx <= boxB.x + boxB.width && boxA.x + boxA.width + expandPx >= boxB.x;
+        const intersectY = boxA.y - expandPx <= boxB.y + boxB.height && boxA.y + boxA.height + expandPx >= boxB.y;
         if (intersectX && intersectY) {
-          neighbors.push(idB);
+          regionA[1].neighbourRegionIds.add(idB);
         }
       }
-      regionNeighbors[idA] = neighbors;
     }
   } catch (e) {
     console.error("Failed to compute region neighbors", e);
   }
 
-  return {
+  const artwork: ProcessedArtwork = {
     id: `art-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
     name: artworkName,
     originalDataUrl: imageSrc,
-    cartoonDataUrl:
-      "data:image/svg+xml;base64," +
-      btoa(unescape(encodeURIComponent(svgDoc.outerHTML))),
-    width,
-    height,
+    cartoonDataUrl: "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgDoc.outerHTML))),
+    cartoonSVG: renderNode.outerHTML,
+    width: processingImageWidthSignal.get(),
+    height: processingImageHeightSignal.get(),
     createdAt: Date.now(),
     modifiedAt: Date.now(),
-    colorStats,
-    regionExpectedColors,
-    regionNeighbors,
-    svgPaths,
+    /** A color can existing in here without a any region e.g. custom added colors */
+    colorsAssignedToRegions,
+    regionsDrawingInfo,
+    // Two maps cause what even are bidirectional maps in JS
+    colorsFilledInRegions: new Map(),
+    regionsCurrentFillInfo,
+    brushStrokePaths: {},
   };
+
+  return artwork;
+}
+
+export function renderArtworkToSVG(artwork: ProcessedArtwork) {
+  const svgElem = parseSVG(artwork.cartoonSVG);
+  artwork.regionsCurrentFillInfo.entries().forEach(([regionId, currentFill]) => {
+    svgElem.querySelector(`[data-region-id="${regionId}"]`)?.setAttribute("fill", currentFill);
+  });
+  return svgElem;
 }

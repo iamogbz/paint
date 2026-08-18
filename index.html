@@ -1,58 +1,45 @@
-<!doctype html>
+<!DOCTYPE html>
 <html lang="en">
+  <head>
+    <meta charset="UTF-8" />
+    <meta name="viewport" content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
+    <meta name="theme-color" content="#FCD5AE" />
+    <link rel="icon" href="/favicon.svg" />
+    <meta name="mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-capable" content="yes" />
+    <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
+    <meta name="description" content="Unleash your creativity, relax, and bring your artworks to life one color at a time. Have fun painting your masterpiece!" />
+    <title>PAINT by COLOURS</title>
+    <link rel="preconnect" href="https://fonts.googleapis.com" />
+    <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin />
+    <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;700;800;900&display=swap" rel="stylesheet" />
 
-<head>
-  <meta charset="UTF-8" />
-  <meta name="viewport"
-    content="width=device-width, initial-scale=1.0, maximum-scale=1.0, user-scalable=no, viewport-fit=cover" />
-  <meta name="theme-color" content="#FCD5AE" />
-  <link rel="icon" href="/favicon.svg" />
-  <meta name="mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-capable" content="yes" />
-  <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent" />
-  <meta name="description"
-    content="Unleash your creativity, relax, and bring your artworks to life one color at a time. Have fun painting your masterpiece!" />
-  <title>PAINT by COLOURS</title>
-  <link rel="preconnect" href="https://fonts.googleapis.com">
-  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
-  <link href="https://fonts.googleapis.com/css2?family=Plus+Jakarta+Sans:wght@500;700;800;900&display=swap"
-    rel="stylesheet">
+    <script type="text/javascript">
+      window.animateFill = async (paintDelay = 50) => {
+        const regionsByColors = window.regionsByColors();
 
-  <script type="text/javascript">
-    window.animateFill = async (paintDelay = 50) => {
-      const regionColors = window.getRegionColors();
-      const regionsByColors = Object.entries(regionColors).reduce(
-        (acc, [regionId, hexColor]) => {
-          return { ...acc, [hexColor]: [...(acc[hexColor] || []), regionId] };
-        },
-        {}
-      );
+        const waitFor = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
 
-      const waitFor = (ms) => new Promise((resolve) => setTimeout(resolve, ms));
-
-      for (const hexColor of Object.keys(regionsByColors)) {
-        console.log(`Selecting regions for color: ${hexColor}`);
-        for (const regionId of regionsByColors[hexColor]) {
-          console.log(`Highlighting region: ${regionId} with color: ${hexColor}`);
-          window.setRegionHighlight(regionId, hexColor);
-          document
-            .getElementById(`swatch-btn-${hexColor.replace("#", "")}`)
-            ?.scrollIntoView({ behavior: "smooth", block: "center" });
-          await waitFor(paintDelay);
-          console.log(`Filling region: ${regionId} with color: ${hexColor}`);
-          window.setRegionFill(regionId, hexColor);
-          await waitFor(paintDelay);
+        for (const hexColor of Object.keys(regionsByColors)) {
+          console.log(`Selecting regions for color: ${hexColor}`);
+          for (const regionId of regionsByColors[hexColor]) {
+            console.log(`Highlighting region: ${regionId} with color: ${hexColor}`);
+            window.setRegionHighlight(regionId, hexColor);
+            document.getElementById(`swatch-btn-${hexColor.replace("#", "")}`)?.scrollIntoView({ behavior: "smooth", block: "center" });
+            await waitFor(paintDelay);
+            console.log(`Filling region: ${regionId} with color: ${hexColor}`);
+            window.setRegionFill(regionId, hexColor);
+            await waitFor(paintDelay);
+          }
+          console.log(`Finished filling regions for color: ${hexColor}`);
         }
-        console.log(`Finished filling regions for color: ${hexColor}`);
-      }
-      window.setRegionHighlight(0, "#00000000");
-    };
-  </script>
-</head>
+        window.setRegionHighlight(0, TRANSPARENT_HEX);
+      };
+    </script>
+  </head>
 
-<body class="antialiased overscroll-none">
-  <paint-app></paint-app>
-  <script type="module" src="/src/main.ts"></script>
-</body>
-
+  <body class="antialiased overscroll-none">
+    <paint-app></paint-app>
+    <script type="module" src="/src/main.ts"></script>
+  </body>
 </html>

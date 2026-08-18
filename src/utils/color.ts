@@ -1,9 +1,5 @@
 // Color math utilities
-export function hsvToRgb(
-  h: number,
-  s: number,
-  v: number
-): [number, number, number] {
+export function hsvToRgb(h: number, s: number, v: number): [number, number, number] {
   h = ((h % 360) + 360) % 360;
   s = Math.max(0, Math.min(1, s));
   v = Math.max(0, Math.min(1, v));
@@ -38,18 +34,10 @@ export function hsvToRgb(
     g = 0;
     b = x;
   }
-  return [
-    Math.round((r + m) * 255),
-    Math.round((g + m) * 255),
-    Math.round((b + m) * 255),
-  ];
+  return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
 }
 
-export function rgbToHsv(
-  r: number,
-  g: number,
-  b: number
-): [number, number, number] {
+export function rgbToHsv(r: number, g: number, b: number): [number, number, number] {
   r = Math.max(0, Math.min(255, r)) / 255;
   g = Math.max(0, Math.min(255, g)) / 255;
   b = Math.max(0, Math.min(255, b)) / 255;
@@ -84,28 +72,23 @@ export function hexToRgb(hexCode: string) {
   }
   const rbga: number[] = [];
   for (let i = 0; i < 4; i++) {
-    rbga.push(
-      parseInt(
-        strippedHexCode.slice(i * hexPartDx, i * hexPartDx + hexPartDx) || "FF",
-        16
-      )
-    );
+    rbga.push(parseInt(strippedHexCode.slice(i * hexPartDx, i * hexPartDx + hexPartDx) || "FF", 16));
   }
   return Object.freeze(rbga) as readonly [number, number, number, number];
 }
 
 export function rgbToHex(r: number, g: number, b: number, a?: number): string {
-  return (
+  return normalizeHex(
     "#" +
-    [r, g, b, a]
-      .filter((v) => v != undefined)
-      .map((x) =>
-        Math.max(0, Math.min(255, Math.round(x)))
-          .toString(16)
-          .padStart(2, "0")
-          .toUpperCase()
-      )
-      .join("")
+      [r, g, b, a]
+        .filter((v) => v != undefined)
+        .map((x) =>
+          Math.max(0, Math.min(255, Math.round(x)))
+            .toString(16)
+            .padStart(2, "0")
+            .toUpperCase()
+        )
+        .join("")
   );
 }
 
@@ -132,4 +115,16 @@ export function getColorProperties(hexCode: string) {
   // - or it's very pale/light (s < 0.15 and v > 0.9)
   const isGray = s < 0.08 || v < 0.08 || (s < 0.15 && v > 0.9);
   return { isGray, h, s, v };
+}
+
+let canvas2dCtx = null;
+export function getHexCode(anyColor: string) {
+  if (!canvas2dCtx) {
+    // Create an unrendered canvas environment
+    canvas2dCtx = document.createElement("canvas").getContext("2d");
+  }
+  canvas2dCtx.fillStyle = anyColor; // Apply any rgb, rgba, hsl, or named color variable
+
+  // Reading back the property forces the engine to serialize to hex
+  return normalizeHex(canvas2dCtx.fillStyle);
 }

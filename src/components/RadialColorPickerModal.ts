@@ -1,28 +1,13 @@
 import { html } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import { SignalElement } from "../utils/SignalElement";
-import {
-  isColorPickerOpenSignal,
-  currentArtworkSignal,
-  activeHighlightColorSignal,
-  handleSelectArtwork,
-  pushUndoState,
-} from "../state/store";
-import { PaletteColor, UsedColorStat, ProcessedArtwork } from "../types";
+import { isColorPickerOpenSignal, currentArtworkSignal, activeHighlightColorSignal, handleSelectArtwork, pushUndoState, saveCurrentArtworkProgress } from "../state/store";
 import { soundEffects } from "../utils/soundEffects";
 import { iconX, iconPalette, iconPlus } from "./icons";
 import { hsvToRgb, rgbToHex, hexToRgb, rgbToHsv } from "../utils/color";
+import { TRANSPARENT_HEX } from "../utils/constants";
 
-const PRESET_HUES = [
-  "#E63946",
-  "#F4A261",
-  "#E9C46A",
-  "#2A9D8F",
-  "#4EA8DE",
-  "#3A86FF",
-  "#8338EC",
-  "#FF006E",
-];
+const PRESET_HUES = ["#E63946", "#F4A261", "#E9C46A", "#2A9D8F", "#4EA8DE", "#3A86FF", "#8338EC", "#FF006E"];
 
 @customElement("radial-color-picker-modal")
 export class RadialColorPickerModal extends SignalElement {
@@ -63,9 +48,7 @@ export class RadialColorPickerModal extends SignalElement {
   };
 
   private drawWheelCanvas() {
-    const canvas = this.renderRoot?.querySelector(
-      "#radial-color-canvas"
-    ) as HTMLCanvasElement;
+    const canvas = this.renderRoot?.querySelector("#radial-color-canvas") as HTMLCanvasElement;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
@@ -100,13 +83,12 @@ export class RadialColorPickerModal extends SignalElement {
 
         const idx = (py * size * dpr + px) * 4;
         if (dist <= radius) {
-          const angle = (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360;
+          const angle = ((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360;
           const sat = Math.min(1, dist / radius);
           const [r, g, b] = hsvToRgb(angle, sat, 1.0);
 
           const edgeDist = radius - dist;
-          const alpha =
-            edgeDist < 1.5 ? Math.max(0, Math.min(1, edgeDist / 1.5)) * 255 : 255;
+          const alpha = edgeDist < 1.5 ? Math.max(0, Math.min(1, edgeDist / 1.5)) * 255 : 255;
 
           data[idx] = r;
           data[idx + 1] = g;
@@ -123,9 +105,7 @@ export class RadialColorPickerModal extends SignalElement {
   }
 
   private updateColorFromWheelPoint(clientX: number, clientY: number) {
-    const wheelContainer = this.renderRoot?.querySelector(
-      "#radial-wheel-container"
-    ) as HTMLElement;
+    const wheelContainer = this.renderRoot?.querySelector("#radial-wheel-container") as HTMLElement;
     if (!wheelContainer) return;
 
     const rect = wheelContainer.getBoundingClientRect();
@@ -138,13 +118,13 @@ export class RadialColorPickerModal extends SignalElement {
     const dist = Math.hypot(dx, dy);
 
     const sat = Math.min(1, dist / this.wheelRadius);
-    const hue = (Math.atan2(dy, dx) * 180 / Math.PI + 360) % 360;
+    const hue = ((Math.atan2(dy, dx) * 180) / Math.PI + 360) % 360;
 
     this.hue = hue;
     this.sat = sat;
 
     const [r, g, b] = hsvToRgb(this.hue, this.sat, this.val);
-    this.hexInput = rgbToHex(r, g, b);
+    this.hexInput = rgbToHex(r, g, b).substring(0, 7);
   }
 
   private handleWheelPointerDown = (e: PointerEvent) => {
@@ -180,7 +160,7 @@ export class RadialColorPickerModal extends SignalElement {
     const valPercent = parseFloat(target.value);
     this.val = valPercent / 100;
     const [r, g, b] = hsvToRgb(this.hue, this.sat, this.val);
-    this.hexInput = rgbToHex(r, g, b);
+    this.hexInput = rgbToHex(r, g, b).substring(0, 7);
   };
 
   private handleHexInputChange = (e: Event) => {
@@ -218,38 +198,17 @@ export class RadialColorPickerModal extends SignalElement {
       return;
     }
 
-    const newPaletteColor: PaletteColor = {
-      hexCode: hex,
-      rgba: [r, g, b, 255] as const,
-    };
+    const isCoreColor = currentArtwork.colorsAssignedToRegions.get(hex)?.size > 0;
 
-    // Append to end of colorStats if not already present
-    const existingIdx = (currentArtwork.colorStats || []).findIndex(
-      (s) => s.color.hexCode.toUpperCase() === hex.toUpperCase()
-    );
-
-    if (existingIdx === -1) {
-      pushUndoState(
-        currentArtwork.paintedRegionsState,
-        currentArtwork.colorStats,
-        currentArtwork.brushStrokePaths
-      );
-
-      const newColorStat: UsedColorStat = {
-        color: newPaletteColor,
-        count: 0,
-        percentage: 0,
-      };
-
-      const updatedArtwork: ProcessedArtwork = {
-        ...currentArtwork,
-        colorStats: [...(currentArtwork.colorStats || []), newColorStat],
-        modifiedAt: Date.now(),
-      };
-      handleSelectArtwork(updatedArtwork);
+    // is not a core colour so is removable
+    if (!isCoreColor && hex !== TRANSPARENT_HEX) {
+      pushUndoState(currentArtwork);
+      // empty assignment shows not a core color
+      currentArtwork.colorsAssignedToRegions.set(hex, new Set());
+      saveCurrentArtworkProgress(currentArtwork);
     }
 
-    activeHighlightColorSignal.set(newPaletteColor);
+    activeHighlightColorSignal.set(hex);
     soundEffects.playPop();
     this.closeModal();
   };
@@ -267,7 +226,7 @@ export class RadialColorPickerModal extends SignalElement {
     const cx = this.wheelSize / 2;
     const cy = this.wheelSize / 2;
     const handleDist = this.sat * this.wheelRadius;
-    const handleAngleRad = this.hue * Math.PI / 180;
+    const handleAngleRad = (this.hue * Math.PI) / 180;
     const handleX = cx + handleDist * Math.cos(handleAngleRad);
     const handleY = cy + handleDist * Math.sin(handleAngleRad);
 
@@ -339,29 +298,13 @@ export class RadialColorPickerModal extends SignalElement {
           <!-- Header -->
           <div style=${this.renderStyleObject(headerStyle)}>
             <div style="display: flex; align-items: center; gap: 0.625rem;">
-              <div
-                style="width: 2.25rem; height: 2.25rem; border-radius: 14px; background-color: #FFD166; border: 2.5px solid #000000; display: flex; align-items: center; justify-content: center; color: #000000; box-shadow: 2px 2px 0px 0px #000000;"
-              >
-                ${iconPalette(18, "#000000")}
-              </div>
+              <div style="width: 2.25rem; height: 2.25rem; border-radius: 14px; background-color: #FFD166; border: 2.5px solid #000000; display: flex; align-items: center; justify-content: center; color: #000000; box-shadow: 2px 2px 0px 0px #000000;">${iconPalette(18, "#000000")}</div>
               <div>
-                <h2
-                  style="margin: 0; font-size: 1.125rem; font-weight: 800; color: #3D2314; letter-spacing: -0.02em;"
-                >
-                  Pick a Colour
-                </h2>
-                <p style="font-size: 0.75rem; font-weight: 800; text-transform: uppercase; color: #4A2810; margin: 0;">
-                  OR ENTER YOUR HEX CODE
-                </p>
+                <h2 style="margin: 0; font-size: 1.125rem; font-weight: 800; color: #3D2314; letter-spacing: -0.02em;">Pick a Colour</h2>
+                <p style="font-size: 0.75rem; font-weight: 800; text-transform: uppercase; color: #4A2810; margin: 0;">OR ENTER YOUR HEX CODE</p>
               </div>
             </div>
-            <button
-              title="Close"
-              @click=${this.closeModal}
-              style=${this.renderStyleObject(closeBtnStyle)}
-            >
-              ${iconX(16, "#000000")}
-            </button>
+            <button title="Close" @click=${this.closeModal} style=${this.renderStyleObject(closeBtnStyle)}>${iconX(16, "#000000")}</button>
           </div>
 
           <!-- Radial Wheel Container -->
@@ -382,10 +325,7 @@ export class RadialColorPickerModal extends SignalElement {
             })}
           >
             <!-- Canvas Wheel -->
-            <canvas
-              id="radial-color-canvas"
-              style="position: absolute; inset: 0; border-radius: 50%; box-shadow: inset 0 0 0 3px #000000, 0 4px 12px rgba(0,0,0,0.15);"
-            ></canvas>
+            <canvas id="radial-color-canvas" style="position: absolute; inset: 0; border-radius: 50%; box-shadow: inset 0 0 0 3px #000000, 0 4px 12px rgba(0,0,0,0.15);"></canvas>
 
             <!-- Wheel Selector Handle -->
             <div
@@ -409,12 +349,8 @@ export class RadialColorPickerModal extends SignalElement {
           <!-- Brightness / Lightness Slider -->
           <div style="width: 100%; display: flex; flex-direction: column; gap: 0.375rem;">
             <div style="display: flex; justify-content: space-between; align-items: center;">
-              <span style="font-size: 0.75rem; font-weight: 800; color: #3D2314;">
-                Brightness
-              </span>
-              <span style="font-size: 0.75rem; font-weight: 800; color: #7A5C43;">
-                ${Math.round(this.val * 100)}%
-              </span>
+              <span style="font-size: 0.75rem; font-weight: 800; color: #3D2314;"> Brightness </span>
+              <span style="font-size: 0.75rem; font-weight: 800; color: #7A5C43;"> ${Math.round(this.val * 100)}% </span>
             </div>
             <input
               type="range"
@@ -437,9 +373,7 @@ export class RadialColorPickerModal extends SignalElement {
           </div>
 
           <!-- Color Preview & Hex Input -->
-          <div
-            style="width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; background-color: #F8F5F2; padding: 0.5rem 0.75rem; border-radius: 16px; border: 2px solid #000000;"
-          >
+          <div style="width: 100%; display: flex; align-items: center; justify-content: space-between; gap: 0.75rem; background-color: #F8F5F2; padding: 0.5rem 0.75rem; border-radius: 16px; border: 2px solid #000000;">
             <!-- Large Preview Chip -->
             <div
               style=${this.renderStyleObject({
@@ -456,14 +390,7 @@ export class RadialColorPickerModal extends SignalElement {
             <!-- Hex input field -->
             <div style="display: flex; align-items: center; gap: 0.375rem; flex: 1;">
               <span style="font-weight: 900; color: #3D2314; font-size: 0.875rem;">HEX</span>
-              <input
-                type="text"
-                maxlength="7"
-                pattern="^#?([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$"
-                .value=${this.hexInput}
-                @input=${this.handleHexInputChange}
-                style="width: 100%; border: 2px solid #000000; border-radius: 8px; padding: 0.25rem 0.5rem; font-weight: 800; font-family: monospace; font-size: 0.875rem; color: #000000; background-color: #FFFFFF;"
-              />
+              <input type="text" maxlength="7" pattern="^#?([A-Fa-f0-9]{6}|[A-Fa-f0-9]{3})$" .value=${this.hexInput} @input=${this.handleHexInputChange} style="width: 100%; border: 2px solid #000000; border-radius: 8px; padding: 0.25rem 0.5rem; font-weight: 800; font-family: monospace; font-size: 0.875rem; color: #000000; background-color: #FFFFFF;" />
             </div>
           </div>
 
@@ -492,20 +419,8 @@ export class RadialColorPickerModal extends SignalElement {
 
           <!-- Action Buttons -->
           <div style="width: 100%; display: flex; gap: 0.625rem; margin-top: 0.25rem;">
-            <button
-              @click=${this.closeModal}
-              style="flex: 1; padding: 0.625rem; border-radius: 16px; border: 3px solid #000000; background-color: #FFFFFF; font-weight: 800; font-size: 0.875rem; color: #3D2314; cursor: pointer; box-shadow: 2px 2px 0px 0px #000000;"
-            >
-              Cancel
-            </button>
-            <button
-              id="confirm-add-color-swatch-btn"
-              @click=${this.handleAddColor}
-              style="flex: 2; padding: 0.625rem; border-radius: 16px; border: 3px solid #000000; background-color: #2A9D8F; font-weight: 900; font-size: 0.875rem; color: #FFFFFF; cursor: pointer; box-shadow: 3px 3px 0px 0px #000000; display: flex; align-items: center; justify-content: center; gap: 0.375rem;"
-            >
-              ${iconPlus(16, "#FFFFFF")}
-              Add Swatch
-            </button>
+            <button @click=${this.closeModal} style="flex: 1; padding: 0.625rem; border-radius: 16px; border: 3px solid #000000; background-color: #FFFFFF; font-weight: 800; font-size: 0.875rem; color: #3D2314; cursor: pointer; box-shadow: 2px 2px 0px 0px #000000;">Cancel</button>
+            <button id="confirm-add-color-swatch-btn" @click=${this.handleAddColor} style="flex: 2; padding: 0.625rem; border-radius: 16px; border: 3px solid #000000; background-color: #2A9D8F; font-weight: 900; font-size: 0.875rem; color: #FFFFFF; cursor: pointer; box-shadow: 3px 3px 0px 0px #000000; display: flex; align-items: center; justify-content: center; gap: 0.375rem;">${iconPlus(16, "#FFFFFF")} Add Swatch</button>
           </div>
         </div>
       </div>
@@ -514,10 +429,7 @@ export class RadialColorPickerModal extends SignalElement {
 
   private renderStyleObject(styleObj: Record<string, string | number>): string {
     return Object.entries(styleObj)
-      .map(
-        ([k, v]) =>
-          `${k.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}: ${v};`
-      )
+      .map(([k, v]) => `${k.replace(/[A-Z]/g, (m) => `-${m.toLowerCase()}`)}: ${v};`)
       .join(" ");
   }
 }
