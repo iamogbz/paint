@@ -221,7 +221,7 @@ export class EaselBoard extends SignalElement {
     e.preventDefault();
 
     const newZoomScale = zoom(this.zoomScale, e.deltaY > 0);
-    
+
     if (newZoomScale !== this.zoomScale) {
       const rect = this.containerElement?.getBoundingClientRect();
       if (rect) {
@@ -229,22 +229,22 @@ export class EaselBoard extends SignalElement {
         const hh = rect.height / 2;
         const mx = e.clientX - rect.left - hw;
         const my = e.clientY - rect.top - hh;
-        
+
         const scaleRatio = newZoomScale / this.zoomScale;
-        
+
         this.panX = mx - (mx - this.panX) * scaleRatio;
         this.panY = my - (my - this.panY) * scaleRatio;
-        
+
         this.panX = this.clampPanX(this.panX, newZoomScale);
         this.panY = this.clampPanY(this.panY, newZoomScale);
       }
       this.zoomScale = newZoomScale;
-    }
 
-    this.wheelSpinningTimeoutId = window.setTimeout(() => {
-      this.wheelSpinningTimeoutId = null;
-      zoomScaleSignal.set(this.zoomScale);
-    }, 150);
+      this.wheelSpinningTimeoutId = window.setTimeout(() => {
+        this.wheelSpinningTimeoutId = null;
+        zoomScaleSignal.set(this.zoomScale);
+      }, 150);
+    }
 
     if (this.animationFrame) {
       return;
@@ -273,14 +273,11 @@ export class EaselBoard extends SignalElement {
       this.isPinchAction = true;
       this.isDragCanvasAction = true;
       this.isBrushPainting = false;
-      
+
       const pointers = Array.from(this.activePointers.values());
-      this.initialPinchDistance = Math.hypot(
-        pointers[0].clientX - pointers[1].clientX,
-        pointers[0].clientY - pointers[1].clientY
-      );
+      this.initialPinchDistance = Math.hypot(pointers[0].clientX - pointers[1].clientX, pointers[0].clientY - pointers[1].clientY);
       this.initialZoomScale = this.zoomScale;
-      
+
       this.containerElement?.setPointerCapture(e.pointerId);
     }
   };
@@ -296,29 +293,23 @@ export class EaselBoard extends SignalElement {
     if (this.isPinchAction && this.activePointers.size === 2) {
       e.preventDefault();
       const pointers = Array.from(this.activePointers.values());
-      const currentDistance = Math.hypot(
-        pointers[0].clientX - pointers[1].clientX,
-        pointers[0].clientY - pointers[1].clientY
-      );
-      
+      const currentDistance = Math.hypot(pointers[0].clientX - pointers[1].clientX, pointers[0].clientY - pointers[1].clientY);
+
       if (this.initialPinchDistance) {
         // Pinch zoom
         const scaleFactor = currentDistance / this.initialPinchDistance;
-        let newZoom = this.initialZoomScale * scaleFactor;
-        
-        // We use the same precision limit as wheel zoom
-        const precision = Math.pow(10, newZoom <= 0.95 ? 2 : 1);
-        newZoom = clamp(Math.round(newZoom * precision) / precision, MIN_ZOOM, MAX_ZOOM);
-        
+        const newZoom = zoom((this.initialZoomScale * scaleFactor) / 0.95, true);
+
         if (newZoom !== this.zoomScale) {
           this.zoomScale = newZoom;
+
           window.clearTimeout(this.wheelSpinningTimeoutId);
           this.wheelSpinningTimeoutId = window.setTimeout(() => {
             this.wheelSpinningTimeoutId = null;
             zoomScaleSignal.set(this.zoomScale);
           }, 150);
         }
-        
+
         // Update drag delta based on first pointer movement since pinch started
         this.dragDeltaX = pointers[0].clientX - this.touchStartX;
         this.dragDeltaY = pointers[0].clientY - this.touchStartY;
@@ -363,7 +354,7 @@ export class EaselBoard extends SignalElement {
       this.touchStartX = remainingPointer.clientX - this.dragDeltaX;
       this.touchStartY = remainingPointer.clientY - this.dragDeltaY;
       this.isPinchAction = false;
-      return; 
+      return;
     }
 
     if (this.activePointers.size === 0) {
