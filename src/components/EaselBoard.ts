@@ -703,7 +703,9 @@ export class EaselBoard extends SignalElement {
   };
 
   private getTransitionCssProperty = () => {
-    // `${this.isDraggingColor || this.isPinching ? "none" : "transform 0.15s cubic-bezier(0.2, 0.5, 0.3, 0.8)"}`;
+    if (this.isPointerDown || this.wheelSpinningTimeoutId !== null) {
+      return "none";
+    }
     return "transform 0.15s cubic-bezier(0.2, 0.5, 0.3, 0.8)";
   };
 
