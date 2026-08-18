@@ -5,7 +5,7 @@ import { currentArtworkSignal, isProcessingSignal, processingImageSrcSignal, pro
 import { getDailyChallenge } from "../data/dailyChallenge";
 import { soundEffects } from "../utils/soundEffects";
 import { iconImage, iconUpload, iconPaintBucket } from "./icons";
-import { BASE_BRUSH_RADIUS, FILLABLE_SVG_ELEMENTS, TRANSPARENT_HEX, transparentImgCss } from "../utils/constants";
+import { BASE_BRUSH_RADIUS, FILLABLE_SVG_ELEMENTS, TRANSPARENT_HEX, transparentImgCss, MIN_ZOOM, MAX_ZOOM } from "../utils/constants";
 import { normalizeHex } from "../utils/color";
 import { BrushStrokePaths } from "../types";
 import { clamp, zoom } from "../utils/ui";
@@ -175,6 +175,12 @@ export class EaselBoard extends SignalElement {
   private panX = 0;
   private panY = 0;
 
+  // Pinch Zoom State
+  private activePointers: Map<number, PointerEvent> = new Map();
+  private initialPinchDistance: number | null = null;
+  private initialZoomScale: number = 1.0;
+  private isPinchAction = false;
+
   // Brush Painting State
   private isBrushPainting = false;
   private brushTargetRegionId: string | null = null;
@@ -231,23 +237,74 @@ export class EaselBoard extends SignalElement {
   };
 
   private handlePointerDown = (e: PointerEvent) => {
-    // only mark pointer down if the user was not attempting to drag from the control bar
-    this.isPointerDown = panDragActiveSignal.get() === false && draggedColorPositionSignal.get() === null;
-    this.dragDeltaX = 0;
-    this.dragDeltaY = 0;
-    this.isDragCanvasAction = false;
-    this.touchStartX = e.clientX;
-    this.touchStartY = e.clientY;
-    this.isBrushPainting = isBrushModeSignal.get() && (e.pointerType === "mouse" || e.button === 0);
+    this.activePointers.set(e.pointerId, e);
 
-    window.addEventListener("pointercancel", this.handlePointerUp);
+    if (this.activePointers.size === 1) {
+      // only mark pointer down if the user was not attempting to drag from the control bar
+      this.isPointerDown = panDragActiveSignal.get() === false && draggedColorPositionSignal.get() === null;
+      this.dragDeltaX = 0;
+      this.dragDeltaY = 0;
+      this.isDragCanvasAction = false;
+      this.isPinchAction = false;
+      this.touchStartX = e.clientX;
+      this.touchStartY = e.clientY;
+      this.isBrushPainting = isBrushModeSignal.get() && (e.pointerType === "mouse" || e.button === 0);
+      window.addEventListener("pointercancel", this.handlePointerUp);
+    } else if (this.activePointers.size === 2) {
+      this.isPinchAction = true;
+      this.isDragCanvasAction = true;
+      this.isBrushPainting = false;
+      
+      const pointers = Array.from(this.activePointers.values());
+      this.initialPinchDistance = Math.hypot(
+        pointers[0].clientX - pointers[1].clientX,
+        pointers[0].clientY - pointers[1].clientY
+      );
+      this.initialZoomScale = this.zoomScale;
+      
+      this.containerElement?.setPointerCapture(e.pointerId);
+    }
   };
 
   private handlePointerMove = (e: PointerEvent) => {
     // if there is no current artwork then nothing to do
     if (!this.artworkId) return;
 
-    if (this.isPointerDown) {
+    if (this.activePointers.has(e.pointerId)) {
+      this.activePointers.set(e.pointerId, e);
+    }
+
+    if (this.isPinchAction && this.activePointers.size === 2) {
+      e.preventDefault();
+      const pointers = Array.from(this.activePointers.values());
+      const currentDistance = Math.hypot(
+        pointers[0].clientX - pointers[1].clientX,
+        pointers[0].clientY - pointers[1].clientY
+      );
+      
+      if (this.initialPinchDistance) {
+        // Pinch zoom
+        const scaleFactor = currentDistance / this.initialPinchDistance;
+        let newZoom = this.initialZoomScale * scaleFactor;
+        
+        // We use the same precision limit as wheel zoom
+        const precision = Math.pow(10, newZoom <= 0.95 ? 2 : 1);
+        newZoom = clamp(Math.round(newZoom * precision) / precision, MIN_ZOOM, MAX_ZOOM);
+        
+        if (newZoom !== this.zoomScale) {
+          this.zoomScale = newZoom;
+          window.clearTimeout(this.wheelSpinningTimeoutId);
+          this.wheelSpinningTimeoutId = window.setTimeout(() => {
+            this.wheelSpinningTimeoutId = null;
+            zoomScaleSignal.set(this.zoomScale);
+          }, 150);
+        }
+        
+        // Update drag delta based on first pointer movement since pinch started
+        this.dragDeltaX = pointers[0].clientX - this.touchStartX;
+        this.dragDeltaY = pointers[0].clientY - this.touchStartY;
+      }
+    } else if (this.isPointerDown && !this.isPinchAction) {
       const dx = e.clientX - this.touchStartX;
       const dy = e.clientY - this.touchStartY;
       const distance = Math.hypot(dx, dy);
@@ -280,47 +337,59 @@ export class EaselBoard extends SignalElement {
   };
 
   private handlePointerUp = (e: PointerEvent) => {
-    if (this.isPointerDown) {
-      if (this.isDragCanvasAction) {
-        this.panX = this.clampPanX(this.panX + this.dragDeltaX, this.zoomScale);
-        this.panY = this.clampPanY(this.panY + this.dragDeltaY, this.zoomScale);
-      } else {
-        // was not drag action when the touch ended
-      }
+    this.activePointers.delete(e.pointerId);
+
+    if (this.activePointers.size === 1 && this.isPinchAction) {
+      const remainingPointer = Array.from(this.activePointers.values())[0];
+      this.touchStartX = remainingPointer.clientX - this.dragDeltaX;
+      this.touchStartY = remainingPointer.clientY - this.dragDeltaY;
+      this.isPinchAction = false;
+      return; 
     }
 
-    // down action did not necessarily start in this component
-    if (this.hoveredRegionId && !this.isDragCanvasAction) {
-      const activeColor = activeHighlightColorSignal.get();
-      if (activeColor) {
-        const dragDropColorPosition = draggedColorPositionSignal.get();
-        if (activeColor && (this.isPointerDown || dragDropColorPosition)) this.fillRegion(this.hoveredRegionId, activeColor);
-      } else {
-        // helpfully select the color of the clicked region
-        // but do nothing else incase the user forgot to tap on a color
+    if (this.activePointers.size === 0) {
+      if (this.isPointerDown) {
+        if (this.isDragCanvasAction) {
+          this.panX = this.clampPanX(this.panX + this.dragDeltaX, this.zoomScale);
+          this.panY = this.clampPanY(this.panY + this.dragDeltaY, this.zoomScale);
+        } else {
+          // was not drag action when the touch ended
+        }
+      }
+
+      // down action did not necessarily start in this component
+      if (this.hoveredRegionId && !this.isDragCanvasAction && !this.isPinchAction) {
+        const activeColor = activeHighlightColorSignal.get();
+        if (activeColor) {
+          const dragDropColorPosition = draggedColorPositionSignal.get();
+          if (activeColor && (this.isPointerDown || dragDropColorPosition)) this.fillRegion(this.hoveredRegionId, activeColor);
+        } else {
+          // helpfully select the color of the clicked region
+          // but do nothing else incase the user forgot to tap on a color
+          const currentArtwork = currentArtworkSignal.get();
+          activeHighlightColorSignal.set(currentArtwork.regionsCurrentFillInfo.get(this.hoveredRegionId) || TRANSPARENT_HEX);
+        }
+      } else if (this.isBrushPainting && this.brushTargetRegionId) {
+        // These should be disparate actions since the user can not drag the canvas in brush mode
+        // if the user was just done painting with brush strokes then save the art
         const currentArtwork = currentArtworkSignal.get();
-        activeHighlightColorSignal.set(currentArtwork.regionsCurrentFillInfo.get(this.hoveredRegionId) || TRANSPARENT_HEX);
+        saveCurrentArtworkProgress(currentArtwork);
       }
-    } else if (this.isBrushPainting && this.brushTargetRegionId) {
-      // These should be disparate actions since the user can not drag the canvas in brush mode
-      // if the user was just done painting with brush strokes then save the art
-      const currentArtwork = currentArtworkSignal.get();
-      saveCurrentArtworkProgress(currentArtwork);
+
+      this.isPointerDown = false;
+      this.touchStartX = null;
+      this.touchStartY = null;
+      this.isDragCanvasAction = false;
+      this.isPinchAction = false;
+      this.dragDeltaX = 0;
+      this.dragDeltaY = 0;
+      this.isBrushPainting = false;
+      this.brushTargetRegionId = null;
+      this.activeStrokeIdx = -1;
+      this.brushPositionBuffer = [];
+      this.containerElement?.releasePointerCapture(e.pointerId);
+      window.removeEventListener("pointercancel", this.handlePointerUp);
     }
-
-    this.isPointerDown = false;
-    this.touchStartX = null;
-    this.touchStartY = null;
-    this.isDragCanvasAction = false;
-    this.dragDeltaX = 0;
-    this.dragDeltaY = 0;
-    this.isBrushPainting = false;
-    this.brushTargetRegionId = null;
-    this.activeStrokeIdx = -1;
-    this.brushPositionBuffer = [];
-
-    this.containerElement?.releasePointerCapture(e.pointerId);
-    window.removeEventListener("pointercancel", this.handlePointerUp);
   };
 
   private handlePointerLeave = (e: PointerEvent) => {
