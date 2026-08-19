@@ -262,7 +262,9 @@ export class EaselBoard extends SignalElement {
       this.isPinchAction = false;
       this.touchStartX = e.clientX;
       this.touchStartY = e.clientY;
-      this.isBrushPainting = isBrushModeSignal.get() && (e.pointerType === "mouse" || e.button === 0);
+      const target = e.target as Element;
+      const isTargetSvg = target.closest("#fill-layer>svg") !== null;
+      this.isBrushPainting = isBrushModeSignal.get() && (e.pointerType === "mouse" || e.button === 0) && isTargetSvg;
 
       // Update hover region immediately on tap for quick fill actions before any move event fires
       if (this.artworkId) {
@@ -324,8 +326,7 @@ export class EaselBoard extends SignalElement {
       const distance = Math.hypot(dx, dy);
       const dragDistanceThresholdPx = 4;
 
-      const isBrushMode = isBrushModeSignal.get();
-      if (isBrushMode) {
+      if (this.isBrushPainting) {
         e.preventDefault();
         this.handleBrushPointerMove(e);
       } else if (!this.isDragCanvasAction && distance > dragDistanceThresholdPx) {
