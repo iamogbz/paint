@@ -652,12 +652,16 @@ export class EaselBoard extends SignalElement {
             const svgX = ((px - rect.left) / rect.width) * currentArtwork.width;
             const svgY = ((py - rect.top) / rect.height) * currentArtwork.height;
 
+            // Expand the bounding box check by an 8px physical screen distance to make hitting thin/small elements easier
+            const toleranceX = 8 * (currentArtwork.width / rect.width);
+            const toleranceY = 8 * (currentArtwork.height / rect.height);
+
             for (const nId of neighbors) {
               const nInfo = currentArtwork.regionsDrawingInfo.get(nId);
               if (nInfo && nInfo.fillColor === selectedColorHex && nInfo.boundingBox) {
                   const bb = nInfo.boundingBox;
-                  // Strictly check if the tapped point falls within the neighbor's mathematical bounding box
-                  if (svgX >= bb.x && svgX <= bb.x + bb.width && svgY >= bb.y && svgY <= bb.y + bb.height) {
+                  // Strictly check if the tapped point falls within the neighbor's mathematical bounding box (+ tolerance)
+                  if (svgX >= bb.x - toleranceX && svgX <= bb.x + bb.width + toleranceX && svgY >= bb.y - toleranceY && svgY <= bb.y + bb.height + toleranceY) {
                     const cx = bb.x + bb.width / 2;
                     const cy = bb.y + bb.height / 2;
                     const dist = Math.hypot(cx - svgX, cy - svgY);
