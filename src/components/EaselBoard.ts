@@ -467,10 +467,10 @@ export class EaselBoard extends SignalElement {
     const activeColor = activeHighlightColorSignal.get();
     if (!activeColor) return;
 
-    this.brushPositionBuffer.push({ x: e.clientX, y: e.clientY });
-
     const currentArtwork = currentArtworkSignal.get();
     if (!currentArtwork) return;
+
+    this.brushPositionBuffer.push({ x: e.clientX, y: e.clientY });
 
     const currentBrushRegionId = this.getRegionIdAtPoint(e.clientX, e.clientY);
     const currentBrushRegionExpectedColor = currentArtwork.regionsDrawingInfo.get(currentBrushRegionId)?.fillColor;
