@@ -217,18 +217,6 @@ export class EaselBoard extends SignalElement {
     }
   }
 
-  private updateTransformDirectly = () => {
-    const transformEl = this.querySelector<HTMLElement>("#easel-transform-element");
-    if (transformEl) {
-      transformEl.style.transform = this.getTransformCssProperty();
-      transformEl.style.transition = this.getTransitionCssProperty();
-    }
-    const container = this.querySelector<HTMLElement>("#main-frame-container");
-    if (container) {
-      container.style.pointerEvents = (this.isDragCanvasAction || this.isPinchAction) ? "none" : "auto";
-    }
-  };
-
   private handleWheel = (e: WheelEvent) => {
     window.clearTimeout(this.wheelSpinningTimeoutId);
     e.preventDefault();
@@ -348,6 +336,8 @@ export class EaselBoard extends SignalElement {
           });
         }
       }
+      this.hoveredRegionId = null;
+      this.updateArtwork();
     } else if (this.isPointerDown && !this.isPinchAction) {
       const dx = e.clientX - this.touchStartX;
       const dy = e.clientY - this.touchStartY;
@@ -370,6 +360,8 @@ export class EaselBoard extends SignalElement {
         if (!this.animationFrame) {
           this.animationFrame = window.requestAnimationFrame(() => {
             this.animationFrame = null;
+            this.hoveredRegionId = null;
+            this.updateArtwork();
             this.updateTransformDirectly();
           });
         }
@@ -378,8 +370,6 @@ export class EaselBoard extends SignalElement {
       if (e.pointerType === "mouse" || draggedColorPositionSignal.get() !== null) {
         this.updateHoverRegion(e);
       } else if (this.hoveredRegionId !== null) {
-        this.hoveredRegionId = null;
-        this.redrawArtboard();
       }
     }
   };
@@ -389,60 +379,58 @@ export class EaselBoard extends SignalElement {
     // in ghost touch / pinch states, especially after long brush strokes where events can be dropped.
     this.activePointers.clear();
 
-    if (true) {
-      if (this.isPointerDown) {
-        if (this.isDragCanvasAction) {
-          this.panX = this.clampPanX(this.panX + this.dragDeltaX, this.zoomScale);
-          this.panY = this.clampPanY(this.panY + this.dragDeltaY, this.zoomScale);
-          this.hoveredRegionId = null; // Reset hover after pan to drag
-        } else {
-          // was not drag action when the touch ended
-        }
+    if (this.isPointerDown) {
+      if (this.isDragCanvasAction) {
+        this.panX = this.clampPanX(this.panX + this.dragDeltaX, this.zoomScale);
+        this.panY = this.clampPanY(this.panY + this.dragDeltaY, this.zoomScale);
+        this.hoveredRegionId = null; // Reset hover after pan to drag
+      } else {
+        // was not drag action when the touch ended
       }
-
-      // down action did not necessarily start in this component
-      if (this.hoveredRegionId && !this.isDragCanvasAction && !this.isPinchAction) {
-        const activeColor = activeHighlightColorSignal.get();
-        if (activeColor) {
-          const dragDropColorPosition = draggedColorPositionSignal.get();
-          if (activeColor && (this.isPointerDown || dragDropColorPosition)) this.fillRegion(this.hoveredRegionId, activeColor);
-        } else {
-          // helpfully select the color of the clicked region
-          // but do nothing else incase the user forgot to tap on a color
-          const currentArtwork = currentArtworkSignal.get();
-          activeHighlightColorSignal.set(currentArtwork.regionsCurrentFillInfo.get(this.hoveredRegionId) || TRANSPARENT_HEX);
-        }
-      } else if (this.isBrushPainting && this.brushTargetRegionId) {
-        // These should be disparate actions since the user can not drag the canvas in brush mode
-        // if the user was just done painting with brush strokes then save the art
-        const currentArtwork = currentArtworkSignal.get();
-        saveCurrentArtworkProgress(currentArtwork);
-      }
-
-      this.isPointerDown = false;
-      this.touchStartX = null;
-      this.touchStartY = null;
-      this.isDragCanvasAction = false;
-      this.isPinchAction = false;
-      this.dragDeltaX = 0;
-      this.dragDeltaY = 0;
-      this.isBrushPainting = false;
-      this.brushTargetRegionId = null;
-      this.activeStrokeIdx = -1;
-      this.brushPositionBuffer = [];
-      try {
-        this.containerElement?.releasePointerCapture(e.pointerId);
-      } catch (err) {}
-      window.removeEventListener("pointercancel", this.handlePointerUp);
-      
-      // on mobile/touch screens, there is no persistent hover after the pointer is lifted
-      if (e.pointerType !== "mouse") {
-        this.hoveredRegionId = null;
-      }
-      
-      this.updateTransformDirectly();
-      this.redrawArtboard(); // trigger redraw at end of drag
     }
+
+    // down action did not necessarily start in this component
+    if (this.hoveredRegionId && !this.isDragCanvasAction && !this.isPinchAction) {
+      const activeColor = activeHighlightColorSignal.get();
+      if (activeColor) {
+        const dragDropColorPosition = draggedColorPositionSignal.get();
+        if (activeColor && (this.isPointerDown || dragDropColorPosition)) this.fillRegion(this.hoveredRegionId, activeColor);
+      } else {
+        // helpfully select the color of the clicked region
+        // but do nothing else incase the user forgot to tap on a color
+        const currentArtwork = currentArtworkSignal.get();
+        activeHighlightColorSignal.set(currentArtwork.regionsCurrentFillInfo.get(this.hoveredRegionId) || TRANSPARENT_HEX);
+      }
+    } else if (this.isBrushPainting && this.brushTargetRegionId) {
+      // These should be disparate actions since the user can not drag the canvas in brush mode
+      // if the user was just done painting with brush strokes then save the art
+      const currentArtwork = currentArtworkSignal.get();
+      saveCurrentArtworkProgress(currentArtwork);
+    }
+
+    this.isPointerDown = false;
+    this.touchStartX = null;
+    this.touchStartY = null;
+    this.isDragCanvasAction = false;
+    this.isPinchAction = false;
+    this.dragDeltaX = 0;
+    this.dragDeltaY = 0;
+    this.isBrushPainting = false;
+    this.brushTargetRegionId = null;
+    this.activeStrokeIdx = -1;
+    this.brushPositionBuffer = [];
+    try {
+      this.containerElement?.releasePointerCapture(e.pointerId);
+    } catch (err) {}
+    window.removeEventListener("pointercancel", this.handlePointerUp);
+    
+    // on mobile/touch screens, there is no persistent hover after the pointer is lifted
+    if (e.pointerType !== "mouse") {
+      this.hoveredRegionId = null;
+    }
+    
+    this.updateTransformDirectly();
+    this.updateArtwork(); // trigger redraw at end of drag
   };
 
   private handlePointerLeave = (e: PointerEvent) => {
@@ -450,7 +438,7 @@ export class EaselBoard extends SignalElement {
       this.updateHoverRegion(e);
     } else if (this.hoveredRegionId !== null) {
       this.hoveredRegionId = null;
-      this.redrawArtboard();
+      this.updateArtwork();
     }
   };
 
@@ -715,20 +703,14 @@ export class EaselBoard extends SignalElement {
     if (regionId !== null) {
       if (this.hoveredRegionId !== regionId) {
         this.hoveredRegionId = regionId;
-        this.redrawArtboard();
+        this.updateArtwork();
       }
       return;
     }
     if (this.hoveredRegionId !== null) {
       this.hoveredRegionId = null;
-      this.redrawArtboard();
+      this.updateArtwork();
     }
-  };
-
-  private redrawArtboard = () => {
-    this.requestUpdate();
-    // publish updates;
-    zoomScaleSignal.set(this.zoomScale);
   };
 
   get screenMaxSize() {
@@ -780,7 +762,7 @@ export class EaselBoard extends SignalElement {
     const isOutsideCanvas = !e.composedPath().includes(this.containerElement);
     if (isOutsideCanvas && this.hoveredRegionId !== null) {
       this.hoveredRegionId = null;
-      this.redrawArtboard();
+      this.updateArtwork();
     }
   };
 
@@ -800,7 +782,7 @@ export class EaselBoard extends SignalElement {
       if (colorHex) {
         activeHighlightColorSignal.set(colorHex);
       }
-      this.redrawArtboard();
+      this.updateArtwork();
     };
 
     (window as any).setRegionFill = (regionId: string, colorHex: string) => {
@@ -810,7 +792,22 @@ export class EaselBoard extends SignalElement {
 
   updated() {
     this.setupPointerListeners();
+    this.updateArtwork();
+  }
 
+  private updateTransformDirectly = () => {
+    const transformEl = this.querySelector<HTMLElement>("#easel-transform-element");
+    if (transformEl) {
+      transformEl.style.transform = this.getTransformCssProperty();
+      transformEl.style.transition = this.getTransitionCssProperty();
+    }
+    const container = this.querySelector<HTMLElement>("#main-frame-container");
+    if (container) {
+      container.style.pointerEvents = (this.isDragCanvasAction || this.isPinchAction) ? "none" : "auto";
+    }
+  };
+
+  private updateArtwork() {
     const fillLayer = document.getElementById("fill-layer");
     const guideLayer = document.getElementById("guide-layer");
     const activeColor = activeHighlightColorSignal.get();
@@ -820,7 +817,7 @@ export class EaselBoard extends SignalElement {
     if (!currentArtwork || !fillLayer) return;
     updateArtworkSvgWithUserPaints(fillLayer.querySelector("svg"), currentArtwork);
     // update the guide layer with current user interaction
-    currentArtwork?.regionsDrawingInfo.values().forEach((region) => {
+    currentArtwork?.regionsDrawingInfo.forEach((region) => {
       const expectedColorHex = region.fillColor;
 
       let stroke = "none";
