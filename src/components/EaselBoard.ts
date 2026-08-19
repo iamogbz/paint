@@ -286,6 +286,12 @@ export class EaselBoard extends SignalElement {
       this.touchStartY = e.clientY;
       this.isBrushPainting = isBrushModeSignal.get() && (e.pointerType === "mouse" || e.button === 0);
       this.cachedSvgRect = this.querySelector<SVGSVGElement>("#fill-layer>svg")?.getBoundingClientRect() || null;
+      
+      // Update hover region immediately on tap for quick fill actions before any move event fires
+      if (this.artworkId) {
+        this.updateHoverRegion(e);
+      }
+
       window.addEventListener("pointercancel", this.handlePointerUp);
     } else if (this.activePointers.size === 2) {
       this.isPinchAction = true;
@@ -643,12 +649,15 @@ export class EaselBoard extends SignalElement {
               const nInfo = currentArtwork.regionsDrawingInfo.get(nId);
               if (nInfo && nInfo.fillColor === selectedColorHex && nInfo.boundingBox) {
                   const bb = nInfo.boundingBox;
-                  const cx = bb.x + bb.width / 2;
-                  const cy = bb.y + bb.height / 2;
-                  const dist = Math.hypot(cx - svgX, cy - svgY);
-                  if (dist < minDistance) {
-                      minDistance = dist;
-                      closestRegion = nId;
+                  // Strictly check if the tapped point falls within the neighbor's mathematical bounding box
+                  if (svgX >= bb.x && svgX <= bb.x + bb.width && svgY >= bb.y && svgY <= bb.y + bb.height) {
+                    const cx = bb.x + bb.width / 2;
+                    const cy = bb.y + bb.height / 2;
+                    const dist = Math.hypot(cx - svgX, cy - svgY);
+                    if (dist < minDistance) {
+                        minDistance = dist;
+                        closestRegion = nId;
+                    }
                   }
               }
             }
