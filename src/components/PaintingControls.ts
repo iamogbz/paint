@@ -121,6 +121,12 @@ export class PaintingControls extends SignalElement {
   private handleSwatchPointerDown = (e: PointerEvent, hexCode: string) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
 
+    try {
+      if (e.target instanceof Element) {
+        e.target.releasePointerCapture(e.pointerId);
+      }
+    } catch (err) {}
+
     const activeColor = activeHighlightColorSignal.get();
     const isActive = activeColor === hexCode;
 

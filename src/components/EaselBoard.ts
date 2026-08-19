@@ -371,11 +371,13 @@ export class EaselBoard extends SignalElement {
         }
       }
     } else if (this.artworkId) {
-      if (e.pointerType === "mouse" || draggedColorPositionSignal.get() !== null) {
+      if (e.pointerType === "mouse") {
         this.updateHoverRegion(e);
       } else if (this.hoveredRegionId !== null) {
         // This could be a stylus hovering over and moving through regions
-        // do nothing until this condition is properly identified
+        // properly identify when this condition is met
+        this.hoveredRegionId = null;
+        this.updateArtwork();
       }
     }
   };
@@ -399,8 +401,7 @@ export class EaselBoard extends SignalElement {
     if (this.hoveredRegionId && !this.isDragCanvasAction && !this.isPinchAction) {
       const activeColor = activeHighlightColorSignal.get();
       if (activeColor) {
-        const dragDropColorPosition = draggedColorPositionSignal.get();
-        if (activeColor && (this.isPointerDown || dragDropColorPosition)) this.fillRegion(this.hoveredRegionId, activeColor);
+        if (this.isPointerDown) this.fillRegion(this.hoveredRegionId, activeColor);
       } else {
         // helpfully select the color of the clicked region
         // but do nothing else incase the user forgot to tap on a color
@@ -440,7 +441,7 @@ export class EaselBoard extends SignalElement {
   };
 
   private handlePointerLeave = (e: PointerEvent) => {
-    if (e.pointerType === "mouse" || draggedColorPositionSignal.get() !== null) {
+    if (e.pointerType === "mouse") {
       this.updateHoverRegion(e);
     } else if (this.hoveredRegionId !== null) {
       this.hoveredRegionId = null;
@@ -758,7 +759,26 @@ export class EaselBoard extends SignalElement {
     super.disconnectedCallback();
     window.removeEventListener("easel-pan-delta", this.handlePanDelta);
     window.removeEventListener("pointerdown", this.handleGlobalPointerDown);
+    window.removeEventListener("pointermove", this.handleGlobalDragMove);
+    window.removeEventListener("pointerup", this.handleGlobalDragUp);
   }
+
+  private handleGlobalDragMove = (e: PointerEvent) => {
+    if (draggedColorPositionSignal.get() !== null) {
+      this.updateHoverRegion(e);
+    }
+  };
+
+  private handleGlobalDragUp = (e: PointerEvent) => {
+    if (draggedColorPositionSignal.get() !== null) {
+      if (this.hoveredRegionId) {
+        const activeColor = activeHighlightColorSignal.get();
+        if (activeColor) {
+          this.fillRegion(this.hoveredRegionId, activeColor);
+        }
+      }
+    }
+  };
 
   private handleGlobalPointerDown = (e: PointerEvent) => {
     if (!this.containerElement) return;
@@ -775,6 +795,8 @@ export class EaselBoard extends SignalElement {
     this.setupPointerListeners();
     window.addEventListener("easel-pan-delta", this.handlePanDelta);
     window.addEventListener("pointerdown", this.handleGlobalPointerDown);
+    window.addEventListener("pointermove", this.handleGlobalDragMove);
+    window.addEventListener("pointerup", this.handleGlobalDragUp);
 
     (window as any).regionsByColors = () => {
       const currentArtwork = currentArtworkSignal.get();
