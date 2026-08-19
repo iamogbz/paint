@@ -593,9 +593,11 @@ export class EaselBoard extends SignalElement {
     const currentArtwork = currentArtworkSignal.get();
     if (!currentArtwork) return;
 
-    // bucket fills can not happen in brush mode
+    // Bucket fills from single taps cannot happen in brush mode,
+    // but dragging and dropping a color from the palette should ALWAYS apply a fill.
     const isBrushMode = isBrushModeSignal.get();
-    if (isBrushMode) return;
+    const isDragDrop = draggedColorPositionSignal.get() !== null;
+    if (isBrushMode && !isDragDrop) return;
 
     const currentColor = currentArtwork.regionsCurrentFillInfo.get(regionId);
     const expected = currentArtwork.regionsDrawingInfo.get(regionId).fillColor;
