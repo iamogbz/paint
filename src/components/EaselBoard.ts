@@ -682,10 +682,11 @@ export class EaselBoard extends SignalElement {
       const { fillColor: regionAExpectedColor, neighbourRegionIds: neighbors } = currentArtwork.regionsDrawingInfo.get(regionIdA);
       const regionACurrentFill = currentArtwork.regionsCurrentFillInfo.get(regionIdA);
 
+      const isAlreadyFilledWithAssignedColor = Boolean(regionACurrentFill && regionAExpectedColor && regionACurrentFill === regionAExpectedColor);
       const isAlreadyFilledWithActiveColor = regionACurrentFill === selectedColorHex;
       const isExpectedColorDifferent = regionAExpectedColor !== selectedColorHex;
 
-      if ((isExpectedColorDifferent || isAlreadyFilledWithActiveColor) && neighbors) {
+      if ((isExpectedColorDifferent || isAlreadyFilledWithActiveColor || isAlreadyFilledWithAssignedColor) && neighbors) {
         let closestRegion: string | null = null;
         let minDistance = Infinity;
 
