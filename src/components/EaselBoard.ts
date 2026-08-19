@@ -921,6 +921,9 @@ export class EaselBoard extends SignalElement {
   render() {
     activeHighlightColorSignal.get(); // Track dependency for repaints on color change
     const currentArtwork = currentArtworkSignal.get();
+    if (this.artworkId !== undefined && this.artworkId !== currentArtwork?.id) {
+      this.handlePanReset();
+    }
     this.artworkId = currentArtwork?.id;
     const isProcessing = isProcessingSignal.get();
     const processingSrc = processingImageSrcSignal.get();
