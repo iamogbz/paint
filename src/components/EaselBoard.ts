@@ -190,6 +190,7 @@ export class EaselBoard extends SignalElement {
   private brushPositionBuffer = [] as BrushStrokePaths[number][number]["points"];
 
   private previousUndoStackLength = 0;
+  private previousActiveColor: string | null = null;
 
   public triggerFilePicker = () => {
     if (this.isDragCanvasAction) return;
@@ -835,10 +836,16 @@ export class EaselBoard extends SignalElement {
   render() {
     const currentArtwork = currentArtworkSignal.get();
     const currentUndoStackLength = undoStackSignal.get().length;
+    const currentActiveColor = activeHighlightColorSignal.get();
+    
     if (currentUndoStackLength < this.previousUndoStackLength) {
       this.hoveredRegionId = null;
     }
+    if (this.previousActiveColor !== currentActiveColor) {
+      this.hoveredRegionId = null;
+    }
     this.previousUndoStackLength = currentUndoStackLength;
+    this.previousActiveColor = currentActiveColor;
 
     this.artworkId = currentArtwork?.id;
     const isProcessing = isProcessingSignal.get();
