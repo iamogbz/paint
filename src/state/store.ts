@@ -315,6 +315,17 @@ export function handleDeleteSwatchColor(color: string) {
       current.regionsCurrentFillInfo.set(regionId, PAINTABLE_REGION_HEX);
     }
   }
+
+  // Remove brush strokes painted with this color
+  if (current.brushStrokePaths) {
+    for (const regionId of Object.keys(current.brushStrokePaths)) {
+      current.brushStrokePaths[regionId] = current.brushStrokePaths[regionId].filter((stroke) => stroke.stroke !== hexCode);
+      if (current.brushStrokePaths[regionId].length === 0) {
+        delete current.brushStrokePaths[regionId];
+      }
+    }
+  }
+
   current.colorsAssignedToRegions.delete(hexCode);
 
   // If the active highlight color is this deleted color, deselect it
