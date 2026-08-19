@@ -1,7 +1,7 @@
 import { html, svg } from "lit";
 import { customElement } from "lit/decorators.js";
 import { SignalElement } from "../utils/SignalElement";
-import { currentArtworkSignal, isProcessingSignal, processingImageSrcSignal, processingImageWidthSignal, processingImageHeightSignal, activeHighlightColorSignal, dragToOpenFileSignal, zoomScaleSignal, handleImageSelected, handleSelectArtwork, draggedColorPositionSignal, pushUndoState, saveCurrentArtworkProgress, footerStyleSignal, isBrushModeSignal, artworksSignal, artworkIdsSortedSignal, panDragActiveSignal } from "../state/store";
+import { currentArtworkSignal, isProcessingSignal, processingImageSrcSignal, processingImageWidthSignal, processingImageHeightSignal, activeHighlightColorSignal, dragToOpenFileSignal, zoomScaleSignal, handleImageSelected, handleSelectArtwork, draggedColorPositionSignal, pushUndoState, saveCurrentArtworkProgress, footerStyleSignal, isBrushModeSignal, artworksSignal, artworkIdsSortedSignal, panDragActiveSignal, undoStackSignal } from "../state/store";
 import { getDailyChallenge } from "../data/dailyChallenge";
 import { soundEffects } from "../utils/soundEffects";
 import { iconImage, iconUpload, iconPaintBucket } from "./icons";
@@ -188,6 +188,8 @@ export class EaselBoard extends SignalElement {
   private activeStrokeIdx = -1;
   // faster buffering of painted paths without waiting for save logic
   private brushPositionBuffer = [] as BrushStrokePaths[number][number]["points"];
+
+  private previousUndoStackLength = 0;
 
   public triggerFilePicker = () => {
     if (this.isDragCanvasAction) return;
@@ -827,6 +829,12 @@ export class EaselBoard extends SignalElement {
 
   render() {
     const currentArtwork = currentArtworkSignal.get();
+    const currentUndoStackLength = undoStackSignal.get().length;
+    if (currentUndoStackLength < this.previousUndoStackLength) {
+      this.hoveredRegionId = null;
+    }
+    this.previousUndoStackLength = currentUndoStackLength;
+
     this.artworkId = currentArtwork?.id;
     const isProcessing = isProcessingSignal.get();
     const processingSrc = processingImageSrcSignal.get();

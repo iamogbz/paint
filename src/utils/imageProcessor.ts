@@ -263,6 +263,13 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
   renderNode.querySelectorAll("style").forEach((elem) => elem.remove());
   // remove all other elements from the perserved SVG
   renderNode.querySelectorAll(`*:not([${PRESERVE_ELEMENT_MARKER}]`).forEach((elem) => elem.remove());
+  
+  if (!renderNode.hasAttribute("viewBox")) {
+    const w = renderNode.getAttribute("width") || processingImageWidthSignal.get();
+    const h = renderNode.getAttribute("height") || processingImageHeightSignal.get();
+    renderNode.setAttribute("viewBox", `0 0 ${parseFloat(String(w))} ${parseFloat(String(h))}`);
+  }
+  
   // ensure final svg scales to container;
   renderNode.setAttribute("height", "100%");
   renderNode.setAttribute("width", "100%");
