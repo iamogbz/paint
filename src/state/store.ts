@@ -5,7 +5,7 @@ import { processImageToCartoonPalette } from "../utils/imageProcessor";
 import { soundEffects } from "../utils/soundEffects";
 import confetti from "canvas-confetti";
 import { copyMapSet, deepCopy } from "../utils/object";
-import { TRANSPARENT_HEX, PAINTABLE_REGION_HEX } from "../utils/constants";
+import { TRANSPARENT_HEX, PAINTABLE_REGION_HEX, FALLBACK_IMAGE_SIZE_PX } from "../utils/constants";
 import { normalizeHex } from "../utils/color";
 
 const STORAGE_KEY_ALL_ARTWORKS = "paint_part_sd_artworks_v1";
@@ -57,23 +57,126 @@ export const footerStyleSignal = computed(() => ({
 // Storage Helpers
 export async function loadSavedArtworks() {
   try {
+    let idbData: any = await get(STORAGE_KEY_ALL_ARTWORKS);
+
     // Migrate from localStorage if it exists to avoid data loss
     const localSaved = localStorage.getItem(STORAGE_KEY_ALL_ARTWORKS);
     if (localSaved) {
-      const parsed: ProcessedArtwork[] = JSON.parse(localSaved);
-      await set(STORAGE_KEY_ALL_ARTWORKS, parsed);
+      try {
+        const parsed = JSON.parse(localSaved);
+        if (!idbData) {
+          idbData = parsed;
+        }
+      } catch (e) {
+        // ignore invalid JSON
+      }
       localStorage.removeItem(STORAGE_KEY_ALL_ARTWORKS);
     }
 
-    const parsed = await get<Map<string, ProcessedArtwork>>(STORAGE_KEY_ALL_ARTWORKS);
-    if (parsed && parsed.size > 0) {
-      const sorted = Array.from(parsed.keys()).sort((a, b) => (parsed.get(b).modifiedAt || 0) - (parsed.get(a).modifiedAt || 0));
+    const validArtworksMap = migrateAndValidateArtworks(idbData);
+
+    if (validArtworksMap.size > 0) {
+      const sorted = Array.from(validArtworksMap.keys()).sort((a, b) => (validArtworksMap.get(b)!.modifiedAt || 0) - (validArtworksMap.get(a)!.modifiedAt || 0));
       artworkIdsSortedSignal.set(sorted);
-      artworksSignal.set(parsed);
+      artworksSignal.set(validArtworksMap);
+      
+      // Save fixed structure back to IDB
+      set(STORAGE_KEY_ALL_ARTWORKS, validArtworksMap).catch(() => {});
     }
   } catch (e) {
     console.warn("Could not restore saved artworks from idb", e);
   }
+}
+
+function migrateAndValidateArtworks(rawData: any): Map<string, ProcessedArtwork> {
+  const result = new Map<string, ProcessedArtwork>();
+  if (!rawData) return result;
+
+  let items: any[] = [];
+  if (rawData instanceof Map) {
+    items = Array.from(rawData.values());
+  } else if (Array.isArray(rawData)) {
+    items = rawData;
+  } else if (typeof rawData === "object") {
+    items = Object.values(rawData);
+  }
+
+  for (const item of items) {
+    try {
+      if (!item || typeof item !== "object" || !item.id) {
+        continue;
+      }
+
+      const artwork: ProcessedArtwork = {
+        id: item.id,
+        name: item.name || "Untitled",
+        originalDataUrl: item.originalDataUrl || "",
+        cartoonDataUrl: item.cartoonDataUrl || "",
+        cartoonSVG: item.cartoonSVG || "",
+        width: item.width || FALLBACK_IMAGE_SIZE_PX,
+        height: item.height || FALLBACK_IMAGE_SIZE_PX,
+        createdAt: item.createdAt || Date.now(),
+        modifiedAt: item.modifiedAt || Date.now(),
+        colorsAssignedToRegions: migrateMapOfSets(item.colorsAssignedToRegions),
+        colorsFilledInRegions: migrateMapOfSets(item.colorsFilledInRegions),
+        regionsCurrentFillInfo: migrateMapOfStrings(item.regionsCurrentFillInfo),
+        regionsDrawingInfo: migrateRegionsDrawingInfo(item.regionsDrawingInfo),
+        brushStrokePaths: item.brushStrokePaths && typeof item.brushStrokePaths === "object" ? item.brushStrokePaths : {},
+      };
+
+      result.set(artwork.id, artwork);
+    } catch (err) {
+      console.warn(`Failed to migrate artwork ${item?.id}`, err);
+    }
+  }
+
+  return result;
+}
+
+function migrateMapOfSets(data: any): Map<string, Set<string>> {
+  const map = new Map<string, Set<string>>();
+  if (!data || typeof data !== "object") return map;
+  
+  const entries = data instanceof Map ? data.entries() : Object.entries(data);
+  for (const [key, value] of entries) {
+    if (value instanceof Set) {
+      map.set(key, value);
+    } else if (Array.isArray(value)) {
+      map.set(key, new Set(value));
+    } else {
+      map.set(key, new Set());
+    }
+  }
+  return map;
+}
+
+function migrateMapOfStrings(data: any): Map<string, string> {
+  const map = new Map<string, string>();
+  if (!data || typeof data !== "object") return map;
+  
+  const entries = data instanceof Map ? data.entries() : Object.entries(data);
+  for (const [key, value] of entries) {
+    map.set(key, String(value));
+  }
+  return map;
+}
+
+function migrateRegionsDrawingInfo(data: any): Map<string, any> {
+  const map = new Map<string, any>();
+  if (!data || typeof data !== "object") return map;
+  
+  const entries = data instanceof Map ? data.entries() : Object.entries(data);
+  for (const [key, value] of entries) {
+    if (value && typeof value === "object") {
+      map.set(key, {
+        ...value,
+        neighbourRegionIds: value.neighbourRegionIds instanceof Set 
+          ? value.neighbourRegionIds 
+          : new Set(Array.isArray(value.neighbourRegionIds) ? value.neighbourRegionIds : [])
+      });
+    }
+  }
+  return map;
 }
 
 /**
