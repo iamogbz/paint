@@ -491,13 +491,10 @@ export class EaselBoard extends SignalElement {
     const rect = this.cachedSvgRect;
     if (!rect) return;
 
-    // clear the buffer now that the element has been found to place the stroke path
-    const strokePoints = this.brushPositionBuffer.splice(0).map((pos) => ({
-      x: ((pos.x - rect.left) / rect.width) * currentArtwork.width,
-      y: ((pos.y - rect.top) / rect.height) * currentArtwork.height,
-    }));
+    // ALWAYS clear the buffer unconditionally to prevent memory leaks and jumping strokes 
+    // when dragging the cursor across invalid colored regions
+    const rawPoints = this.brushPositionBuffer.splice(0);
 
-    // Find the region under the pointer using getRegionIdAtPoint
     const currentBrushRegionId = this.getRegionIdAtPoint(e.clientX, e.clientY);
     const currentBrushRegionExpectedColor = currentArtwork.regionsDrawingInfo.get(currentBrushRegionId)?.fillColor;
     const currentBrushRegionCurrentColor = currentArtwork.regionsCurrentFillInfo.get(currentBrushRegionId);
@@ -519,6 +516,12 @@ export class EaselBoard extends SignalElement {
           // Reset active stroke index when moving to a different region with the same expected color
           this.activeStrokeIdx = -1;
         }
+
+        // map the valid points into SVG space
+        const strokePoints = rawPoints.map((pos) => ({
+          x: ((pos.x - rect.left) / rect.width) * currentArtwork.width,
+          y: ((pos.y - rect.top) / rect.height) * currentArtwork.height,
+        }));
 
         // do not bother starting a new stroke if there are no points for it
         if (strokePoints.length > 0) {
