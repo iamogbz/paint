@@ -1,11 +1,11 @@
 import { html, svg } from "lit";
 import { customElement } from "lit/decorators.js";
 import { SignalElement } from "../utils/SignalElement";
-import { currentArtworkSignal, isProcessingSignal, processingImageSrcSignal, processingImageWidthSignal, processingImageHeightSignal, activeHighlightColorSignal, dragToOpenFileSignal, zoomScaleSignal, handleImageSelected, handleSelectArtwork, draggedColorPositionSignal, pushUndoState, saveCurrentArtworkProgress, footerStyleSignal, isBrushModeSignal, artworksSignal, artworkIdsSortedSignal, panDragActiveSignal, undoStackSignal } from "../state/store";
+import { currentArtworkSignal, isProcessingSignal, processingImageSrcSignal, processingImageWidthSignal, processingImageHeightSignal, activeHighlightColorSignal, dragToOpenFileSignal, zoomScaleSignal, handleImageSelected, handleSelectArtwork, draggedColorPositionSignal, pushUndoState, saveCurrentArtworkProgress, footerStyleSignal, isBrushModeSignal, artworksSignal, artworkIdsSortedSignal, panDragActiveSignal } from "../state/store";
 import { getDailyChallenge } from "../data/dailyChallenge";
 import { soundEffects } from "../utils/soundEffects";
 import { iconImage, iconUpload, iconPaintBucket } from "./icons";
-import { BASE_BRUSH_RADIUS, FALLBACK_IMAGE_SIZE_PX, FILLABLE_SVG_ELEMENTS, TRANSPARENT_HEX, transparentImgCss, MIN_ZOOM, MAX_ZOOM } from "../utils/constants";
+import { BASE_BRUSH_RADIUS, FALLBACK_IMAGE_SIZE_PX, FILLABLE_SVG_ELEMENTS, TRANSPARENT_HEX, transparentImgCss } from "../utils/constants";
 import { normalizeHex } from "../utils/color";
 import { BrushStrokePaths } from "../types";
 import { clamp, zoom } from "../utils/ui";
@@ -158,8 +158,8 @@ function eraseFromStrokesList(
 @customElement("easel-board")
 export class EaselBoard extends SignalElement {
   private containerElement: HTMLElement | null = null;
-  // TODO: what is this even needed for?
-  private animationFrame: number = null;
+  private requestedTransformAnimationFrame: number = null;
+  private requestedRepaintAnimationFrame: number = null;
 
   // Interactive Canvas State
   private artworkId: string = null;
@@ -249,15 +249,7 @@ export class EaselBoard extends SignalElement {
       }, 150);
     }
 
-    if (this.animationFrame) {
-      return;
-    }
-    this.animationFrame = window.requestAnimationFrame(() => {
-      this.animationFrame = null;
-      this.updateTransformDirectly();
-      // Only set signal to keep values in sync, no redraw
-      zoomScaleSignal.set(this.zoomScale);
-    });
+    this.updateTransformDirectly();
   };
 
   private handlePointerDown = (e: PointerEvent) => {
@@ -274,7 +266,7 @@ export class EaselBoard extends SignalElement {
       this.touchStartY = e.clientY;
       this.isBrushPainting = isBrushModeSignal.get() && (e.pointerType === "mouse" || e.button === 0);
       this.cachedSvgRect = this.querySelector<SVGSVGElement>("#fill-layer>svg")?.getBoundingClientRect() || null;
-      
+
       // Update hover region immediately on tap for quick fill actions before any move event fires
       if (this.artworkId) {
         this.updateHoverRegion(e);
@@ -327,14 +319,7 @@ export class EaselBoard extends SignalElement {
         // Update drag delta based on first pointer movement since pinch started
         this.dragDeltaX = pointers[0].clientX - this.touchStartX;
         this.dragDeltaY = pointers[0].clientY - this.touchStartY;
-
-        if (!this.animationFrame) {
-          this.animationFrame = window.requestAnimationFrame(() => {
-            this.animationFrame = null;
-            this.updateTransformDirectly();
-            zoomScaleSignal.set(this.zoomScale);
-          });
-        }
+        this.updateTransformDirectly();
       }
       if (this.hoveredRegionId !== null) {
         this.hoveredRegionId = null;
@@ -359,15 +344,10 @@ export class EaselBoard extends SignalElement {
       if (this.isDragCanvasAction) {
         this.dragDeltaX = dx;
         this.dragDeltaY = dy;
-        if (!this.animationFrame) {
-          this.animationFrame = window.requestAnimationFrame(() => {
-            this.animationFrame = null;
-            this.updateTransformDirectly();
-            if (this.hoveredRegionId !== null) {
-              this.hoveredRegionId = null;
-              this.updateArtwork();
-            }
-          });
+        this.updateTransformDirectly();
+        if (this.hoveredRegionId !== null) {
+          this.hoveredRegionId = null;
+          this.updateArtwork();
         }
       }
     } else if (this.artworkId) {
@@ -430,12 +410,12 @@ export class EaselBoard extends SignalElement {
       this.containerElement?.releasePointerCapture(e.pointerId);
     } catch (err) {}
     window.removeEventListener("pointercancel", this.handlePointerUp);
-    
+
     // on mobile/touch screens, there is no persistent hover after the pointer is lifted
-    if (e.pointerType !== "mouse") {
+    if (e.pointerType !== "mouse" && draggedColorPositionSignal.get() === null) {
       this.hoveredRegionId = null;
     }
-    
+
     this.updateTransformDirectly();
     this.updateArtwork(); // update render state at the end of drag
   };
@@ -455,11 +435,7 @@ export class EaselBoard extends SignalElement {
     this.dragDeltaY = 0;
     this.panX += e?.detail.dx ?? 0;
     this.panY += e?.detail.dy ?? 0;
-    if (this.animationFrame) return;
-    this.animationFrame = window.requestAnimationFrame(() => {
-      this.animationFrame = null;
-      this.updateTransformDirectly();
-    });
+    this.updateTransformDirectly();
   };
 
   private handleBrushPointerMove = (e: PointerEvent) => {
@@ -503,20 +479,20 @@ export class EaselBoard extends SignalElement {
         }
 
         const boundingBox = currentArtwork.regionsDrawingInfo.get(currentBrushRegionId)?.boundingBox;
-        
+
         // clear the buffer now that we can use it, filtering out any accumulated points that fall outside the target region's bounding box
-        const strokePoints = this.brushPositionBuffer.splice(0).map((pos) => ({
-          x: ((pos.x - rect.left) / rect.width) * currentArtwork.width,
-          y: ((pos.y - rect.top) / rect.height) * currentArtwork.height,
-        })).filter(pos => {
+        const strokePoints = this.brushPositionBuffer
+          .splice(0)
+          .map((pos) => ({
+            x: ((pos.x - rect.left) / rect.width) * currentArtwork.width,
+            y: ((pos.y - rect.top) / rect.height) * currentArtwork.height,
+          }))
+          .filter((pos) => {
             if (!boundingBox) return true;
             // Expand the bounding box slightly for the filter to avoid dropping points just on the edge
             const tolerance = 4 * (currentArtwork.width / rect.width);
-            return pos.x >= boundingBox.x - tolerance && 
-                   pos.x <= boundingBox.x + boundingBox.width + tolerance && 
-                   pos.y >= boundingBox.y - tolerance && 
-                   pos.y <= boundingBox.y + boundingBox.height + tolerance;
-        });
+            return pos.x >= boundingBox.x - tolerance && pos.x <= boundingBox.x + boundingBox.width + tolerance && pos.y >= boundingBox.y - tolerance && pos.y <= boundingBox.y + boundingBox.height + tolerance;
+          });
 
         // do not bother starting a new stroke if there are no points for it
         if (strokePoints.length > 0) {
@@ -655,45 +631,45 @@ export class EaselBoard extends SignalElement {
 
         // Use cached svg rect or compute once
         if (!this.cachedSvgRect) {
-            this.cachedSvgRect = this.querySelector<SVGSVGElement>("#fill-layer>svg")?.getBoundingClientRect() || null;
+          this.cachedSvgRect = this.querySelector<SVGSVGElement>("#fill-layer>svg")?.getBoundingClientRect() || null;
         }
         const rect = this.cachedSvgRect;
-        
+
         if (rect) {
-            const svgX = ((px - rect.left) / rect.width) * currentArtwork.width;
-            const svgY = ((py - rect.top) / rect.height) * currentArtwork.height;
+          const svgX = ((px - rect.left) / rect.width) * currentArtwork.width;
+          const svgY = ((py - rect.top) / rect.height) * currentArtwork.height;
 
-            // Expand the bounding box check by an 8px physical screen distance to make hitting thin/small elements easier
-            const toleranceX = 8 * (currentArtwork.width / rect.width);
-            const toleranceY = 8 * (currentArtwork.height / rect.height);
-            let minArea = Infinity;
+          // Expand the bounding box check by an 8px physical screen distance to make hitting thin/small elements easier
+          const toleranceX = 8 * (currentArtwork.width / rect.width);
+          const toleranceY = 8 * (currentArtwork.height / rect.height);
+          let minArea = Infinity;
 
-            for (const nId of neighbors) {
-              const nInfo = currentArtwork.regionsDrawingInfo.get(nId);
-              if (nInfo && nInfo.fillColor === selectedColorHex && nInfo.boundingBox) {
-                  const bb = nInfo.boundingBox;
-                  // Strictly check if the tapped point falls within the neighbor's mathematical bounding box (+ tolerance)
-                  if (svgX >= bb.x - toleranceX && svgX <= bb.x + bb.width + toleranceX && svgY >= bb.y - toleranceY && svgY <= bb.y + bb.height + toleranceY) {
-                    const cx = bb.x + bb.width / 2;
-                    const cy = bb.y + bb.height / 2;
-                    const dist = Math.hypot(cx - svgX, cy - svgY);
-                    const area = bb.width * bb.height;
-                    
-                    // We strongly prefer the smaller shape to make it easier to hit fine details
-                    // Only fallback to distance if areas are functionally identical
-                    const isSignificantlySmallerArea = area < minArea * 0.8;
-                    const isSimilarAreaButCloser = Math.abs(area - minArea) / minArea <= 0.2 && dist < minDistance;
+          for (const nId of neighbors) {
+            const nInfo = currentArtwork.regionsDrawingInfo.get(nId);
+            if (nInfo && nInfo.fillColor === selectedColorHex && nInfo.boundingBox) {
+              const bb = nInfo.boundingBox;
+              // Strictly check if the tapped point falls within the neighbor's mathematical bounding box (+ tolerance)
+              if (svgX >= bb.x - toleranceX && svgX <= bb.x + bb.width + toleranceX && svgY >= bb.y - toleranceY && svgY <= bb.y + bb.height + toleranceY) {
+                const cx = bb.x + bb.width / 2;
+                const cy = bb.y + bb.height / 2;
+                const dist = Math.hypot(cx - svgX, cy - svgY);
+                const area = bb.width * bb.height;
 
-                    if (isSignificantlySmallerArea || isSimilarAreaButCloser) {
-                        minArea = area;
-                        minDistance = dist;
-                        closestRegion = nId;
-                    }
-                  }
+                // We strongly prefer the smaller shape to make it easier to hit fine details
+                // Only fallback to distance if areas are functionally identical
+                const isSignificantlySmallerArea = area < minArea * 0.8;
+                const isSimilarAreaButCloser = Math.abs(area - minArea) / minArea <= 0.2 && dist < minDistance;
+
+                if (isSignificantlySmallerArea || isSimilarAreaButCloser) {
+                  minArea = area;
+                  minDistance = dist;
+                  closestRegion = nId;
+                }
               }
             }
+          }
         }
-        
+
         if (closestRegion !== null) {
           return closestRegion;
         }
@@ -777,12 +753,18 @@ export class EaselBoard extends SignalElement {
           this.fillRegion(this.hoveredRegionId, activeColor);
         }
       }
+      
+      // Clear hover state on mobile after dropping, since there's no persistent mouse cursor
+      if (e.pointerType !== "mouse" && this.hoveredRegionId !== null) {
+        this.hoveredRegionId = null;
+        this.updateArtwork();
+      }
     }
   };
 
   private handleGlobalPointerDown = (e: PointerEvent) => {
     if (!this.containerElement) return;
-    
+
     // Check if the tap happened outside the canvas container
     const isOutsideCanvas = !e.composedPath().includes(this.containerElement);
     if (isOutsideCanvas && this.hoveredRegionId !== null) {
@@ -822,78 +804,91 @@ export class EaselBoard extends SignalElement {
     this.updateArtwork();
   }
 
-  private updateTransformDirectly = () => {
-    const transformEl = this.querySelector<HTMLElement>("#easel-transform-element");
-    if (transformEl) {
-      transformEl.style.transform = this.getTransformCssProperty();
-      transformEl.style.transition = this.getTransitionCssProperty();
+  private updateTransformDirectly = async () => {
+    if (this.requestedTransformAnimationFrame !== null) {
+      window.cancelAnimationFrame(this.requestedTransformAnimationFrame);
     }
-    const container = this.querySelector<HTMLElement>("#main-frame-container");
-    if (container) {
-      container.style.pointerEvents = (this.isDragCanvasAction || this.isPinchAction) ? "none" : "auto";
-    }
+    this.requestedTransformAnimationFrame = window.requestAnimationFrame(() => {
+      this.requestedTransformAnimationFrame = null;
+      const transformEl = this.querySelector<HTMLElement>("#easel-transform-element");
+      if (transformEl) {
+        transformEl.style.transform = this.getTransformCssProperty();
+        transformEl.style.transition = this.getTransitionCssProperty();
+      }
+      const container = this.querySelector<HTMLElement>("#main-frame-container");
+      if (container) {
+        container.style.pointerEvents = this.isDragCanvasAction || this.isPinchAction ? "none" : "auto";
+      }
+    });
   };
 
-  private updateArtwork() {
-    const fillLayer = document.getElementById("fill-layer");
-    const guideLayer = document.getElementById("guide-layer");
-    const activeColor = activeHighlightColorSignal.get();
-    const currentArtwork = currentArtworkSignal.get();
+  private updateArtwork = () => {
+    if (this.requestedRepaintAnimationFrame !== null) {
+      window.cancelAnimationFrame(this.requestedRepaintAnimationFrame);
+    }
 
-    // update the artwork to show the current paint interaction state
-    if (!currentArtwork || !fillLayer) return;
-    updateArtworkSvgWithUserPaints(fillLayer.querySelector("svg"), currentArtwork);
-    // update the guide layer with current user interaction
-    currentArtwork?.regionsDrawingInfo.forEach((region) => {
-      const expectedColorHex = region.fillColor;
+    this.requestedRepaintAnimationFrame = window.requestAnimationFrame(() => {
+      this.requestedRepaintAnimationFrame = null;
+      const fillLayer = document.getElementById("fill-layer");
+      const guideLayer = document.getElementById("guide-layer");
+      const activeColor = activeHighlightColorSignal.get();
+      const currentArtwork = currentArtworkSignal.get();
 
-      let stroke = "none";
-      let strokeWidth = 0;
-      let mixBlendMode = "normal";
+      // update the artwork to show the current paint interaction state
+      if (!currentArtwork || !fillLayer) return;
+      updateArtworkSvgWithUserPaints(fillLayer.querySelector("svg"), currentArtwork);
+      // update the guide layer with current user interaction
+      currentArtwork?.regionsDrawingInfo.forEach((region) => {
+        const expectedColorHex = region.fillColor;
 
-      const baseStrokeWidth = Math.max(1, currentArtwork.width / 400 / this.zoomScale);
+        let stroke = "none";
+        let strokeWidth = 0;
+        let mixBlendMode = "normal";
 
-      const targetHexUpper = normalizeHex(activeColor);
-      const expectedHexUpper = normalizeHex(expectedColorHex);
-      const currentHexUpper = fillLayer.querySelector(`[data-region-id="${region.id}"]`).getAttribute("fill").toUpperCase();
+        const baseStrokeWidth = Math.max(1, currentArtwork.width / 400 / this.zoomScale);
 
-      const activeBrushTargetColor = this.brushTargetRegionId ? normalizeHex(currentArtwork.regionsDrawingInfo.get(this.brushTargetRegionId)?.fillColor) : null;
-      const isTarget = (!!targetHexUpper && expectedHexUpper === targetHexUpper) || (!!activeBrushTargetColor && expectedHexUpper === activeBrushTargetColor);
-      const isPaintedCorrect = !!currentHexUpper && currentHexUpper === expectedHexUpper;
-      const isPaintedWrong = !!currentHexUpper && currentHexUpper !== expectedHexUpper;
-      const isHovered = region.id === this.hoveredRegionId || region.id === this.brushTargetRegionId;
-      strokeWidth = baseStrokeWidth * (isPaintedWrong ? 1.2 : 1.0);
+        const targetHexUpper = normalizeHex(activeColor);
+        const expectedHexUpper = normalizeHex(expectedColorHex);
+        const currentHexUpper = fillLayer.querySelector(`[data-region-id="${region.id}"]`).getAttribute("fill").toUpperCase();
 
-      if (isHovered) {
-        const isTransparentPaintFill = targetHexUpper.substring(7) === "00";
-        stroke = isTransparentPaintFill ? "#FFFFFF" : activeColor || "#000000";
-        mixBlendMode = isTransparentPaintFill ? "difference" : "normal";
-      } else {
-        if (isTarget) {
-          if (isPaintedCorrect) {
-            stroke = "none";
-            strokeWidth = 0;
-            mixBlendMode = "normal";
-          } else {
-            // TODO: fix issue where sometimes blend mode difference does not work
-            stroke = "#000000";
-            // use is painted wrong stroke width
+        const activeBrushTargetColor = this.brushTargetRegionId ? normalizeHex(currentArtwork.regionsDrawingInfo.get(this.brushTargetRegionId)?.fillColor) : null;
+        const isTarget = (!!targetHexUpper && expectedHexUpper === targetHexUpper) || (!!activeBrushTargetColor && expectedHexUpper === activeBrushTargetColor);
+        const isPaintedCorrect = !!currentHexUpper && currentHexUpper === expectedHexUpper;
+        const isPaintedWrong = !!currentHexUpper && currentHexUpper !== expectedHexUpper;
+        const isHovered = region.id === this.hoveredRegionId || region.id === this.brushTargetRegionId;
+        strokeWidth = baseStrokeWidth * (isPaintedWrong ? 1.2 : 1.0);
+
+        if (isHovered) {
+          const isTransparentPaintFill = targetHexUpper.substring(7) === "00";
+          stroke = isTransparentPaintFill ? "#FFFFFF" : activeColor || "#000000";
+          mixBlendMode = isTransparentPaintFill ? "difference" : "normal";
+        } else {
+          if (isTarget) {
+            if (isPaintedCorrect) {
+              stroke = "none";
+              strokeWidth = 0;
+              mixBlendMode = "normal";
+            } else {
+              // TODO: fix issue where sometimes blend mode difference does not work
+              stroke = "#000000";
+              // use is painted wrong stroke width
+              mixBlendMode = "normal";
+            }
+          } else if (!this.hoveredRegionId && !targetHexUpper) {
+            stroke = "#00000088";
+            strokeWidth = baseStrokeWidth;
             mixBlendMode = "normal";
           }
-        } else if (!this.hoveredRegionId && !targetHexUpper) {
-          stroke = "#00000088";
-          strokeWidth = baseStrokeWidth;
-          mixBlendMode = "normal";
         }
-      }
 
-      const guideElem = guideLayer.querySelector(`[data-region-id=${region.id}]`) as SVGElement;
-      guideElem.setAttribute("fill", "none");
-      guideElem.setAttribute("stroke", stroke);
-      guideElem.setAttribute("stroke-width", strokeWidth.toString());
-      guideElem.style.mixBlendMode = mixBlendMode;
+        const guideElem = guideLayer.querySelector(`[data-region-id=${region.id}]`) as SVGElement;
+        guideElem.setAttribute("fill", "none");
+        guideElem.setAttribute("stroke", stroke);
+        guideElem.setAttribute("stroke-width", strokeWidth.toString());
+        guideElem.style.mixBlendMode = mixBlendMode;
+      });
     });
-  }
+  };
 
   render() {
     const currentArtwork = currentArtworkSignal.get();
