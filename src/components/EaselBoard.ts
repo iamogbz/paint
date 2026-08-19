@@ -420,28 +420,40 @@ export class EaselBoard extends SignalElement {
     this.updateTransformDirectly();
   };
 
-  private getSvgCoordinates(px: number, py: number): { x: number; y: number; scaleX: number; scaleY: number } | null {
+  private getSvgCoordinates(px: number, py: number, zoomScale: number): { x: number; y: number; scaleX: number; scaleY: number } | null {
     const svg = this.querySelector<SVGSVGElement>("#fill-layer>svg");
     if (!svg) return null;
 
-    // Use a graphics element inside the SVG to ensure viewBox scaling is included in the CTM.
-    // If we use the root <svg> element, getScreenCTM() maps only to its CSS layout pixels in most browsers.
-    const graphicsElement = svg.querySelector<SVGGraphicsElement>("path, g, rect, circle, polygon, polyline") || svg;
+    const currentArtwork = currentArtworkSignal.get();
+    if (!currentArtwork) return null;
 
-    const ctm = graphicsElement.getScreenCTM();
+    const ctm = svg.getScreenCTM();
     if (!ctm) return null;
 
     const pt = svg.createSVGPoint();
     pt.x = px;
     pt.y = py;
-    const svgP = pt.matrixTransform(ctm.inverse());
+    
+    // ctm.inverse() maps screen coordinates to the SVG's CSS layout coordinates
+    const cssP = pt.matrixTransform(ctm.inverse());
 
-    // Scale factor to convert 1 physical screen pixel into SVG coordinate distance
-    // ctm.inverse().a is the X scale (svg_width / screen_width)
-    const scaleX = Math.abs(ctm.inverse().a);
-    const scaleY = Math.abs(ctm.inverse().d);
+    // Calculate viewBox scaling accurately using the bounding rect and current zoom
+    // This avoids using inner paths that might have local transforms offsetting the strokes
+    const rect = svg.getBoundingClientRect();
+    const unzoomedWidth = rect.width / zoomScale;
+    const unzoomedHeight = rect.height / zoomScale;
 
-    return { x: svgP.x, y: svgP.y, scaleX, scaleY };
+    const viewBoxScaleX = currentArtwork.width / unzoomedWidth;
+    const viewBoxScaleY = currentArtwork.height / unzoomedHeight;
+
+    const x = cssP.x * viewBoxScaleX;
+    const y = cssP.y * viewBoxScaleY;
+    
+    // Total scale factor to convert 1 physical screen pixel into SVG viewBox coordinate distance
+    const scaleX = Math.abs(ctm.inverse().a) * viewBoxScaleX;
+    const scaleY = Math.abs(ctm.inverse().d) * viewBoxScaleY;
+
+    return { x, y, scaleX, scaleY };
   }
 
   private handleBrushPointerMove = (e: PointerEvent) => {
@@ -483,7 +495,7 @@ export class EaselBoard extends SignalElement {
         // clear the buffer now that we can use it, filtering out any accumulated points that fall outside the target region's bounding box
         const strokePoints = this.brushPositionBuffer
           .splice(0)
-          .map((pos) => this.getSvgCoordinates(pos.x, pos.y))
+          .map((pos) => this.getSvgCoordinates(pos.x, pos.y, this.zoomScale))
           .filter((pos) => pos !== null)
           .filter((pos) => {
             if (!boundingBox) return true;
@@ -629,7 +641,7 @@ export class EaselBoard extends SignalElement {
         let closestRegion: string | null = null;
         let minDistance = Infinity;
 
-        const svgCoords = this.getSvgCoordinates(px, py);
+        const svgCoords = this.getSvgCoordinates(px, py, this.zoomScale);
 
         if (svgCoords) {
           const { x: svgX, y: svgY, scaleX, scaleY } = svgCoords;
