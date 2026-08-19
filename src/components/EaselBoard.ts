@@ -170,6 +170,10 @@ export class EaselBoard extends SignalElement {
   private activePointers: Map<number, PointerEvent> = new Map();
   private initialPinchDistance: number | null = null;
   private initialZoomScale: number = 1.0;
+  private initialPanX: number = 0;
+  private initialPanY: number = 0;
+  private initialPinchMidX: number | null = null;
+  private initialPinchMidY: number | null = null;
   private isPinchAction = false;
 
   // Brush Painting State
@@ -286,6 +290,10 @@ export class EaselBoard extends SignalElement {
       const pointers = Array.from(this.activePointers.values());
       this.initialPinchDistance = Math.hypot(pointers[0].clientX - pointers[1].clientX, pointers[0].clientY - pointers[1].clientY);
       this.initialZoomScale = this.zoomScale;
+      this.initialPanX = this.panX;
+      this.initialPanY = this.panY;
+      this.initialPinchMidX = (pointers[0].clientX + pointers[1].clientX) / 2;
+      this.initialPinchMidY = (pointers[0].clientY + pointers[1].clientY) / 2;
 
       this.containerElement?.setPointerCapture(e.pointerId);
     }
@@ -300,26 +308,44 @@ export class EaselBoard extends SignalElement {
       e.preventDefault();
       const pointers = Array.from(this.activePointers.values());
       const currentDistance = Math.hypot(pointers[0].clientX - pointers[1].clientX, pointers[0].clientY - pointers[1].clientY);
+      const currentMidX = (pointers[0].clientX + pointers[1].clientX) / 2;
+      const currentMidY = (pointers[0].clientY + pointers[1].clientY) / 2;
 
-      if (this.initialPinchDistance) {
-        // Pinch zoom
+      const rect = this.containerElement?.getBoundingClientRect();
+
+      if (this.initialPinchDistance && this.initialPinchDistance > 0 && rect) {
         const scaleFactor = currentDistance / this.initialPinchDistance;
-        const newZoom = zoom((this.initialZoomScale * scaleFactor) / 0.95, true);
+        const newZoom = zoom(this.initialZoomScale * scaleFactor, true);
 
-        if (newZoom !== this.zoomScale) {
-          this.zoomScale = newZoom;
+        const hw = rect.width / 2;
+        const hh = rect.height / 2;
+        const initMidX = this.initialPinchMidX ?? currentMidX;
+        const initMidY = this.initialPinchMidY ?? currentMidY;
 
-          window.clearTimeout(this.wheelSpinningTimeoutId);
-          this.wheelSpinningTimeoutId = window.setTimeout(() => {
-            this.wheelSpinningTimeoutId = null;
-            zoomScaleSignal.set(this.zoomScale);
-            this.updateTransformDirectly();
-          }, 150);
-        }
+        const mx = initMidX - rect.left - hw;
+        const my = initMidY - rect.top - hh;
 
-        // Update drag delta based on first pointer movement since pinch started
-        this.dragDeltaX = pointers[0].clientX - this.touchStartX;
-        this.dragDeltaY = pointers[0].clientY - this.touchStartY;
+        const scaleRatio = newZoom / (this.initialZoomScale || 1.0);
+
+        const zoomPanX = mx - (mx - this.initialPanX) * scaleRatio;
+        const zoomPanY = my - (my - this.initialPanY) * scaleRatio;
+
+        const translationX = currentMidX - initMidX;
+        const translationY = currentMidY - initMidY;
+
+        this.zoomScale = newZoom;
+        this.panX = this.clampPanX(zoomPanX + translationX, newZoom);
+        this.panY = this.clampPanY(zoomPanY + translationY, newZoom);
+        this.dragDeltaX = 0;
+        this.dragDeltaY = 0;
+
+        window.clearTimeout(this.wheelSpinningTimeoutId);
+        this.wheelSpinningTimeoutId = window.setTimeout(() => {
+          this.wheelSpinningTimeoutId = null;
+          zoomScaleSignal.set(this.zoomScale);
+          this.updateTransformDirectly();
+        }, 150);
+
         this.updateTransformDirectly();
       }
       if (this.hoveredRegionId !== null) {
@@ -363,9 +389,15 @@ export class EaselBoard extends SignalElement {
   };
 
   private handlePointerUp = (e: PointerEvent) => {
-    // Unconditionally clear all active pointers on any pointer up to prevent getting stuck
-    // in ghost touch / pinch states, especially after long brush strokes where events can be dropped.
-    this.activePointers.clear();
+    if (e && e.pointerId !== undefined) {
+      this.activePointers.delete(e.pointerId);
+    }
+    if (this.activePointers.size < 2) {
+      this.isPinchAction = false;
+      this.initialPinchDistance = null;
+      this.initialPinchMidX = null;
+      this.initialPinchMidY = null;
+    }
 
     if (this.isPointerDown) {
       if (this.isDragCanvasAction) {
