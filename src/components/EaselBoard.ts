@@ -180,6 +180,7 @@ export class EaselBoard extends SignalElement {
   private initialPinchDistance: number | null = null;
   private initialZoomScale: number = 1.0;
   private isPinchAction = false;
+  private cachedSvgRect: DOMRect | null = null;
 
   // Brush Painting State
   private isBrushPainting = false;
@@ -216,6 +217,18 @@ export class EaselBoard extends SignalElement {
     }
   }
 
+  private updateTransformDirectly = () => {
+    const transformEl = this.querySelector<HTMLElement>("#easel-transform-element");
+    if (transformEl) {
+      transformEl.style.transform = this.getTransformCssProperty();
+      transformEl.style.transition = this.getTransitionCssProperty();
+    }
+    const container = this.querySelector<HTMLElement>("#main-frame-container");
+    if (container) {
+      container.style.pointerEvents = (this.isDragCanvasAction || this.isPinchAction) ? "none" : "auto";
+    }
+  };
+
   private handleWheel = (e: WheelEvent) => {
     window.clearTimeout(this.wheelSpinningTimeoutId);
     e.preventDefault();
@@ -239,10 +252,12 @@ export class EaselBoard extends SignalElement {
         this.panY = this.clampPanY(this.panY, newZoomScale);
       }
       this.zoomScale = newZoomScale;
+      this.cachedSvgRect = null; // invalidate rect
 
       this.wheelSpinningTimeoutId = window.setTimeout(() => {
         this.wheelSpinningTimeoutId = null;
         zoomScaleSignal.set(this.zoomScale);
+        this.updateTransformDirectly();
       }, 150);
     }
 
@@ -251,7 +266,9 @@ export class EaselBoard extends SignalElement {
     }
     this.animationFrame = window.requestAnimationFrame(() => {
       this.animationFrame = null;
-      this.redrawArtboard();
+      this.updateTransformDirectly();
+      // Only set signal to keep values in sync, no redraw
+      zoomScaleSignal.set(this.zoomScale);
     });
   };
 
@@ -268,6 +285,7 @@ export class EaselBoard extends SignalElement {
       this.touchStartX = e.clientX;
       this.touchStartY = e.clientY;
       this.isBrushPainting = isBrushModeSignal.get() && (e.pointerType === "mouse" || e.button === 0);
+      this.cachedSvgRect = this.querySelector<SVGSVGElement>("#fill-layer>svg")?.getBoundingClientRect() || null;
       window.addEventListener("pointercancel", this.handlePointerUp);
     } else if (this.activePointers.size === 2) {
       this.isPinchAction = true;
@@ -302,17 +320,27 @@ export class EaselBoard extends SignalElement {
 
         if (newZoom !== this.zoomScale) {
           this.zoomScale = newZoom;
+          this.cachedSvgRect = null; // invalidate
 
           window.clearTimeout(this.wheelSpinningTimeoutId);
           this.wheelSpinningTimeoutId = window.setTimeout(() => {
             this.wheelSpinningTimeoutId = null;
             zoomScaleSignal.set(this.zoomScale);
+            this.updateTransformDirectly();
           }, 150);
         }
 
         // Update drag delta based on first pointer movement since pinch started
         this.dragDeltaX = pointers[0].clientX - this.touchStartX;
         this.dragDeltaY = pointers[0].clientY - this.touchStartY;
+
+        if (!this.animationFrame) {
+          this.animationFrame = window.requestAnimationFrame(() => {
+            this.animationFrame = null;
+            this.updateTransformDirectly();
+            zoomScaleSignal.set(this.zoomScale);
+          });
+        }
       }
     } else if (this.isPointerDown && !this.isPinchAction) {
       const dx = e.clientX - this.touchStartX;
@@ -327,23 +355,22 @@ export class EaselBoard extends SignalElement {
       } else if (!this.isDragCanvasAction && distance > dragDistanceThresholdPx) {
         this.containerElement?.setPointerCapture(e.pointerId);
         this.isDragCanvasAction = true;
+        this.updateTransformDirectly();
       }
 
       if (this.isDragCanvasAction) {
         this.dragDeltaX = dx;
         this.dragDeltaY = dy;
+        if (!this.animationFrame) {
+          this.animationFrame = window.requestAnimationFrame(() => {
+            this.animationFrame = null;
+            this.updateTransformDirectly();
+          });
+        }
       }
     } else if (this.artworkId) {
       this.updateHoverRegion(e);
     }
-
-    if (this.animationFrame) {
-      return;
-    }
-    this.animationFrame = window.requestAnimationFrame(() => {
-      this.animationFrame = null;
-      this.redrawArtboard();
-    });
   };
 
   private handlePointerUp = (e: PointerEvent) => {
@@ -354,6 +381,7 @@ export class EaselBoard extends SignalElement {
       this.touchStartX = remainingPointer.clientX - this.dragDeltaX;
       this.touchStartY = remainingPointer.clientY - this.dragDeltaY;
       this.isPinchAction = false;
+      this.updateTransformDirectly();
       return;
     }
 
@@ -399,6 +427,9 @@ export class EaselBoard extends SignalElement {
       this.brushPositionBuffer = [];
       this.containerElement?.releasePointerCapture(e.pointerId);
       window.removeEventListener("pointercancel", this.handlePointerUp);
+      
+      this.updateTransformDirectly();
+      this.redrawArtboard(); // trigger redraw at end of drag
     }
   };
 
@@ -415,7 +446,7 @@ export class EaselBoard extends SignalElement {
     if (this.animationFrame) return;
     this.animationFrame = window.requestAnimationFrame(() => {
       this.animationFrame = null;
-      this.redrawArtboard();
+      this.updateTransformDirectly();
     });
   };
 
@@ -429,11 +460,15 @@ export class EaselBoard extends SignalElement {
 
     this.brushPositionBuffer.push({ x: e.clientX, y: e.clientY });
 
-    const svgEl = this.querySelector<SVGSVGElement>("#fill-layer>svg");
     const currentArtwork = currentArtworkSignal.get();
-    if (!svgEl || !currentArtwork) return;
+    if (!currentArtwork) return;
 
-    const rect = svgEl.getBoundingClientRect();
+    if (!this.cachedSvgRect) {
+      this.cachedSvgRect = this.querySelector<SVGSVGElement>("#fill-layer>svg")?.getBoundingClientRect() || null;
+    }
+    const rect = this.cachedSvgRect;
+    if (!rect) return;
+
     // clear the buffer now that the element has been found to place the stroke path
     const strokePoints = this.brushPositionBuffer.splice(0).map((pos) => ({
       x: ((pos.x - rect.left) / rect.width) * currentArtwork.width,
@@ -590,51 +625,37 @@ export class EaselBoard extends SignalElement {
 
     if (regionIdA !== null && selectedColorHex) {
       const { fillColor: regionAExpectedColor, neighbourRegionIds: neighbors } = currentArtwork.regionsDrawingInfo.get(regionIdA);
-      if (regionAExpectedColor !== selectedColorHex) {
-        let shouldScan = false;
+      if (regionAExpectedColor !== selectedColorHex && neighbors) {
+        let closestRegion: string | null = null;
+        let minDistance = Infinity;
 
-        if (neighbors) {
-          for (const nId of neighbors) {
-            if (currentArtwork.regionsDrawingInfo.get(nId).fillColor === selectedColorHex) {
-              shouldScan = true;
-              break;
-            }
-          }
-        } else {
-          // Fallback if regionNeighbors wasn't computed
-          shouldScan = true;
+        // Use cached svg rect or compute once
+        if (!this.cachedSvgRect) {
+            this.cachedSvgRect = this.querySelector<SVGSVGElement>("#fill-layer>svg")?.getBoundingClientRect() || null;
         }
+        const rect = this.cachedSvgRect;
+        
+        if (rect) {
+            const svgX = ((px - rect.left) / rect.width) * currentArtwork.width;
+            const svgY = ((py - rect.top) / rect.height) * currentArtwork.height;
 
-        if (shouldScan) {
-          let closestRegion: string | null = null;
-          let minDistance = Infinity;
-
-          // Radial scan checks only 12 points instead of 81, dramatically improving performance
-          const radii = [4, 8];
-          for (const r of radii) {
-            const steps = r === 4 ? 4 : 8;
-            for (let i = 0; i < steps; i++) {
-              const angle = (i * Math.PI * 2) / steps;
-              const dx = Math.round(Math.cos(angle) * r);
-              const dy = Math.round(Math.sin(angle) * r);
-
-              const dist = Math.hypot(dx, dy);
-              const nRegion = getRegionAt(px + dx, py + dy);
-              if (nRegion !== null && nRegion !== regionIdA) {
-                const nExpectedColor = currentArtwork.regionsDrawingInfo.get(nRegion).fillColor;
-                if (nExpectedColor === selectedColorHex) {
+            for (const nId of neighbors) {
+              const nInfo = currentArtwork.regionsDrawingInfo.get(nId);
+              if (nInfo && nInfo.fillColor === selectedColorHex && nInfo.boundingBox) {
+                  const bb = nInfo.boundingBox;
+                  const cx = bb.x + bb.width / 2;
+                  const cy = bb.y + bb.height / 2;
+                  const dist = Math.hypot(cx - svgX, cy - svgY);
                   if (dist < minDistance) {
-                    minDistance = dist;
-                    closestRegion = nRegion;
+                      minDistance = dist;
+                      closestRegion = nId;
                   }
-                }
               }
             }
-          }
-
-          if (closestRegion !== null) {
-            return closestRegion;
-          }
+        }
+        
+        if (closestRegion !== null) {
+          return closestRegion;
         }
       }
     }
