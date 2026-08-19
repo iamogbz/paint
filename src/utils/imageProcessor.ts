@@ -267,6 +267,28 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
   renderNode.setAttribute("height", "100%");
   renderNode.setAttribute("width", "100%");
 
+  // Sort the elements so that smaller elements are rendered on top (later in DOM)
+  // This helps ensure small elements aren't hidden behind large ones.
+  const sortedFillableElements = Array.from(renderNode.querySelectorAll(`:is(${FILLABLE_SVG_ELEMENTS_SELECTOR})`));
+  sortedFillableElements.sort((a, b) => {
+    const regionA = a.getAttribute("data-region-id");
+    const regionB = b.getAttribute("data-region-id");
+    const boxA = regionA ? regionsDrawingInfo.get(regionA)?.boundingBox : null;
+    const boxB = regionB ? regionsDrawingInfo.get(regionB)?.boundingBox : null;
+    const areaA = boxA ? boxA.width * boxA.height : Infinity;
+    const areaB = boxB ? boxB.width * boxB.height : Infinity;
+    // larger area goes first, so it gets rendered earlier (underneath)
+    return areaB - areaA;
+  });
+
+  sortedFillableElements.forEach((el) => {
+    // Append the element back to its parent to reorder it
+    // It will be moved to the end of its parent's child list
+    if (el.parentElement) {
+      el.parentElement.appendChild(el);
+    }
+  });
+
   // add clip paths and containers for brush strokes
   const brushStrokeDefElem = document.createElement("defs");
   renderNode.prepend(brushStrokeDefElem);
