@@ -336,8 +336,10 @@ export class EaselBoard extends SignalElement {
           });
         }
       }
-      this.hoveredRegionId = null;
-      this.updateArtwork();
+      if (this.hoveredRegionId !== null) {
+        this.hoveredRegionId = null;
+        this.updateArtwork();
+      }
     } else if (this.isPointerDown && !this.isPinchAction) {
       const dx = e.clientX - this.touchStartX;
       const dy = e.clientY - this.touchStartY;
@@ -360,9 +362,11 @@ export class EaselBoard extends SignalElement {
         if (!this.animationFrame) {
           this.animationFrame = window.requestAnimationFrame(() => {
             this.animationFrame = null;
-            this.hoveredRegionId = null;
-            this.updateArtwork();
             this.updateTransformDirectly();
+            if (this.hoveredRegionId !== null) {
+              this.hoveredRegionId = null;
+              this.updateArtwork();
+            }
           });
         }
       }
@@ -370,6 +374,8 @@ export class EaselBoard extends SignalElement {
       if (e.pointerType === "mouse" || draggedColorPositionSignal.get() !== null) {
         this.updateHoverRegion(e);
       } else if (this.hoveredRegionId !== null) {
+        // This could be a stylus hovering over and moving through regions
+        // do nothing until this condition is properly identified
       }
     }
   };
@@ -430,7 +436,7 @@ export class EaselBoard extends SignalElement {
     }
     
     this.updateTransformDirectly();
-    this.updateArtwork(); // trigger redraw at end of drag
+    this.updateArtwork(); // update render state at the end of drag
   };
 
   private handlePointerLeave = (e: PointerEvent) => {
@@ -486,7 +492,6 @@ export class EaselBoard extends SignalElement {
       if (!this.brushTargetRegionId) {
         this.brushTargetRegionId = currentBrushRegionId;
         this.hoveredRegionId = null;
-        console.log({ activeColorIsSameAsRegionCurrentColor, targetRegionIsAlreadyInDirtyState });
         pushUndoState(currentArtwork);
       }
       const regionsShareTheSameExpectedColor = currentBrushRegionExpectedColor === currentArtwork.regionsDrawingInfo.get(this.brushTargetRegionId!)?.fillColor;
@@ -553,7 +558,7 @@ export class EaselBoard extends SignalElement {
       this.activeStrokeIdx = -1;
     }
 
-    this.requestUpdate();
+    this.updateArtwork();
   };
 
   private handleFileInput = (file: File) => {
