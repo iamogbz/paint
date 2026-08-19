@@ -284,9 +284,6 @@ export class EaselBoard extends SignalElement {
   };
 
   private handlePointerMove = (e: PointerEvent) => {
-    // if there is no current artwork then nothing to do
-    if (!this.artworkId) return;
-
     if (this.activePointers.has(e.pointerId)) {
       this.activePointers.set(e.pointerId, e);
     }
