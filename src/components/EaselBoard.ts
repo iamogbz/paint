@@ -491,10 +491,6 @@ export class EaselBoard extends SignalElement {
     const rect = this.cachedSvgRect;
     if (!rect) return;
 
-    // ALWAYS clear the buffer unconditionally to prevent memory leaks and jumping strokes 
-    // when dragging the cursor across invalid colored regions
-    const rawPoints = this.brushPositionBuffer.splice(0);
-
     const currentBrushRegionId = this.getRegionIdAtPoint(e.clientX, e.clientY);
     const currentBrushRegionExpectedColor = currentArtwork.regionsDrawingInfo.get(currentBrushRegionId)?.fillColor;
     const currentBrushRegionCurrentColor = currentArtwork.regionsCurrentFillInfo.get(currentBrushRegionId);
@@ -517,11 +513,21 @@ export class EaselBoard extends SignalElement {
           this.activeStrokeIdx = -1;
         }
 
-        // map the valid points into SVG space
-        const strokePoints = rawPoints.map((pos) => ({
+        const boundingBox = currentArtwork.regionsDrawingInfo.get(currentBrushRegionId)?.boundingBox;
+        
+        // clear the buffer now that we can use it, filtering out any accumulated points that fall outside the target region's bounding box
+        const strokePoints = this.brushPositionBuffer.splice(0).map((pos) => ({
           x: ((pos.x - rect.left) / rect.width) * currentArtwork.width,
           y: ((pos.y - rect.top) / rect.height) * currentArtwork.height,
-        }));
+        })).filter(pos => {
+            if (!boundingBox) return true;
+            // Expand the bounding box slightly for the filter to avoid dropping points just on the edge
+            const tolerance = 4 * (currentArtwork.width / rect.width);
+            return pos.x >= boundingBox.x - tolerance && 
+                   pos.x <= boundingBox.x + boundingBox.width + tolerance && 
+                   pos.y >= boundingBox.y - tolerance && 
+                   pos.y <= boundingBox.y + boundingBox.height + tolerance;
+        });
 
         // do not bother starting a new stroke if there are no points for it
         if (strokePoints.length > 0) {
