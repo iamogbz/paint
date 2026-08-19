@@ -25,7 +25,10 @@ self.onmessage = async (e: MessageEvent) => {
           const boxB = regionB.boundingBox;
           if (!boxB) continue;
           const areaB = boxB.width * boxB.height;
-          
+
+          // Only add smaller or equal sized regions to the neighbor list.
+          // This prevents large regions from "stealing" taps intended for smaller regions 
+          // when the user wants to paint a small region with a non-matching color.
           if (areaB > areaA) continue;
           
           const intersectX = boxA.x - expandPx <= boxB.x + boxB.width && boxA.x + boxA.width + expandPx >= boxB.x;

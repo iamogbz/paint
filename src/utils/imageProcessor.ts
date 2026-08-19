@@ -158,13 +158,30 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
 
     // Run vtracer in worker
     const options = {
+      /** default: color-cluster for true color image */
       clustering: "color-cluster",
+      /** shapes disjoint with others */
       hierarchical: "cutout",
+      /** Auto-quantize target color count */
       maxColors: 24,
+      /** If a pallete is defined maps colors to this */
+      // palette: palette,
+      /** Discard patches smaller than X px in size (0..=128) */
       filterSpeckle: 2,
+      /** default: 8 (best) - Significant bits per RGB channel (1..=8)  */
       colorPrecision: 8,
+      /** Color difference between gradient layers (0..=255) */
       layerDifference: 48,
+      /** Method for converting in to shapes. Values below only valid in spline */
       mode: "spline",
+      /** default: 60, Minimum Momentary Angle (in degrees) to be considered a corner (to be kept after smoothing) - Higher = smoother */
+      // cornerThreshold: 60,
+      /** default: 4, Perform Iterative Subdivide Smooth until all segments are shorter than this length <3.5..=10> */
+      // lengthThreshold: 4,
+      /** default: 45, Minimum Angle Displacement (in degrees) to be considered a cutting point between curves <0..=180> */
+      // spliceThreshold: 45,
+      /** default: off, Simplify curves: fewest cubics within this tolerance in px (try 1–2.5) */
+      // simplify: 2,
     };
     const svgStr = await runInWorker("VECTORIZE", { rawPixels, imgWidth, imgHeight, options });
     svgDoc = parseSVG(svgStr.includes("xmlns=") ? svgStr : svgStr.replace("<svg", `<svg xmlns="${XML_NS}"`));
