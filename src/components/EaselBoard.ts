@@ -398,6 +398,7 @@ export class EaselBoard extends SignalElement {
         if (this.isDragCanvasAction) {
           this.panX = this.clampPanX(this.panX + this.dragDeltaX, this.zoomScale);
           this.panY = this.clampPanY(this.panY + this.dragDeltaY, this.zoomScale);
+          this.hoveredRegionId = null; // Reset hover after pan to drag
         } else {
           // was not drag action when the touch ended
         }
