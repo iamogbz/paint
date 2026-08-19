@@ -100,9 +100,7 @@ export class PaintingControls extends SignalElement {
     soundEffects.playPop();
     const activeColor = activeHighlightColorSignal.get();
 
-    if (activeColor === hexCode) {
-      activeHighlightColorSignal.set(null);
-    } else {
+    if (activeColor !== hexCode) {
       window.clearTimeout(this.timeoutId);
       activeHighlightColorSignal.set(hexCode);
 
