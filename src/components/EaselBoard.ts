@@ -431,7 +431,7 @@ export class EaselBoard extends SignalElement {
     pt.x = px;
     pt.y = py;
     const svgP = pt.matrixTransform(ctm.inverse());
-    
+
     // Scale factor to convert 1 physical screen pixel into SVG coordinate distance
     // ctm.inverse().a is the X scale (svg_width / screen_width)
     const scaleX = Math.abs(ctm.inverse().a);
@@ -523,7 +523,8 @@ export class EaselBoard extends SignalElement {
         }
       } else {
         // Not over a colorable region, terminate active stroke
-        this.activeStrokeIdx = -1;
+        // Disabled to allow smoothly stroking between regions
+        // this.activeStrokeIdx = -1;
       }
     } else {
       // Out of bounds or not over any region path, terminate active stroke
