@@ -180,7 +180,7 @@ export class EaselBoard extends SignalElement {
   private initialPinchDistance: number | null = null;
   private initialZoomScale: number = 1.0;
   private isPinchAction = false;
-  private cachedSvgRect: DOMRect | null = null;
+
 
   // Brush Painting State
   private isBrushPainting = false;
@@ -240,7 +240,6 @@ export class EaselBoard extends SignalElement {
         this.panY = this.clampPanY(this.panY, newZoomScale);
       }
       this.zoomScale = newZoomScale;
-      this.cachedSvgRect = null; // invalidate rect
 
       this.wheelSpinningTimeoutId = window.setTimeout(() => {
         this.wheelSpinningTimeoutId = null;
@@ -265,7 +264,6 @@ export class EaselBoard extends SignalElement {
       this.touchStartX = e.clientX;
       this.touchStartY = e.clientY;
       this.isBrushPainting = isBrushModeSignal.get() && (e.pointerType === "mouse" || e.button === 0);
-      this.cachedSvgRect = this.querySelector<SVGSVGElement>("#fill-layer>svg")?.getBoundingClientRect() || null;
 
       // Update hover region immediately on tap for quick fill actions before any move event fires
       if (this.artworkId) {
@@ -306,7 +304,6 @@ export class EaselBoard extends SignalElement {
 
         if (newZoom !== this.zoomScale) {
           this.zoomScale = newZoom;
-          this.cachedSvgRect = null; // invalidate
 
           window.clearTimeout(this.wheelSpinningTimeoutId);
           this.wheelSpinningTimeoutId = window.setTimeout(() => {
@@ -423,6 +420,26 @@ export class EaselBoard extends SignalElement {
     this.updateTransformDirectly();
   };
 
+  private getSvgCoordinates(px: number, py: number): { x: number; y: number; scaleX: number; scaleY: number } | null {
+    const svg = this.querySelector<SVGSVGElement>("#fill-layer>svg");
+    if (!svg) return null;
+
+    const ctm = svg.getScreenCTM();
+    if (!ctm) return null;
+
+    const pt = svg.createSVGPoint();
+    pt.x = px;
+    pt.y = py;
+    const svgP = pt.matrixTransform(ctm.inverse());
+    
+    // Scale factor to convert 1 physical screen pixel into SVG coordinate distance
+    // ctm.inverse().a is the X scale (svg_width / screen_width)
+    const scaleX = Math.abs(ctm.inverse().a);
+    const scaleY = Math.abs(ctm.inverse().d);
+
+    return { x: svgP.x, y: svgP.y, scaleX, scaleY };
+  }
+
   private handleBrushPointerMove = (e: PointerEvent) => {
     if (!this.isBrushPainting) return;
 
@@ -435,12 +452,6 @@ export class EaselBoard extends SignalElement {
 
     const currentArtwork = currentArtworkSignal.get();
     if (!currentArtwork) return;
-
-    if (!this.cachedSvgRect) {
-      this.cachedSvgRect = this.querySelector<SVGSVGElement>("#fill-layer>svg")?.getBoundingClientRect() || null;
-    }
-    const rect = this.cachedSvgRect;
-    if (!rect) return;
 
     const currentBrushRegionId = this.getRegionIdAtPoint(e.clientX, e.clientY);
     const currentBrushRegionExpectedColor = currentArtwork.regionsDrawingInfo.get(currentBrushRegionId)?.fillColor;
@@ -468,16 +479,16 @@ export class EaselBoard extends SignalElement {
         // clear the buffer now that we can use it, filtering out any accumulated points that fall outside the target region's bounding box
         const strokePoints = this.brushPositionBuffer
           .splice(0)
-          .map((pos) => ({
-            x: ((pos.x - rect.left) / rect.width) * currentArtwork.width,
-            y: ((pos.y - rect.top) / rect.height) * currentArtwork.height,
-          }))
+          .map((pos) => this.getSvgCoordinates(pos.x, pos.y))
+          .filter((pos): pos is NonNullable<ReturnType<typeof this.getSvgCoordinates>> => pos !== null)
           .filter((pos) => {
             if (!boundingBox) return true;
             // Expand the bounding box slightly for the filter to avoid dropping points just on the edge
-            const tolerance = 4 * (currentArtwork.width / rect.width);
-            return pos.x >= boundingBox.x - tolerance && pos.x <= boundingBox.x + boundingBox.width + tolerance && pos.y >= boundingBox.y - tolerance && pos.y <= boundingBox.y + boundingBox.height + tolerance;
-          });
+            const toleranceX = 4 * pos.scaleX;
+            const toleranceY = 4 * pos.scaleY;
+            return pos.x >= boundingBox.x - toleranceX && pos.x <= boundingBox.x + boundingBox.width + toleranceX && pos.y >= boundingBox.y - toleranceY && pos.y <= boundingBox.y + boundingBox.height + toleranceY;
+          })
+          .map(({ x, y }) => ({ x, y }));
 
         // do not bother starting a new stroke if there are no points for it
         if (strokePoints.length > 0) {
@@ -614,19 +625,14 @@ export class EaselBoard extends SignalElement {
         let closestRegion: string | null = null;
         let minDistance = Infinity;
 
-        // Use cached svg rect or compute once
-        if (!this.cachedSvgRect) {
-          this.cachedSvgRect = this.querySelector<SVGSVGElement>("#fill-layer>svg")?.getBoundingClientRect() || null;
-        }
-        const rect = this.cachedSvgRect;
+        const svgCoords = this.getSvgCoordinates(px, py);
 
-        if (rect) {
-          const svgX = ((px - rect.left) / rect.width) * currentArtwork.width;
-          const svgY = ((py - rect.top) / rect.height) * currentArtwork.height;
+        if (svgCoords) {
+          const { x: svgX, y: svgY, scaleX, scaleY } = svgCoords;
 
           // Expand the bounding box check by an 8px physical screen distance to make hitting thin/small elements easier
-          const toleranceX = 8 * (currentArtwork.width / rect.width);
-          const toleranceY = 8 * (currentArtwork.height / rect.height);
+          const toleranceX = 8 * scaleX;
+          const toleranceY = 8 * scaleY;
           let minArea = Infinity;
 
           for (const nId of neighbors) {
