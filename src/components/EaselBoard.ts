@@ -394,27 +394,12 @@ export class EaselBoard extends SignalElement {
       const currentArtwork = currentArtworkSignal.get();
       saveCurrentArtworkProgress(currentArtwork);
     }
-
-    this.isPointerDown = false;
-    this.touchStartX = null;
-    this.touchStartY = null;
-    this.isDragCanvasAction = false;
-    this.isPinchAction = false;
-    this.dragDeltaX = 0;
-    this.dragDeltaY = 0;
-    this.isBrushPainting = false;
-    this.brushTargetRegionId = null;
-    this.activeStrokeIdx = -1;
-    this.brushPositionBuffer = [];
     try {
       this.containerElement?.releasePointerCapture(e.pointerId);
     } catch (err) {}
-    window.removeEventListener("pointercancel", this.handlePointerUp);
 
     // on mobile/touch screens, there is no persistent hover after the pointer is lifted
-    if (e.pointerType !== "mouse" && draggedColorPositionSignal.get() === null) {
-      this.hoveredRegionId = null;
-    }
+    // this handled by global pointer up to ensure it happens no matter where up occurs
 
     this.updateTransformDirectly();
     this.updateArtwork(); // update render state at the end of drag
@@ -735,17 +720,18 @@ export class EaselBoard extends SignalElement {
     super.disconnectedCallback();
     window.removeEventListener("easel-pan-delta", this.handlePanDelta);
     window.removeEventListener("pointerdown", this.handleGlobalPointerDown);
-    window.removeEventListener("pointermove", this.handleGlobalDragMove);
-    window.removeEventListener("pointerup", this.handleGlobalDragUp);
+    window.removeEventListener("pointermove", this.handleGlobalPointerMove);
+    window.removeEventListener("pointerup", this.handleGlobalPointerUp);
   }
 
-  private handleGlobalDragMove = (e: PointerEvent) => {
+  private handleGlobalPointerMove = (e: PointerEvent) => {
     if (draggedColorPositionSignal.get() !== null) {
       this.updateHoverRegion(e);
     }
   };
 
-  private handleGlobalDragUp = (e: PointerEvent) => {
+  private handleGlobalPointerUp = (e: PointerEvent) => {
+    const previousHoveredRegionId = this.hoveredRegionId
     if (draggedColorPositionSignal.get() !== null) {
       if (this.hoveredRegionId) {
         const activeColor = activeHighlightColorSignal.get();
@@ -753,12 +739,23 @@ export class EaselBoard extends SignalElement {
           this.fillRegion(this.hoveredRegionId, activeColor);
         }
       }
-      
-      // Clear hover state on mobile after dropping, since there's no persistent mouse cursor
-      if (e.pointerType !== "mouse" && this.hoveredRegionId !== null) {
-        this.hoveredRegionId = null;
-        this.updateArtwork();
-      }
+    }
+
+    this.isPointerDown = false;
+    this.touchStartX = null;
+    this.touchStartY = null;
+    this.isDragCanvasAction = false;
+    this.isPinchAction = false;
+    this.dragDeltaX = 0;
+    this.dragDeltaY = 0;
+    this.isBrushPainting = false;
+    this.brushTargetRegionId = null;
+    this.activeStrokeIdx = -1;
+    this.brushPositionBuffer = [];
+    this.hoveredRegionId = null;
+    // Clear hover state after dropping, since there's no persistent mouse cursor
+    if (previousHoveredRegionId !== null) {
+      this.updateArtwork();
     }
   };
 
@@ -777,8 +774,8 @@ export class EaselBoard extends SignalElement {
     this.setupPointerListeners();
     window.addEventListener("easel-pan-delta", this.handlePanDelta);
     window.addEventListener("pointerdown", this.handleGlobalPointerDown);
-    window.addEventListener("pointermove", this.handleGlobalDragMove);
-    window.addEventListener("pointerup", this.handleGlobalDragUp);
+    window.addEventListener("pointermove", this.handleGlobalPointerMove);
+    window.addEventListener("pointerup", this.handleGlobalPointerUp);
 
     (window as any).regionsByColors = () => {
       const currentArtwork = currentArtworkSignal.get();
@@ -891,6 +888,7 @@ export class EaselBoard extends SignalElement {
   };
 
   render() {
+    activeHighlightColorSignal.get(); // Track dependency for repaints on color change
     const currentArtwork = currentArtworkSignal.get();
     this.artworkId = currentArtwork?.id;
     const isProcessing = isProcessingSignal.get();
