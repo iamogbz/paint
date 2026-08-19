@@ -387,16 +387,11 @@ export class EaselBoard extends SignalElement {
   private handlePointerUp = (e: PointerEvent) => {
     this.activePointers.delete(e.pointerId);
 
-    if (this.activePointers.size === 1 && this.isPinchAction) {
-      const remainingPointer = Array.from(this.activePointers.values())[0];
-      this.touchStartX = remainingPointer.clientX - this.dragDeltaX;
-      this.touchStartY = remainingPointer.clientY - this.dragDeltaY;
-      this.isPinchAction = false;
-      this.updateTransformDirectly();
-      return;
-    }
+    // Unconditionally clear all active pointers on any pointer up to prevent getting stuck
+    // in ghost touch / pinch states, especially after long brush strokes where events can be dropped.
+    this.activePointers.clear();
 
-    if (this.activePointers.size === 0) {
+    if (true) {
       if (this.isPointerDown) {
         if (this.isDragCanvasAction) {
           this.panX = this.clampPanX(this.panX + this.dragDeltaX, this.zoomScale);
@@ -437,7 +432,9 @@ export class EaselBoard extends SignalElement {
       this.brushTargetRegionId = null;
       this.activeStrokeIdx = -1;
       this.brushPositionBuffer = [];
-      this.containerElement?.releasePointerCapture(e.pointerId);
+      try {
+        this.containerElement?.releasePointerCapture(e.pointerId);
+      } catch (err) {}
       window.removeEventListener("pointercancel", this.handlePointerUp);
       
       // on mobile/touch screens, there is no persistent hover after the pointer is lifted
