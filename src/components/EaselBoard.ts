@@ -480,15 +480,14 @@ export class EaselBoard extends SignalElement {
         const strokePoints = this.brushPositionBuffer
           .splice(0)
           .map((pos) => this.getSvgCoordinates(pos.x, pos.y))
-          .filter((pos): pos is NonNullable<ReturnType<typeof this.getSvgCoordinates>> => pos !== null)
+          .filter((pos) => pos !== null)
           .filter((pos) => {
             if (!boundingBox) return true;
             // Expand the bounding box slightly for the filter to avoid dropping points just on the edge
             const toleranceX = 4 * pos.scaleX;
             const toleranceY = 4 * pos.scaleY;
             return pos.x >= boundingBox.x - toleranceX && pos.x <= boundingBox.x + boundingBox.width + toleranceX && pos.y >= boundingBox.y - toleranceY && pos.y <= boundingBox.y + boundingBox.height + toleranceY;
-          })
-          .map(({ x, y }) => ({ x, y }));
+          });
 
         // do not bother starting a new stroke if there are no points for it
         if (strokePoints.length > 0) {
