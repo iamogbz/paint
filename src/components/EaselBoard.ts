@@ -424,7 +424,11 @@ export class EaselBoard extends SignalElement {
     const svg = this.querySelector<SVGSVGElement>("#fill-layer>svg");
     if (!svg) return null;
 
-    const ctm = svg.getScreenCTM();
+    // Use a graphics element inside the SVG to ensure viewBox scaling is included in the CTM.
+    // If we use the root <svg> element, getScreenCTM() maps only to its CSS layout pixels in most browsers.
+    const graphicsElement = svg.querySelector<SVGGraphicsElement>("path, g, rect, circle, polygon, polyline") || svg;
+
+    const ctm = graphicsElement.getScreenCTM();
     if (!ctm) return null;
 
     const pt = svg.createSVGPoint();
