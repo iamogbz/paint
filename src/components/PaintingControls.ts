@@ -673,16 +673,16 @@ export class PaintingControls extends SignalElement {
                       position: "relative" as const,
                       backgroundImage: `conic-gradient(
                         from 0deg,
-                      hsl(0, 100%, 50%) 0deg,     /* Red at 0° */
-                      hsl(60, 100%, 50%) 60deg,   /* Yellow at 60° */
-                      hsl(120, 100%, 50%) 120deg, /* Green at 120° */
-                      hsl(180, 100%, 50%) 180deg, /* Cyan at 180° */
-                      hsl(240, 100%, 50%) 240deg, /* Blue at 240° */
-                      hsl(300, 100%, 50%) 300deg, /* Magenta at 300° */
-                      hsl(360, 100%, 50%) 360deg  /* Red at 360° */
+                        hsl(calc(0 + var(--hue)), 100%, 50%) 0deg,     /* Red at 0° */
+                        hsl(calc(60 + var(--hue)), 100%, 50%) 60deg,   /* Yellow at 60° */
+                        hsl(calc(120 + var(--hue)), 100%, 50%) 120deg, /* Green at 120° */
+                        hsl(calc(180 + var(--hue)), 100%, 50%) 180deg, /* Cyan at 180° */
+                        hsl(calc(240 + var(--hue)), 100%, 50%) 240deg, /* Blue at 240° */
+                        hsl(calc(300 + var(--hue)), 100%, 50%) 300deg, /* Magenta at 300° */
+                        hsl(calc(360 + var(--hue)), 100%, 50%) 360deg  /* Red at 360° */
                       );`,
                       transition: "transform 0.15s ease",
-                      animation: "hue-loop linear 5s infinite",
+                      animation: "hue-loop linear 10s infinite",
                     })}
                   >
                     <div style="position: absolute; inset: 0; width: 0; height: 0; margin: auto; background-color: #FFFFFF; border: solid 2px #FFFFFF; border-radius: 100%; corner-shape: round !important; display: flex; align-items: center; justify-content: center;"></div>

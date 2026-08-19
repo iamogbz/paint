@@ -7,7 +7,6 @@ import { soundEffects } from "../utils/soundEffects";
 import { iconImage, iconUpload, iconPaintBucket } from "./icons";
 import { BASE_BRUSH_RADIUS, FALLBACK_IMAGE_SIZE_PX, FILLABLE_SVG_ELEMENTS, TRANSPARENT_HEX, transparentImgCss } from "../utils/constants";
 import { normalizeHex } from "../utils/color";
-import { BrushStrokePaths } from "../types";
 import { clamp, zoom } from "../utils/ui";
 import { unsafeSVG } from "lit/directives/unsafe-svg.js";
 import { updateArtworkSvgWithUserPaints } from "../utils/imageProcessor";
@@ -952,7 +951,8 @@ export class EaselBoard extends SignalElement {
 
         let stroke = "none";
         let strokeWidth = 0;
-        let mixBlendMode = "normal";
+        let elemClass = "";
+        const hueLoopCls = "animated-hue";
 
         const baseStrokeWidth = Math.max(1, currentArtwork.width / 400 / this.zoomScale);
 
@@ -969,23 +969,19 @@ export class EaselBoard extends SignalElement {
         if (isHovered) {
           const isTransparentPaintFill = activeHexUpper.substring(7) === "00";
           stroke = isTransparentPaintFill ? "#FFFFFF" : activeColor || "#000000";
-          mixBlendMode = isTransparentPaintFill ? "difference" : "normal";
+          elemClass = isTransparentPaintFill ? hueLoopCls : "";
         } else {
           if (isTarget) {
             if (isPaintedCorrect) {
               stroke = "none";
               strokeWidth = 0;
-              mixBlendMode = "normal";
             } else {
-              // TODO: fix issue where sometimes blend mode difference does not work
-              stroke = "#000000";
-              // use is painted wrong stroke width
-              mixBlendMode = "normal";
+              stroke = "hsl(var(--hue), 100%, 50%)";
+              elemClass = hueLoopCls;
             }
           } else if (!activeHexUpper || !activeColorIsCore) {
             stroke = "#00000088";
             strokeWidth = baseStrokeWidth;
-            mixBlendMode = "normal";
           }
         }
 
@@ -993,7 +989,7 @@ export class EaselBoard extends SignalElement {
         guideElem.setAttribute("fill", "none");
         guideElem.setAttribute("stroke", stroke);
         guideElem.setAttribute("stroke-width", strokeWidth.toString());
-        guideElem.style.mixBlendMode = mixBlendMode;
+        guideElem.setAttribute("class", elemClass);
       });
     });
   };

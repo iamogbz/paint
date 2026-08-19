@@ -7,11 +7,11 @@ body {
   position: fixed;
   margin: 0;
   padding: 0;
-  font-family: 'Plus Jakarta Sans', system-ui, -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, sans-serif;
+  font-family: "Plus Jakarta Sans", system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI", Roboto, sans-serif;
   user-select: none;
   -webkit-tap-highlight-color: transparent;
-  background-color: #FFFFFF;
-  color: #3D2314;
+  background-color: #ffffff;
+  color: #3d2314;
 }
 
 /* Hide scrollbar for clean mobile UI */
@@ -45,17 +45,34 @@ button {
   }
 }
 
+/* 1. Register the hue variable so the browser knows how to animate numbers */
+@property --hue {
+  syntax: "<number>";
+  inherits: false;
+  initial-value: 0;
+}
+
+.animated-hue {
+  /* eg: fill: hsl(var(--hue), 80%, 50%); */
+  animation: hue-loop 5s linear infinite;
+}
+
+/* 3. Smoothly cycle the number from 0 to 360 */
 @keyframes hue-loop {
-  0% {
-    filter: hue-rotate(0deg);
+  from {
+    --hue: 0;
   }
-  100% {
-    filter: hue-rotate(360deg);
+  to {
+    --hue: 360;
   }
 }
 
 @keyframes bounce-drop {
-  0%, 20%, 50%, 80%, 100% {
+  0%,
+  20%,
+  50%,
+  80%,
+  100% {
     transform: translateY(-50%); /* Ground level */
   }
   40% {
@@ -67,7 +84,8 @@ button {
 }
 
 @keyframes blur-pulse {
-  0%, 100% {
+  0%,
+  100% {
     filter: blur(4px);
   }
   50% {
