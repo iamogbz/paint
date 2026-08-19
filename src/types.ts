@@ -1,11 +1,14 @@
 /** Region IDs to list of brush strokes */
 export type BrushStrokePaths = Record<
   string,
-  Array<{
-    points: Array<{ x: number; y: number }>;
-    stroke: string;
-    strokeWidth: number;
-  }>
+  Record<
+    string,
+    {
+      points: Array<{ x: number; y: number }>;
+      stroke: string;
+      strokeWidth: number;
+    }
+  >
 >;
 
 export interface SvgPath {

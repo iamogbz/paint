@@ -220,7 +220,7 @@ export class PaintingControls extends SignalElement {
     const regionedColors: string[] = [];
     const assignedNonRegionedColors: Set<string> = new Set();
     const allColors = [TRANSPARENT_HEX];
-    const dirtyRegions = new Set(currentArtwork?.regionsCurrentFillInfo.keys().filter((regionId) => currentArtwork?.brushStrokePaths[regionId]?.length > 0) ?? []);
+    const dirtyRegions = new Set(currentArtwork?.regionsCurrentFillInfo.keys().filter((regionId) => Object.keys(currentArtwork?.brushStrokePaths[regionId] ?? {}).length > 0) ?? []);
 
     if (currentArtwork) {
       // use the stat count directly since painting in the image does not change this value

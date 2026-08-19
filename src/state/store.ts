@@ -272,12 +272,15 @@ export function saveCurrentArtworkProgress(currentArtwork: ProcessedArtwork) {
   currentArtworkSignal.set(currentArtwork && { ...currentArtwork });
 }
 
+const MAX_UNDO_HISTORY = 10;
+
 /**
  * Save only the diffable between states not the full artwork
  */
 export function pushUndoState(currentArtwork: ProcessedArtwork) {
-  undoStackSignal.set([
-    ...undoStackSignal.get(),
+  const currentStack = undoStackSignal.get();
+  const nextStack = [
+    ...currentStack,
     {
       /** For the swatch counts */
       colorsAssignedToRegions: copyMapSet(currentArtwork.colorsAssignedToRegions),
@@ -288,7 +291,13 @@ export function pushUndoState(currentArtwork: ProcessedArtwork) {
       /** For the custom brush strokes */
       brushStrokePaths: deepCopy(currentArtwork.brushStrokePaths),
     } as const,
-  ]);
+  ];
+
+  if (nextStack.length > MAX_UNDO_HISTORY) {
+    undoStackSignal.set(nextStack.slice(-MAX_UNDO_HISTORY));
+  } else {
+    undoStackSignal.set(nextStack);
+  }
 }
 
 export function handleDeleteSwatchColor(color: string) {
@@ -319,9 +328,16 @@ export function handleDeleteSwatchColor(color: string) {
   // Remove brush strokes painted with this color
   if (current.brushStrokePaths) {
     for (const regionId of Object.keys(current.brushStrokePaths)) {
-      current.brushStrokePaths[regionId] = current.brushStrokePaths[regionId].filter((stroke) => stroke.stroke !== hexCode);
-      if (current.brushStrokePaths[regionId].length === 0) {
-        delete current.brushStrokePaths[regionId];
+      const regionStrokes = current.brushStrokePaths[regionId];
+      if (regionStrokes) {
+        for (const [strokeId, stroke] of Object.entries(regionStrokes)) {
+          if (stroke.stroke === hexCode) {
+            delete regionStrokes[strokeId];
+          }
+        }
+        if (Object.keys(regionStrokes).length === 0) {
+          delete current.brushStrokePaths[regionId];
+        }
       }
     }
   }

@@ -407,20 +407,32 @@ export function updateArtworkSvgWithUserPaints(svgElem: SVGSVGElement, artwork: 
     fillElem.setAttribute("fill", fill);
 
     const strokesContainer = svgElem.querySelector(`#brush-strokes-${regionId}`) as SVGGElement;
-    const strokes = artwork.brushStrokePaths[regionId];
-    if (!strokes || strokes.length === 0) {
+    if (!strokesContainer) return;
+
+    const strokesRecord = artwork.brushStrokePaths[regionId];
+    if (!strokesRecord || Object.keys(strokesRecord).length === 0) {
       // clear all the rendered strokes
       strokesContainer.innerHTML = "";
       return;
     }
-    if (strokesContainer.childElementCount > strokes.length) {
-      for (let i = strokes.length; i < strokesContainer.childElementCount; i++) {
-        strokesContainer.children.item(i).remove();
+
+    const strokeIds = Object.keys(strokesRecord);
+
+    // Remove any children that are no longer in the strokesRecord
+    Array.from(strokesContainer.children).forEach((child) => {
+      const id = child.getAttribute("id");
+      if (id && id.startsWith(`stroke-${regionId}_`)) {
+        const strokeId = id.split("_").pop();
+        if (!strokeId || !strokesRecord[strokeId]) {
+          child.remove();
+        }
       }
-    }
-    strokes.forEach((stroke, idx) => {
+    });
+
+    strokeIds.forEach((strokeId) => {
+      const stroke = strokesRecord[strokeId];
       if (stroke.points.length <= 0) return; // this should not happen but in case
-      const strokePathElemId = `stroke-${regionId}_${idx}`;
+      const strokePathElemId = `stroke-${regionId}_${strokeId}`;
       let strokePathElem = strokesContainer.querySelector(`#${strokePathElemId}`) as SVGPathElement;
       if (!strokePathElem) {
         strokePathElem = document.createElementNS(XML_NS, "path");
