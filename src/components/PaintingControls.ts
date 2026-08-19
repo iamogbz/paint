@@ -218,7 +218,7 @@ export class PaintingControls extends SignalElement {
     }
 
     const regionedColors: string[] = [];
-    const nonRegionedColors: string[] = [];
+    const assignedNonRegionedColors: Set<string> = new Set();
     const allColors = [TRANSPARENT_HEX];
     const dirtyRegions = new Set(currentArtwork?.regionsCurrentFillInfo.keys().filter((regionId) => currentArtwork?.brushStrokePaths[regionId]?.length > 0) ?? []);
 
@@ -231,9 +231,10 @@ export class PaintingControls extends SignalElement {
         if (regionsIds.size > 0) {
           regionedColors.push(colorHex);
         } else {
-          nonRegionedColors.push(colorHex);
+          assignedNonRegionedColors.add(colorHex);
         }
       }
+      const nonRegionedColors = assignedNonRegionedColors.union(new Set(currentArtwork.regionsCurrentFillInfo.values())).difference(new Set(regionedColors));
 
       // Un-regioned colors maintain their preserved order
       // Regioned colors maintain order but uncompleted show first
