@@ -509,6 +509,7 @@ export class EaselBoard extends SignalElement {
       // If there was no active brush target region reset it to where the user was hovering over
       if (!this.brushTargetRegionId) {
         this.brushTargetRegionId = currentBrushRegionId;
+        this.hoveredRegionId = null;
         console.log({ activeColorIsSameAsRegionCurrentColor, targetRegionIsAlreadyInDirtyState });
         pushUndoState(currentArtwork);
       }
@@ -816,10 +817,11 @@ export class EaselBoard extends SignalElement {
       const expectedHexUpper = normalizeHex(expectedColorHex);
       const currentHexUpper = fillLayer.querySelector(`[data-region-id="${region.id}"]`).getAttribute("fill").toUpperCase();
 
-      const isTarget = !!targetHexUpper && expectedHexUpper === targetHexUpper;
+      const activeBrushTargetColor = this.brushTargetRegionId ? normalizeHex(currentArtwork.regionsDrawingInfo.get(this.brushTargetRegionId)?.fillColor) : null;
+      const isTarget = (!!targetHexUpper && expectedHexUpper === targetHexUpper) || (!!activeBrushTargetColor && expectedHexUpper === activeBrushTargetColor);
       const isPaintedCorrect = !!currentHexUpper && currentHexUpper === expectedHexUpper;
       const isPaintedWrong = !!currentHexUpper && currentHexUpper !== expectedHexUpper;
-      const isHovered = region.id === this.hoveredRegionId;
+      const isHovered = region.id === this.hoveredRegionId || region.id === this.brushTargetRegionId;
       strokeWidth = baseStrokeWidth * (isPaintedWrong ? 1.2 : 1.0);
 
       if (isHovered) {
