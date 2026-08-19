@@ -424,17 +424,20 @@ export class EaselBoard extends SignalElement {
     const svg = this.querySelector<SVGSVGElement>("#fill-layer>svg");
     if (!svg) return null;
 
-    // 1. Get the LIVE bounding box (NOT cached, so it perfectly respects current pan/zoom/transforms)
     const rect = svg.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return null;
 
-    // Use the native viewBox as the source of truth for internal SVG coordinates
-    // If viewBox is somehow missing, fallback to the baseVal width/height or artwork bounds
-    let vbX = 0, vbY = 0, vbW = 100, vbH = 100;
-    
+    const ctmMatrix = svg.getScreenCTM();
+    if (!ctmMatrix) return null;
+
+    const screenPoint = svg.createSVGPoint();
+    screenPoint.x = px;
+    screenPoint.y = py;
+
+    const svgTouchPoint = screenPoint.matrixTransform(ctmMatrix.inverse());
+
+    let vbW = 100, vbH = 100;
     if (svg.viewBox.baseVal && svg.viewBox.baseVal.width > 0) {
-      vbX = svg.viewBox.baseVal.x;
-      vbY = svg.viewBox.baseVal.y;
       vbW = svg.viewBox.baseVal.width;
       vbH = svg.viewBox.baseVal.height;
     } else {
@@ -445,19 +448,10 @@ export class EaselBoard extends SignalElement {
       }
     }
 
-    // 2. Calculate how far into the SVG's screen bounding box we clicked (Percentage 0.0 to 1.0)
-    const percentX = (px - rect.left) / rect.width;
-    const percentY = (py - rect.top) / rect.height;
-
-    // 3. Map that percentage into the internal SVG viewBox coordinate space
-    const x = vbX + (percentX * vbW);
-    const y = vbY + (percentY * vbH);
-
-    // 4. Calculate how many internal SVG units equal 1 physical screen pixel
     const scaleX = vbW / rect.width;
     const scaleY = vbH / rect.height;
 
-    return { x, y, scaleX, scaleY };
+    return { x: svgTouchPoint.x, y: svgTouchPoint.y, scaleX, scaleY };
   }
 
   private handleBrushPointerMove = (e: PointerEvent) => {
