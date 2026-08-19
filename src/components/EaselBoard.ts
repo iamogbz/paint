@@ -434,6 +434,11 @@ export class EaselBoard extends SignalElement {
       this.containerElement?.releasePointerCapture(e.pointerId);
       window.removeEventListener("pointercancel", this.handlePointerUp);
       
+      // on mobile/touch screens, there is no persistent hover after the pointer is lifted
+      if (e.pointerType !== "mouse") {
+        this.hoveredRegionId = null;
+      }
+      
       this.updateTransformDirectly();
       this.redrawArtboard(); // trigger redraw at end of drag
     }
