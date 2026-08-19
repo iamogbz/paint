@@ -385,8 +385,6 @@ export class EaselBoard extends SignalElement {
   };
 
   private handlePointerUp = (e: PointerEvent) => {
-    this.activePointers.delete(e.pointerId);
-
     // Unconditionally clear all active pointers on any pointer up to prevent getting stuck
     // in ghost touch / pinch states, especially after long brush strokes where events can be dropped.
     this.activePointers.clear();
