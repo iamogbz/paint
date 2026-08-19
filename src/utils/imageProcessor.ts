@@ -1,9 +1,36 @@
 import { FALLBACK_IMAGE_SIZE_PX, FILLABLE_SVG_ELEMENTS_SELECTOR, TRANSPARENT_HEX } from "./constants.js";
 import { processingImageHeightSignal, processingImageWidthSignal } from "../state/store.js";
 import { MutableMap, ProcessedArtwork } from "../types";
-import init, { vectorize_rgba } from "../vtracer/vtracer_wasm.js";
 import { getHexCode, normalizeHex } from "./color.js";
 import { parseSVG, XML_NS } from "./html.js";
+
+let _worker: Worker | null = null;
+let _msgId = 0;
+const _callbacks = new Map<number, { resolve: Function, reject: Function }>();
+
+function getWorker() {
+  if (!_worker) {
+    _worker = new Worker(new URL('./imageProcessorWorker.ts', import.meta.url), { type: 'module' });
+    _worker.onmessage = (e) => {
+      const { id, type, payload } = e.data;
+      const cb = _callbacks.get(id);
+      if (cb) {
+        if (type === "SUCCESS") cb.resolve(payload);
+        else cb.reject(new Error(payload));
+        _callbacks.delete(id);
+      }
+    };
+  }
+  return _worker;
+}
+
+function runInWorker(type: string, payload: any): Promise<any> {
+  return new Promise((resolve, reject) => {
+    const id = ++_msgId;
+    _callbacks.set(id, { resolve, reject });
+    getWorker().postMessage({ id, type, payload });
+  });
+}
 
 function parseSvgDimension(value) {
   if (!value) return 0;
@@ -129,35 +156,17 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     const origImgData = origCtx.getImageData(0, 0, imgWidth, imgHeight);
     const rawPixels = origImgData.data;
 
-    // Run vtracer
-    await init("https://unpkg.com/@visioncortex/vtracer@1.0.0-alpha.3/pkg/vtracer_wasm_bg.wasm");
+    // Run vtracer in worker
     const options = {
-      /** default: color-cluster for true color image */
       clustering: "color-cluster",
-      /** shapes disjoint with others */
       hierarchical: "cutout",
-      /** Auto-quantize target color count */
       maxColors: 24,
-      /** If a pallete is defined maps colors to this */
-      // palette: palette,
-      /** Discard patches smaller than X px in size (0..=128) */
       filterSpeckle: 2,
-      /** default: 8 (best) - Significant bits per RGB channel (1..=8)  */
       colorPrecision: 8,
-      /** Color difference between gradient layers (0..=255) */
       layerDifference: 48,
-      /** Method for converting in to shapes. Values below only valid in spline */
       mode: "spline",
-      /** default: 60, Minimum Momentary Angle (in degrees) to be considered a corner (to be kept after smoothing) - Higher = smoother */
-      // cornerThreshold: 60,
-      /** default: 4, Perform Iterative Subdivide Smooth until all segments are shorter than this length <3.5..=10> */
-      // lengthThreshold: 4,
-      /** default: 45, Minimum Angle Displacement (in degrees) to be considered a cutting point between curves <0..=180> */
-      // spliceThreshold: 45,
-      /** default: off, Simplify curves: fewest cubics within this tolerance in px (try 1–2.5) */
-      // simplify: 2,
     };
-    const svgStr = vectorize_rgba(rawPixels, imgWidth, imgHeight, options);
+    const svgStr = await runInWorker("VECTORIZE", { rawPixels, imgWidth, imgHeight, options });
     svgDoc = parseSVG(svgStr.includes("xmlns=") ? svgStr : svgStr.replace("<svg", `<svg xmlns="${XML_NS}"`));
   } else if (maybeImage.type === "err") {
     console.error(maybeImage);
@@ -322,29 +331,13 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
 
   try {
     const expandPx = 12;
-    for (const regionA of regionsDrawingInfo) {
-      const idA = regionA[0];
-      const boxA = regionA[1].boundingBox;
-      if (!boxA) continue;
-      const areaA = boxA.width * boxA.height;
-
-      for (const regionB of regionsDrawingInfo) {
-        const idB = regionB[0];
-        if (idA === idB) continue;
-        const boxB = regionB[1].boundingBox;
-        if (!boxB) continue;
-        const areaB = boxB.width * boxB.height;
-
-        // Only add smaller or equal sized regions to the neighbor list.
-        // This prevents large regions from "stealing" taps intended for smaller regions 
-        // when the user wants to paint a small region with a non-matching color.
-        if (areaB > areaA) continue;
-
-        const intersectX = boxA.x - expandPx <= boxB.x + boxB.width && boxA.x + boxA.width + expandPx >= boxB.x;
-        const intersectY = boxA.y - expandPx <= boxB.y + boxB.height && boxA.y + boxA.height + expandPx >= boxB.y;
-        if (intersectX && intersectY) {
-          regionA[1].neighbourRegionIds.add(idB);
-        }
+    const regions = Array.from(regionsDrawingInfo.values()).map(r => ({ id: r.id, boundingBox: r.boundingBox }));
+    const computedNeighbours = await runInWorker("COMPUTE_NEIGHBORS", { regions, expandPx });
+    
+    for (const [id, neighbours] of computedNeighbours) {
+      const region = regionsDrawingInfo.get(id);
+      if (region) {
+        neighbours.forEach((nId: string) => region.neighbourRegionIds.add(nId));
       }
     }
   } catch (e) {

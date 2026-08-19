@@ -184,7 +184,7 @@ export function pushUndoState(currentArtwork: ProcessedArtwork) {
       regionsCurrentFillInfo: new Map(currentArtwork.regionsCurrentFillInfo),
       /** For the custom brush strokes */
       brushStrokePaths: deepCopy(currentArtwork.brushStrokePaths),
-    },
+    } as const,
   ]);
 }
 

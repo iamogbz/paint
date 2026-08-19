@@ -5,5 +5,5 @@ export function deepCopy<T>(obj: T): T {
 
 /** Deep clone map set */
 export function copyMapSet<K, V>(o: Map<K, Set<V>>) {
-  return new Map(o.entries().map(([k, v]) => [k, new Set(v)]));
+  return new Map(Array.from(o).map(([k, v]) => [k, new Set(v)] as const));
 }
