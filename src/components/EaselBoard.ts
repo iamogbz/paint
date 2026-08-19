@@ -378,7 +378,12 @@ export class EaselBoard extends SignalElement {
         }
       }
     } else if (this.artworkId) {
-      this.updateHoverRegion(e);
+      if (e.pointerType === "mouse" || draggedColorPositionSignal.get() !== null) {
+        this.updateHoverRegion(e);
+      } else if (this.hoveredRegionId !== null) {
+        this.hoveredRegionId = null;
+        this.redrawArtboard();
+      }
     }
   };
 
@@ -449,7 +454,12 @@ export class EaselBoard extends SignalElement {
   };
 
   private handlePointerLeave = (e: PointerEvent) => {
-    this.updateHoverRegion(e);
+    if (e.pointerType === "mouse" || draggedColorPositionSignal.get() !== null) {
+      this.updateHoverRegion(e);
+    } else if (this.hoveredRegionId !== null) {
+      this.hoveredRegionId = null;
+      this.redrawArtboard();
+    }
   };
 
   private handlePanDelta = (e) => {
