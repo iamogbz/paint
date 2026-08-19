@@ -668,6 +668,7 @@ export class EaselBoard extends SignalElement {
             // Expand the bounding box check by an 8px physical screen distance to make hitting thin/small elements easier
             const toleranceX = 8 * (currentArtwork.width / rect.width);
             const toleranceY = 8 * (currentArtwork.height / rect.height);
+            let minArea = Infinity;
 
             for (const nId of neighbors) {
               const nInfo = currentArtwork.regionsDrawingInfo.get(nId);
@@ -678,7 +679,15 @@ export class EaselBoard extends SignalElement {
                     const cx = bb.x + bb.width / 2;
                     const cy = bb.y + bb.height / 2;
                     const dist = Math.hypot(cx - svgX, cy - svgY);
-                    if (dist < minDistance) {
+                    const area = bb.width * bb.height;
+                    
+                    // We strongly prefer the smaller shape to make it easier to hit fine details
+                    // Only fallback to distance if areas are functionally identical
+                    const isSignificantlySmallerArea = area < minArea * 0.8;
+                    const isSimilarAreaButCloser = Math.abs(area - minArea) / minArea <= 0.2 && dist < minDistance;
+
+                    if (isSignificantlySmallerArea || isSimilarAreaButCloser) {
+                        minArea = area;
                         minDistance = dist;
                         closestRegion = nId;
                     }
