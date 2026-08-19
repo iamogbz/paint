@@ -189,9 +189,6 @@ export class EaselBoard extends SignalElement {
   // faster buffering of painted paths without waiting for save logic
   private brushPositionBuffer = [] as BrushStrokePaths[number][number]["points"];
 
-  private previousUndoStackLength = 0;
-  private previousActiveColor: string | null = null;
-
   public triggerFilePicker = () => {
     if (this.isDragCanvasAction) return;
     const input = document.getElementById("easel-file-input") as HTMLInputElement;
@@ -756,11 +753,24 @@ export class EaselBoard extends SignalElement {
   disconnectedCallback() {
     super.disconnectedCallback();
     window.removeEventListener("easel-pan-delta", this.handlePanDelta);
+    window.removeEventListener("pointerdown", this.handleGlobalPointerDown);
   }
+
+  private handleGlobalPointerDown = (e: PointerEvent) => {
+    if (!this.containerElement) return;
+    
+    // Check if the tap happened outside the canvas container
+    const isOutsideCanvas = !e.composedPath().includes(this.containerElement);
+    if (isOutsideCanvas && this.hoveredRegionId !== null) {
+      this.hoveredRegionId = null;
+      this.redrawArtboard();
+    }
+  };
 
   firstUpdated() {
     this.setupPointerListeners();
     window.addEventListener("easel-pan-delta", this.handlePanDelta);
+    window.addEventListener("pointerdown", this.handleGlobalPointerDown);
 
     (window as any).regionsByColors = () => {
       const currentArtwork = currentArtworkSignal.get();
@@ -845,18 +855,6 @@ export class EaselBoard extends SignalElement {
 
   render() {
     const currentArtwork = currentArtworkSignal.get();
-    const currentUndoStackLength = undoStackSignal.get().length;
-    const currentActiveColor = activeHighlightColorSignal.get();
-    
-    if (currentUndoStackLength < this.previousUndoStackLength) {
-      this.hoveredRegionId = null;
-    }
-    if (this.previousActiveColor !== currentActiveColor) {
-      this.hoveredRegionId = null;
-    }
-    this.previousUndoStackLength = currentUndoStackLength;
-    this.previousActiveColor = currentActiveColor;
-
     this.artworkId = currentArtwork?.id;
     const isProcessing = isProcessingSignal.get();
     const processingSrc = processingImageSrcSignal.get();
