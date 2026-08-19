@@ -71,8 +71,18 @@ async function loadImage(src: string): Promise<Readonly<({ type: "err"; data: un
         const img = new Image();
         img.crossOrigin = "anonymous";
         img.onload = () => {
-          processingImageWidthSignal.set(img.naturalWidth || FALLBACK_IMAGE_SIZE_PX);
-          processingImageHeightSignal.set(img.naturalHeight || FALLBACK_IMAGE_SIZE_PX);
+          let targetWidth = img.naturalWidth || FALLBACK_IMAGE_SIZE_PX;
+          let targetHeight = img.naturalHeight || FALLBACK_IMAGE_SIZE_PX;
+          const maxDim = Math.max(targetWidth, targetHeight);
+          
+          if (maxDim > FALLBACK_IMAGE_SIZE_PX) {
+            const scale = FALLBACK_IMAGE_SIZE_PX / maxDim;
+            targetWidth = Math.round(targetWidth * scale);
+            targetHeight = Math.round(targetHeight * scale);
+          }
+          
+          processingImageWidthSignal.set(targetWidth);
+          processingImageHeightSignal.set(targetHeight);
           resolve({
             type: "bin",
             format: contentType,
@@ -136,8 +146,8 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     svgDoc = maybeImage.data;
   } else if (maybeImage.type === "bin") {
     const img = maybeImage.data;
-    const imgWidth = img.width;
-    const imgHeight = img.height;
+    const imgWidth = processingImageWidthSignal.get();
+    const imgHeight = processingImageHeightSignal.get();
 
     const origCanvas = document.createElement("canvas");
     origCanvas.width = imgWidth;
@@ -145,7 +155,7 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     const origCtx = origCanvas.getContext("2d", { willReadFrequently: true });
     if (!origCtx) throw new Error("Failed to initialize canvas 2D context");
 
-    origCtx.imageSmoothingEnabled = false;
+    origCtx.imageSmoothingEnabled = true;
     origCtx.imageSmoothingQuality = "high";
 
     // Fill with white background in case of transparency
