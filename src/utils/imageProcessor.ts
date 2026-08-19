@@ -326,12 +326,19 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
       const idA = regionA[0];
       const boxA = regionA[1].boundingBox;
       if (!boxA) continue;
+      const areaA = boxA.width * boxA.height;
 
       for (const regionB of regionsDrawingInfo) {
         const idB = regionB[0];
         if (idA === idB) continue;
         const boxB = regionB[1].boundingBox;
         if (!boxB) continue;
+        const areaB = boxB.width * boxB.height;
+
+        // Only add smaller or equal sized regions to the neighbor list.
+        // This prevents large regions from "stealing" taps intended for smaller regions 
+        // when the user wants to paint a small region with a non-matching color.
+        if (areaB > areaA) continue;
 
         const intersectX = boxA.x - expandPx <= boxB.x + boxB.width && boxA.x + boxA.width + expandPx >= boxB.x;
         const intersectY = boxA.y - expandPx <= boxB.y + boxB.height && boxA.y + boxA.height + expandPx >= boxB.y;
