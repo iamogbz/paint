@@ -5,7 +5,7 @@ import { currentArtworkSignal, isProcessingSignal, processingImageSrcSignal, pro
 import { getDailyChallenge } from "../data/dailyChallenge";
 import { soundEffects } from "../utils/soundEffects";
 import { iconImage, iconUpload, iconPaintBucket } from "./icons";
-import { BASE_BRUSH_RADIUS, FILLABLE_SVG_ELEMENTS, TRANSPARENT_HEX, transparentImgCss, MIN_ZOOM, MAX_ZOOM } from "../utils/constants";
+import { BASE_BRUSH_RADIUS, FALLBACK_IMAGE_SIZE_PX, FILLABLE_SVG_ELEMENTS, TRANSPARENT_HEX, transparentImgCss, MIN_ZOOM, MAX_ZOOM } from "../utils/constants";
 import { normalizeHex } from "../utils/color";
 import { BrushStrokePaths } from "../types";
 import { clamp, zoom } from "../utils/ui";
@@ -528,7 +528,8 @@ export class EaselBoard extends SignalElement {
           } else {
             // Start a new active stroke in the entered region
             this.brushTargetRegionId = currentBrushRegionId;
-            const strokeWidth = Math.max(1, BASE_BRUSH_RADIUS / this.zoomScale);
+            const imageScaleFactor = Math.max(currentArtwork.width, currentArtwork.height) / FALLBACK_IMAGE_SIZE_PX;
+            const strokeWidth = Math.max(1, (BASE_BRUSH_RADIUS * imageScaleFactor) / this.zoomScale);
             if (activeColor) {
               // If the active color is transparent, do not create a new stroke
               if (activeColor === TRANSPARENT_HEX) {
