@@ -66,6 +66,7 @@ export class PaintingControls extends SignalElement {
     const onPointerUp = () => {
       cleanup();
       if (!hasDragged) {
+        window.dispatchEvent(new CustomEvent("easel-reset-pan"));
         const currentZoom = zoomScaleSignal.get();
         const nextScale = currentZoom === 1 ? 2 : 1;
         zoomScaleSignal.set(nextScale);

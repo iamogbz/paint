@@ -420,6 +420,14 @@ export class EaselBoard extends SignalElement {
     this.updateTransformDirectly();
   };
 
+  private handlePanReset = () => {
+    this.panX = 0;
+    this.panY = 0;
+    this.dragDeltaX = 0;
+    this.dragDeltaY = 0;
+    this.updateTransformDirectly();
+  };
+
   private getSvgCoordinates(px: number, py: number): { x: number; y: number; scaleX: number; scaleY: number } | null {
     const svg = this.querySelector<SVGSVGElement>("#fill-layer>svg");
     if (!svg) return null;
@@ -739,6 +747,7 @@ export class EaselBoard extends SignalElement {
   disconnectedCallback() {
     super.disconnectedCallback();
     window.removeEventListener("easel-pan-delta", this.handlePanDelta);
+    window.removeEventListener("easel-reset-pan", this.handlePanReset);
     window.removeEventListener("pointerdown", this.handleGlobalPointerDown);
     window.removeEventListener("pointermove", this.handleGlobalPointerMove);
     window.removeEventListener("pointerup", this.handleGlobalPointerUp);
@@ -793,6 +802,7 @@ export class EaselBoard extends SignalElement {
   firstUpdated() {
     this.setupPointerListeners();
     window.addEventListener("easel-pan-delta", this.handlePanDelta);
+    window.addEventListener("easel-reset-pan", this.handlePanReset);
     window.addEventListener("pointerdown", this.handleGlobalPointerDown);
     window.addEventListener("pointermove", this.handleGlobalPointerMove);
     window.addEventListener("pointerup", this.handleGlobalPointerUp);
