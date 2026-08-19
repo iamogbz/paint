@@ -420,38 +420,42 @@ export class EaselBoard extends SignalElement {
     this.updateTransformDirectly();
   };
 
-  private getSvgCoordinates(px: number, py: number, zoomScale: number): { x: number; y: number; scaleX: number; scaleY: number } | null {
+  private getSvgCoordinates(px: number, py: number): { x: number; y: number; scaleX: number; scaleY: number } | null {
     const svg = this.querySelector<SVGSVGElement>("#fill-layer>svg");
     if (!svg) return null;
 
-    const currentArtwork = currentArtworkSignal.get();
-    if (!currentArtwork) return null;
-
-    const ctm = svg.getScreenCTM();
-    if (!ctm) return null;
-
-    const pt = svg.createSVGPoint();
-    pt.x = px;
-    pt.y = py;
-    
-    // ctm.inverse() maps screen coordinates to the SVG's CSS layout coordinates
-    const cssP = pt.matrixTransform(ctm.inverse());
-
-    // Calculate viewBox scaling accurately using the bounding rect and current zoom
-    // This avoids using inner paths that might have local transforms offsetting the strokes
+    // 1. Get the LIVE bounding box (NOT cached, so it perfectly respects current pan/zoom/transforms)
     const rect = svg.getBoundingClientRect();
-    const unzoomedWidth = rect.width / zoomScale;
-    const unzoomedHeight = rect.height / zoomScale;
+    if (rect.width === 0 || rect.height === 0) return null;
 
-    const viewBoxScaleX = currentArtwork.width / unzoomedWidth;
-    const viewBoxScaleY = currentArtwork.height / unzoomedHeight;
-
-    const x = cssP.x * viewBoxScaleX;
-    const y = cssP.y * viewBoxScaleY;
+    // Use the native viewBox as the source of truth for internal SVG coordinates
+    // If viewBox is somehow missing, fallback to the baseVal width/height or artwork bounds
+    let vbX = 0, vbY = 0, vbW = 100, vbH = 100;
     
-    // Total scale factor to convert 1 physical screen pixel into SVG viewBox coordinate distance
-    const scaleX = Math.abs(ctm.inverse().a) * viewBoxScaleX;
-    const scaleY = Math.abs(ctm.inverse().d) * viewBoxScaleY;
+    if (svg.viewBox.baseVal && svg.viewBox.baseVal.width > 0) {
+      vbX = svg.viewBox.baseVal.x;
+      vbY = svg.viewBox.baseVal.y;
+      vbW = svg.viewBox.baseVal.width;
+      vbH = svg.viewBox.baseVal.height;
+    } else {
+      const currentArtwork = currentArtworkSignal.get();
+      if (currentArtwork) {
+        vbW = currentArtwork.width;
+        vbH = currentArtwork.height;
+      }
+    }
+
+    // 2. Calculate how far into the SVG's screen bounding box we clicked (Percentage 0.0 to 1.0)
+    const percentX = (px - rect.left) / rect.width;
+    const percentY = (py - rect.top) / rect.height;
+
+    // 3. Map that percentage into the internal SVG viewBox coordinate space
+    const x = vbX + (percentX * vbW);
+    const y = vbY + (percentY * vbH);
+
+    // 4. Calculate how many internal SVG units equal 1 physical screen pixel
+    const scaleX = vbW / rect.width;
+    const scaleY = vbH / rect.height;
 
     return { x, y, scaleX, scaleY };
   }
@@ -495,7 +499,7 @@ export class EaselBoard extends SignalElement {
         // clear the buffer now that we can use it, filtering out any accumulated points that fall outside the target region's bounding box
         const strokePoints = this.brushPositionBuffer
           .splice(0)
-          .map((pos) => this.getSvgCoordinates(pos.x, pos.y, this.zoomScale))
+          .map((pos) => this.getSvgCoordinates(pos.x, pos.y))
           .filter((pos) => pos !== null)
           .filter((pos) => {
             if (!boundingBox) return true;
@@ -641,7 +645,7 @@ export class EaselBoard extends SignalElement {
         let closestRegion: string | null = null;
         let minDistance = Infinity;
 
-        const svgCoords = this.getSvgCoordinates(px, py, this.zoomScale);
+        const svgCoords = this.getSvgCoordinates(px, py);
 
         if (svgCoords) {
           const { x: svgX, y: svgY, scaleX, scaleY } = svgCoords;
