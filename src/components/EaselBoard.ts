@@ -1,4 +1,4 @@
-import { html, svg } from "lit";
+import { html } from "lit";
 import { customElement } from "lit/decorators.js";
 import { SignalElement } from "../utils/SignalElement";
 import { currentArtworkSignal, isProcessingSignal, processingImageSrcSignal, processingImageWidthSignal, processingImageHeightSignal, activeHighlightColorSignal, dragToOpenFileSignal, zoomScaleSignal, handleImageSelected, handleSelectArtwork, draggedColorPositionSignal, pushUndoState, saveCurrentArtworkProgress, footerStyleSignal, isBrushModeSignal, artworksSignal, artworkIdsSortedSignal, panDragActiveSignal } from "../state/store";
@@ -180,7 +180,6 @@ export class EaselBoard extends SignalElement {
   private initialPinchDistance: number | null = null;
   private initialZoomScale: number = 1.0;
   private isPinchAction = false;
-
 
   // Brush Painting State
   private isBrushPainting = false;
@@ -444,7 +443,8 @@ export class EaselBoard extends SignalElement {
 
     const svgTouchPoint = screenPoint.matrixTransform(ctmMatrix.inverse());
 
-    let vbW = 100, vbH = 100;
+    let vbW = FALLBACK_IMAGE_SIZE_PX,
+      vbH = FALLBACK_IMAGE_SIZE_PX;
     if (svg.viewBox.baseVal && svg.viewBox.baseVal.width > 0) {
       vbW = svg.viewBox.baseVal.width;
       vbH = svg.viewBox.baseVal.height;
@@ -760,7 +760,7 @@ export class EaselBoard extends SignalElement {
   };
 
   private handleGlobalPointerUp = (e: PointerEvent) => {
-    const previousHoveredRegionId = this.hoveredRegionId
+    const previousHoveredRegionId = this.hoveredRegionId;
     if (draggedColorPositionSignal.get() !== null) {
       if (this.hoveredRegionId) {
         const activeColor = activeHighlightColorSignal.get();
@@ -863,6 +863,8 @@ export class EaselBoard extends SignalElement {
 
       // update the artwork to show the current paint interaction state
       if (!currentArtwork || !fillLayer) return;
+      const activeHexUpper = normalizeHex(activeColor);
+      const activeColorIsCore = currentArtwork.colorsAssignedToRegions.get(activeHexUpper)?.size > 0 || activeHexUpper === TRANSPARENT_HEX;
       updateArtworkSvgWithUserPaints(fillLayer.querySelector("svg"), currentArtwork);
       // update the guide layer with current user interaction
       currentArtwork?.regionsDrawingInfo.forEach((region) => {
@@ -874,19 +876,18 @@ export class EaselBoard extends SignalElement {
 
         const baseStrokeWidth = Math.max(1, currentArtwork.width / 400 / this.zoomScale);
 
-        const targetHexUpper = normalizeHex(activeColor);
         const expectedHexUpper = normalizeHex(expectedColorHex);
         const currentHexUpper = fillLayer.querySelector(`[data-region-id="${region.id}"]`).getAttribute("fill").toUpperCase();
 
         const activeBrushTargetColor = this.brushTargetRegionId ? normalizeHex(currentArtwork.regionsDrawingInfo.get(this.brushTargetRegionId)?.fillColor) : null;
-        const isTarget = (!!targetHexUpper && expectedHexUpper === targetHexUpper) || (!!activeBrushTargetColor && expectedHexUpper === activeBrushTargetColor);
+        const isTarget = (!!activeHexUpper && expectedHexUpper === activeHexUpper) || (!!activeBrushTargetColor && expectedHexUpper === activeBrushTargetColor);
         const isPaintedCorrect = !!currentHexUpper && currentHexUpper === expectedHexUpper;
         const isPaintedWrong = !!currentHexUpper && currentHexUpper !== expectedHexUpper;
         const isHovered = region.id === this.hoveredRegionId || region.id === this.brushTargetRegionId;
         strokeWidth = baseStrokeWidth * (isPaintedWrong ? 1.2 : 1.0);
 
         if (isHovered) {
-          const isTransparentPaintFill = targetHexUpper.substring(7) === "00";
+          const isTransparentPaintFill = activeHexUpper.substring(7) === "00";
           stroke = isTransparentPaintFill ? "#FFFFFF" : activeColor || "#000000";
           mixBlendMode = isTransparentPaintFill ? "difference" : "normal";
         } else {
@@ -901,7 +902,7 @@ export class EaselBoard extends SignalElement {
               // use is painted wrong stroke width
               mixBlendMode = "normal";
             }
-          } else if (!this.hoveredRegionId && !targetHexUpper) {
+          } else if (!activeHexUpper || !activeColorIsCore) {
             stroke = "#00000088";
             strokeWidth = baseStrokeWidth;
             mixBlendMode = "normal";
