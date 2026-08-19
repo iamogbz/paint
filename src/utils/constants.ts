@@ -1,4 +1,5 @@
 export const TRANSPARENT_HEX = "#00000000";
+export const PAINTABLE_REGION_HEX = "#FFFFFFFF";
 export const transparentImgCss = `conic-gradient(#00000011 25%, #FFFFFF11 25%, #FFFFFF11 50%, #00000011 50%, #00000011 75%, #FFFFFF11 75%)`;
 
 export const BASE_BRUSH_RADIUS = 20;

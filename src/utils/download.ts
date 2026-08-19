@@ -2,6 +2,7 @@ import { jsPDF } from "jspdf";
 import "svg2pdf.js";
 import { ProcessedArtwork } from "../types";
 import { renderArtworkToSVG } from "./imageProcessor";
+import { TRANSPARENT_HEX } from "./constants";
 
 export async function downloadImage(dataUrl: string, filename: string): Promise<void> {
   if (!dataUrl) return;
@@ -107,7 +108,7 @@ export async function exportArtworkHighResPng(artwork: ProcessedArtwork): Promis
         return;
       }
 
-      ctx.fillStyle = "#FFFFFF"; // Ensure white background
+      ctx.fillStyle = TRANSPARENT_HEX; // PNGs can be transparent
       ctx.fillRect(0, 0, canvas.width, canvas.height);
       ctx.drawImage(img, 0, 0, targetWidth, targetHeight);
 

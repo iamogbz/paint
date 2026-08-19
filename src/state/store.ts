@@ -5,7 +5,7 @@ import { processImageToCartoonPalette } from "../utils/imageProcessor";
 import { soundEffects } from "../utils/soundEffects";
 import confetti from "canvas-confetti";
 import { copyMapSet, deepCopy } from "../utils/object";
-import { TRANSPARENT_HEX } from "../utils/constants";
+import { TRANSPARENT_HEX, PAINTABLE_REGION_HEX } from "../utils/constants";
 import { normalizeHex } from "../utils/color";
 
 const STORAGE_KEY_ALL_ARTWORKS = "paint_part_sd_artworks_v1";
@@ -206,7 +206,11 @@ export function handleDeleteSwatchColor(color: string) {
 
   // Unpaint any region that was painted with this color
   for (const regionId of current.colorsFilledInRegions.get(hexCode) ?? []) {
-    current.regionsCurrentFillInfo.delete(regionId);
+    if (current.regionsDrawingInfo.get(regionId).fillColor === TRANSPARENT_HEX) {
+      current.regionsCurrentFillInfo.set(regionId, TRANSPARENT_HEX);
+    } else {
+      current.regionsCurrentFillInfo.set(regionId, PAINTABLE_REGION_HEX);
+    }
   }
   current.colorsAssignedToRegions.delete(hexCode);
 

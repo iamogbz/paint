@@ -1,4 +1,4 @@
-import { FALLBACK_IMAGE_SIZE_PX, FILLABLE_SVG_ELEMENTS_SELECTOR, TRANSPARENT_HEX } from "./constants.js";
+import { FALLBACK_IMAGE_SIZE_PX, FILLABLE_SVG_ELEMENTS_SELECTOR, PAINTABLE_REGION_HEX, TRANSPARENT_HEX } from "./constants.js";
 import { processingImageHeightSignal, processingImageWidthSignal } from "../state/store.js";
 import { MutableMap, ProcessedArtwork } from "../types";
 import { getHexCode, normalizeHex } from "./color.js";
@@ -159,7 +159,7 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     origCtx.imageSmoothingQuality = "high";
 
     // Fill with white background in case of transparency
-    origCtx.fillStyle = "#FFFFFF";
+    origCtx.fillStyle = PAINTABLE_REGION_HEX;
     origCtx.fillRect(0, 0, imgWidth, imgHeight);
     origCtx.drawImage(img, 0, 0, imgWidth, imgHeight);
 
@@ -277,13 +277,13 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
       if (!colorsAssignedToRegions.has(fillColor)) {
         colorsAssignedToRegions.set(fillColor, new Set());
       }
-      regionsCurrentFillInfo.set(fillRegionId, "#FFFFFFFF");
+      regionsCurrentFillInfo.set(fillRegionId, PAINTABLE_REGION_HEX);
       colorsAssignedToRegions.get(fillColor).add(fillRegionId);
     }
 
     // prepare for blank rendering colors will be applied afterwards
     const isTransparentRegion = regionsDrawingInfo.get(fillRegionId).fillColor === TRANSPARENT_HEX;
-    const fill = regionsCurrentFillInfo.get(fillRegionId) || (isTransparentRegion ? "none" : "#FFFFFF");
+    const fill = regionsCurrentFillInfo.get(fillRegionId) || (isTransparentRegion ? "none" : PAINTABLE_REGION_HEX);
 
     fillElement.setAttribute("fill", fill);
     fillElement.setAttribute("stroke", "none");
