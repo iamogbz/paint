@@ -944,7 +944,8 @@ export class EaselBoard extends SignalElement {
       if (!currentArtwork || !fillLayer) return;
       const activeHexUpper = normalizeHex(activeColor);
       const activeColorIsCore = currentArtwork.colorsAssignedToRegions.get(activeHexUpper)?.size > 0 || activeHexUpper === TRANSPARENT_HEX;
-      updateArtworkSvgWithUserPaints(fillLayer.querySelector("svg"), currentArtwork);
+      const fillSvg = fillLayer.querySelector("svg");
+      updateArtworkSvgWithUserPaints(fillSvg, currentArtwork);
       // update the guide layer with current user interaction
       currentArtwork?.regionsDrawingInfo.forEach((region) => {
         const expectedColorHex = region.fillColor;
@@ -954,7 +955,8 @@ export class EaselBoard extends SignalElement {
         let elemClass = "";
         const hueLoopCls = "animated-hue";
 
-        const baseStrokeWidth = Math.max(1, currentArtwork.width / 400 / this.zoomScale);
+        const artWidth = fillSvg.viewBox.baseVal.width || currentArtwork.width;
+        const baseStrokeWidth = Math.max(1.5, (artWidth / FALLBACK_IMAGE_SIZE_PX) / this.zoomScale);
 
         const expectedHexUpper = normalizeHex(expectedColorHex);
         const currentHexUpper = fillLayer.querySelector(`[data-region-id="${region.id}"]`).getAttribute("fill").toUpperCase();

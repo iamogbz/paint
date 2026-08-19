@@ -11,13 +11,14 @@ self.onmessage = async (e: MessageEvent) => {
     } else if (type === "COMPUTE_NEIGHBORS") {
       const { regions, expandPx } = payload;
       const neighbourGraph = new Map<string, string[]>();
+      const expandPxSq = expandPx * expandPx;
       
       for (const regionA of regions) {
         const idA = regionA.id;
         const boxA = regionA.boundingBox;
         if (!boxA) continue;
         const areaA = boxA.width * boxA.height;
-        const neighbours: string[] = [];
+        const candidates: { id: string; distSq: number }[] = [];
         
         for (const regionB of regions) {
           const idB = regionB.id;
@@ -31,13 +32,17 @@ self.onmessage = async (e: MessageEvent) => {
           // when the user wants to paint a small region with a non-matching color.
           if (areaB > areaA) continue;
           
-          const intersectX = boxA.x - expandPx <= boxB.x + boxB.width && boxA.x + boxA.width + expandPx >= boxB.x;
-          const intersectY = boxA.y - expandPx <= boxB.y + boxB.height && boxA.y + boxA.height + expandPx >= boxB.y;
-          if (intersectX && intersectY) {
-            neighbours.push(idB);
+          const dx = Math.max(0, Math.max(boxA.x - (boxB.x + boxB.width), boxB.x - (boxA.x + boxA.width)));
+          const dy = Math.max(0, Math.max(boxA.y - (boxB.y + boxB.height), boxB.y - (boxA.y + boxA.height)));
+          const minDistSq = dx * dx + dy * dy;
+
+          if (minDistSq <= expandPxSq) {
+            candidates.push({ id: idB, distSq: minDistSq });
           }
         }
-        neighbourGraph.set(idA, neighbours);
+
+        candidates.sort((a, b) => a.distSq - b.distSq);
+        neighbourGraph.set(idA, candidates.map((c) => c.id));
       }
       self.postMessage({ id, type: "SUCCESS", payload: neighbourGraph });
     }

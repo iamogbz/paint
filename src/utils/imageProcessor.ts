@@ -357,7 +357,10 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
   });
 
   try {
-    const expandPx = 12;
+    const imgWidth = processingImageWidthSignal.get() || FALLBACK_IMAGE_SIZE_PX;
+    const imgHeight = processingImageHeightSignal.get() || FALLBACK_IMAGE_SIZE_PX;
+    const maxDim = Math.max(imgWidth, imgHeight);
+    const expandPx = Math.max(8, maxDim * 0.015);
     const regions = Array.from(regionsDrawingInfo.values()).map(r => ({ id: r.id, boundingBox: r.boundingBox }));
     const computedNeighbours = await runInWorker("COMPUTE_NEIGHBORS", { regions, expandPx });
     
