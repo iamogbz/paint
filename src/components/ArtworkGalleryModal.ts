@@ -121,7 +121,7 @@ export class ArtworkGalleryModal extends SignalElement {
                 .map(([hexCode, regionIds]) => [regionIds.size, hexCode] as const)
                 .filter(([size, hexCode]) => hexCode !== TRANSPARENT_HEX && size !== 0);
               const usedColorsSorted = Array.from(usedColorsByCount).sort();
-              const colorCountToDisplay = 8;
+              const colorCountToDisplay = 6;
               const stepSize = Math.max(1, Math.floor(usedColorsSorted.length / colorCountToDisplay));
               const colorsToDisplay = new Array(8)
                 .fill(null)
@@ -259,7 +259,7 @@ export class ArtworkGalleryModal extends SignalElement {
                         }}
                         style=${this.renderStyleObject(selectBtnStyle)}
                       >
-                        ${iconCheckCircle2(14, isActive ? "#FFFFFF" : "#000000")} ${isActive ? "Currently Viewing" : "Display on Easel"}
+                        ${iconCheckCircle2(14, isActive ? "#FFFFFF" : "#000000")} ${isActive ? "Resume" : "Display"}
                       </button>
 
                       <div style="display: flex; align-items: center; gap: 0.375rem;">
