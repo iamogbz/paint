@@ -70,14 +70,14 @@ export default defineConfig(() => {
       directoryListingPlugin(),
       VitePWA({
         registerType: "autoUpdate",
-        devOptions: { enabled: true },
+        devOptions: { enabled: false },
         manifestFilename: "manifest.json",
         includeAssets: ["**/*.{png,jpg,jpeg,svg,gif,ico,webp}"],
         workbox: {
           globPatterns: ["**/*.{js,css,html,ico,png,svg,jpg,jpeg,gif,webp,webmanifest}"],
           cleanupOutdatedCaches: true,
-          clientsClaim: true,
-          skipWaiting: true,
+          clientsClaim: false,
+          skipWaiting: false,
           maximumFileSizeToCacheInBytes: 15 * 1024 * 1024,
         },
         manifest: manifestJson as ManifestOptions,

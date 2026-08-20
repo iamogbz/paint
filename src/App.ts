@@ -16,18 +16,10 @@ export class PaintApp extends SignalElement {
     isWindowFocusedSignal.set(false);
   };
 
-  // Use UP because we want to enable focus after the first click
-  private handleGlobalPointerUp = (e: Event) => {
-    window.focus();
-    isWindowFocusedSignal.set(true);
-
-    const path = e.composedPath() as HTMLElement[];
-    const isModal = path.some((el) => el.tagName === "ARTWORK-GALLERY-MODAL" || el.tagName === "RADIAL-COLOR-PICKER-MODAL" || el.tagName === "APP-TOUR");
-
-    // We no longer stop propagation here so that EaselBoard's window listener
-    // can run and correctly see that the click target was the overlay (not the canvas).
-    if (!isModal) {
-      e.preventDefault();
+  private handleGlobalPointerUp = () => {
+    if (!isWindowFocusedSignal.get()) {
+      window.focus();
+      isWindowFocusedSignal.set(true);
     }
   };
 
