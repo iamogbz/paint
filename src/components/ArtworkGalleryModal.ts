@@ -123,7 +123,7 @@ export class ArtworkGalleryModal extends SignalElement {
               const usedColorsSorted = Array.from(usedColorsByCount).sort();
               const colorCountToDisplay = 6;
               const stepSize = Math.max(1, Math.floor(usedColorsSorted.length / colorCountToDisplay));
-              const colorsToDisplay = new Array(8)
+              const colorsToDisplay = new Array(colorCountToDisplay)
                 .fill(null)
                 .map((_, i) => usedColorsSorted[i * stepSize]?.[1])
                 .filter(Boolean);
