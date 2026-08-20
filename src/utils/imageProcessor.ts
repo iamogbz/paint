@@ -74,13 +74,13 @@ async function loadImage(src: string): Promise<Readonly<({ type: "err"; data: un
           let targetWidth = img.naturalWidth || FALLBACK_IMAGE_SIZE_PX;
           let targetHeight = img.naturalHeight || FALLBACK_IMAGE_SIZE_PX;
           const maxDim = Math.max(targetWidth, targetHeight);
-          
+
           if (maxDim > FALLBACK_IMAGE_SIZE_PX) {
             const scale = FALLBACK_IMAGE_SIZE_PX / maxDim;
             targetWidth = Math.round(targetWidth * scale);
             targetHeight = Math.round(targetHeight * scale);
           }
-          
+
           processingImageWidthSignal.set(targetWidth);
           processingImageHeightSignal.set(targetHeight);
           resolve({
@@ -299,38 +299,16 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
   renderNode.querySelectorAll("style").forEach((elem) => elem.remove());
   // remove all other elements from the perserved SVG
   renderNode.querySelectorAll(`*:not([${PRESERVE_ELEMENT_MARKER}]`).forEach((elem) => elem.remove());
-  
+
   if (!renderNode.hasAttribute("viewBox")) {
     const w = renderNode.getAttribute("width") || processingImageWidthSignal.get();
     const h = renderNode.getAttribute("height") || processingImageHeightSignal.get();
     renderNode.setAttribute("viewBox", `0 0 ${parseFloat(String(w))} ${parseFloat(String(h))}`);
   }
-  
+
   // ensure final svg scales to container;
   renderNode.setAttribute("height", "100%");
   renderNode.setAttribute("width", "100%");
-
-  // Sort the elements so that smaller elements are rendered on top (later in DOM)
-  // This helps ensure small elements aren't hidden behind large ones.
-  const sortedFillableElements = Array.from(renderNode.querySelectorAll(`:is(${FILLABLE_SVG_ELEMENTS_SELECTOR})`));
-  sortedFillableElements.sort((a, b) => {
-    const regionA = a.getAttribute("data-region-id");
-    const regionB = b.getAttribute("data-region-id");
-    const boxA = regionA ? regionsDrawingInfo.get(regionA)?.boundingBox : null;
-    const boxB = regionB ? regionsDrawingInfo.get(regionB)?.boundingBox : null;
-    const areaA = boxA ? boxA.width * boxA.height : Infinity;
-    const areaB = boxB ? boxB.width * boxB.height : Infinity;
-    // larger area goes first, so it gets rendered earlier (underneath)
-    return areaB - areaA;
-  });
-
-  sortedFillableElements.forEach((el) => {
-    // Append the element back to its parent to reorder it
-    // It will be moved to the end of its parent's child list
-    if (el.parentElement) {
-      el.parentElement.appendChild(el);
-    }
-  });
 
   // add clip paths and containers for brush strokes
   const brushStrokeDefElem = document.createElement("defs");
@@ -363,7 +341,7 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     const expandPx = Math.max(8, maxDim * 0.015);
     const regions = Array.from(regionsDrawingInfo.values()).map(r => ({ id: r.id, boundingBox: r.boundingBox }));
     const computedNeighbours = await runInWorker("COMPUTE_NEIGHBORS", { regions, expandPx });
-    
+
     for (const [id, neighbours] of computedNeighbours) {
       const region = regionsDrawingInfo.get(id);
       if (region) {
