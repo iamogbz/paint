@@ -1142,6 +1142,9 @@ export class EaselBoard extends SignalElement {
                           <a href="https://github.com/sponsors/iamogbz" target="_blank" style="color: inherit; text-decoration: inherit; cursor: pointer;">❤️ QBRKTS</a>
                           ©️ ${new Date().getFullYear()}
                         </p>
+                        <div style="margin-top: 1rem; display: inline-flex; align-items: center; justify-content: center; padding: 0.2rem 0.5rem; background-color: rgba(0, 0, 0, 0.01); border: 1px solid rgba(0, 0, 0, 0.05); border-radius: 12px; font-family: monospace; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em; color: inherit;" title="version">
+                          ${typeof __COMMIT_HASH__ !== "undefined" ? __COMMIT_HASH__.slice(0, 7) : ""}
+                        </div>
                       </footer>
                     `
                   : ""}

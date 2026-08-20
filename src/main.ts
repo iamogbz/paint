@@ -2,6 +2,8 @@ import "./index.css";
 import "./App";
 import { registerSW } from "virtual:pwa-register";
 
+document.documentElement.dataset.version = typeof __COMMIT_HASH__ !== "undefined" ? __COMMIT_HASH__ : "";
+
 const updateSW = registerSW({
   onNeedRefresh() {
     updateSW(true);

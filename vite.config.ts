@@ -1,8 +1,18 @@
 import path from "path";
 import fs from "fs";
+import { execSync } from "child_process";
 import { defineConfig } from "vite";
 import { ManifestOptions, VitePWA } from "vite-plugin-pwa";
 import manifestJson from "./public/manifest.json";
+
+const getCommitHash = () => {
+  if (process.env.COMMIT_REF) return process.env.COMMIT_REF;
+  try {
+    return execSync("git rev-parse HEAD").toString().trim();
+  } catch {
+    return "development";
+  }
+};
 
 const fileToLink = (f) => `<li><a href="/daily-challenge/${f}" style="color: blue; text-decoration: underline;">${f}</a></li>`;
 const getHtml = () => {
@@ -53,6 +63,9 @@ function directoryListingPlugin() {
 
 export default defineConfig(() => {
   return {
+    define: {
+      __COMMIT_HASH__: JSON.stringify(getCommitHash()),
+    },
     plugins: [
       directoryListingPlugin(),
       VitePWA({
