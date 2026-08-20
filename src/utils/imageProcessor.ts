@@ -1,4 +1,5 @@
 import { FALLBACK_IMAGE_SIZE_PX, FILLABLE_SVG_ELEMENTS_SELECTOR, PAINTABLE_REGION_HEX, TRANSPARENT_HEX } from "./constants.js";
+import { enhanceBitmapForVectorization } from "./imageFilters.js";
 import { processingImageHeightSignal, processingImageWidthSignal } from "../state/store.js";
 import { MutableMap, ProcessedArtwork } from "../types";
 import { getHexCode, normalizeHex } from "./color.js";
@@ -70,7 +71,9 @@ async function loadImage(src: string): Promise<Readonly<({ type: "err"; data: un
       return new Promise((resolve) => {
         const img = new Image();
         img.crossOrigin = "anonymous";
+        const objectUrl = URL.createObjectURL(blob);
         img.onload = () => {
+          URL.revokeObjectURL(objectUrl);
           let targetWidth = img.naturalWidth || FALLBACK_IMAGE_SIZE_PX;
           let targetHeight = img.naturalHeight || FALLBACK_IMAGE_SIZE_PX;
           const maxDim = Math.max(targetWidth, targetHeight);
@@ -90,6 +93,7 @@ async function loadImage(src: string): Promise<Readonly<({ type: "err"; data: un
           } as const);
         };
         img.onerror = () => {
+          URL.revokeObjectURL(objectUrl);
           processingImageWidthSignal.set(FALLBACK_IMAGE_SIZE_PX);
           processingImageHeightSignal.set(FALLBACK_IMAGE_SIZE_PX);
           resolve({
@@ -98,7 +102,7 @@ async function loadImage(src: string): Promise<Readonly<({ type: "err"; data: un
             data: blob,
           } as const);
         };
-        img.src = URL.createObjectURL(blob);
+        img.src = objectUrl;
       });
     }
   } else {
@@ -108,6 +112,63 @@ async function loadImage(src: string): Promise<Readonly<({ type: "err"; data: un
       data: null,
     } as const;
   }
+}
+
+/**
+ * Multi-step halving downscaler to target dimensions (capped at FALLBACK_IMAGE_SIZE_PX).
+ * Downscaling incrementally in halves prevents aliasing, blur, and pixelation artifacts.
+ */
+function downscaleCanvasMultiStep(
+  source: HTMLCanvasElement | HTMLImageElement,
+  targetWidth: number,
+  targetHeight: number
+): HTMLCanvasElement {
+  let currentWidth = source instanceof HTMLImageElement ? source.naturalWidth : source.width;
+  let currentHeight = source instanceof HTMLImageElement ? source.naturalHeight : source.height;
+
+  let currentCanvas = document.createElement("canvas");
+  currentCanvas.width = currentWidth;
+  currentCanvas.height = currentHeight;
+  let ctx = currentCanvas.getContext("2d", { willReadFrequently: true })!;
+  ctx.imageSmoothingEnabled = true;
+  ctx.imageSmoothingQuality = "high";
+
+  // Fill canvas with white background for bitmap images in case of transparency
+  ctx.fillStyle = PAINTABLE_REGION_HEX;
+  ctx.fillRect(0, 0, currentWidth, currentHeight);
+  ctx.drawImage(source, 0, 0);
+
+  // Halving loop when current size is > 1.5x target
+  while (currentWidth > targetWidth * 1.5 || currentHeight > targetHeight * 1.5) {
+    const nextWidth = Math.max(targetWidth, Math.floor(currentWidth / 2));
+    const nextHeight = Math.max(targetHeight, Math.floor(currentHeight / 2));
+
+    const nextCanvas = document.createElement("canvas");
+    nextCanvas.width = nextWidth;
+    nextCanvas.height = nextHeight;
+    const nextCtx = nextCanvas.getContext("2d", { willReadFrequently: true })!;
+    nextCtx.imageSmoothingEnabled = true;
+    nextCtx.imageSmoothingQuality = "high";
+    nextCtx.drawImage(currentCanvas, 0, 0, currentWidth, currentHeight, 0, 0, nextWidth, nextHeight);
+
+    currentWidth = nextWidth;
+    currentHeight = nextHeight;
+    currentCanvas = nextCanvas;
+  }
+
+  // Final scale step if dimensions don't match target exact
+  if (currentWidth !== targetWidth || currentHeight !== targetHeight) {
+    const finalCanvas = document.createElement("canvas");
+    finalCanvas.width = targetWidth;
+    finalCanvas.height = targetHeight;
+    const finalCtx = finalCanvas.getContext("2d", { willReadFrequently: true })!;
+    finalCtx.imageSmoothingEnabled = true;
+    finalCtx.imageSmoothingQuality = "high";
+    finalCtx.drawImage(currentCanvas, 0, 0, currentWidth, currentHeight, 0, 0, targetWidth, targetHeight);
+    return finalCanvas;
+  }
+
+  return currentCanvas;
 }
 
 /**
@@ -149,24 +210,19 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     const imgWidth = processingImageWidthSignal.get();
     const imgHeight = processingImageHeightSignal.get();
 
-    const origCanvas = document.createElement("canvas");
-    origCanvas.width = imgWidth;
-    origCanvas.height = imgHeight;
+    // Multi-step downscale to target dimensions
+    const origCanvas = downscaleCanvasMultiStep(img, imgWidth, imgHeight);
     const origCtx = origCanvas.getContext("2d", { willReadFrequently: true });
     if (!origCtx) throw new Error("Failed to initialize canvas 2D context");
 
-    origCtx.imageSmoothingEnabled = true;
-    origCtx.imageSmoothingQuality = "high";
-
-    // Fill with white background in case of transparency
-    origCtx.fillStyle = PAINTABLE_REGION_HEX;
-    origCtx.fillRect(0, 0, imgWidth, imgHeight);
-    origCtx.drawImage(img, 0, 0, imgWidth, imgHeight);
-
     const origImgData = origCtx.getImageData(0, 0, imgWidth, imgHeight);
+
+    // Apply bilateral filter & thresholded unsharp mask to bitmap images prior to vectorization
+    enhanceBitmapForVectorization(origImgData);
+
     const rawPixels = origImgData.data;
 
-    // Run vtracer in worker
+    // Run vtracer in worker with optimized parameters
     const options = {
       /** default: color-cluster for true color image */
       clustering: "color-cluster",
@@ -177,21 +233,23 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
       /** If a pallete is defined maps colors to this */
       // palette: palette,
       /** Discard patches smaller than X px in size (0..=128) */
-      filterSpeckle: 2,
+      filterSpeckle: 4,
       /** default: 8 (best) - Significant bits per RGB channel (1..=8)  */
       colorPrecision: 8,
+      pathPrecision: 8,
       /** Color difference between gradient layers (0..=255) */
-      layerDifference: 48,
+      layerDifference: 16,
       /** Method for converting in to shapes. Values below only valid in spline */
       mode: "spline",
       /** default: 60, Minimum Momentary Angle (in degrees) to be considered a corner (to be kept after smoothing) - Higher = smoother */
-      // cornerThreshold: 60,
+      cornerThreshold: 60,
       /** default: 4, Perform Iterative Subdivide Smooth until all segments are shorter than this length <3.5..=10> */
-      // lengthThreshold: 4,
+      lengthThreshold: 4.0,
       /** default: 45, Minimum Angle Displacement (in degrees) to be considered a cutting point between curves <0..=180> */
-      // spliceThreshold: 45,
+      spliceThreshold: 45,
       /** default: off, Simplify curves: fewest cubics within this tolerance in px (try 1–2.5) */
-      // simplify: 2,
+      simplify: 2,
+      maxIterations: 10,
     };
     const svgStr = await runInWorker("VECTORIZE", { rawPixels, imgWidth, imgHeight, options });
     svgDoc = parseSVG(svgStr.includes("xmlns=") ? svgStr : svgStr.replace("<svg", `<svg xmlns="${XML_NS}"`));
