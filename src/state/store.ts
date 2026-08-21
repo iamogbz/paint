@@ -47,7 +47,7 @@ export const appBackgroundStyleSignal = computed(() => ({
 }));
 
 export const footerStyleSignal = computed(() => ({
-  marginTop: "0.75rem",
+  marginTop: "1rem",
   textAlign: "center" as const,
   fontSize: "0.75rem",
   fontWeight: "800",
@@ -79,7 +79,7 @@ export async function loadSavedArtworks() {
       const sorted = Array.from(validArtworksMap.keys()).sort((a, b) => (validArtworksMap.get(b)!.modifiedAt || 0) - (validArtworksMap.get(a)!.modifiedAt || 0));
       artworkIdsSortedSignal.set(sorted);
       artworksSignal.set(validArtworksMap);
-      
+
       // Save fixed structure back to IDB
       set(STORAGE_KEY_ALL_ARTWORKS, validArtworksMap).catch(() => {});
     }
@@ -136,7 +136,7 @@ function migrateAndValidateArtworks(rawData: any): Map<string, ProcessedArtwork>
 function migrateMapOfSets(data: any): Map<string, Set<string>> {
   const map = new Map<string, Set<string>>();
   if (!data || typeof data !== "object") return map;
-  
+
   const entries = data instanceof Map ? data.entries() : Object.entries(data);
   for (const [key, value] of entries) {
     if (value instanceof Set) {
@@ -153,7 +153,7 @@ function migrateMapOfSets(data: any): Map<string, Set<string>> {
 function migrateMapOfStrings(data: any): Map<string, string> {
   const map = new Map<string, string>();
   if (!data || typeof data !== "object") return map;
-  
+
   const entries = data instanceof Map ? data.entries() : Object.entries(data);
   for (const [key, value] of entries) {
     map.set(key, String(value));
@@ -164,14 +164,14 @@ function migrateMapOfStrings(data: any): Map<string, string> {
 function migrateRegionsDrawingInfo(data: any): Map<string, any> {
   const map = new Map<string, any>();
   if (!data || typeof data !== "object") return map;
-  
+
   const entries = data instanceof Map ? data.entries() : Object.entries(data);
   for (const [key, value] of entries) {
     if (value && typeof value === "object") {
       map.set(key, {
         ...value,
-        neighbourRegionIds: value.neighbourRegionIds instanceof Set 
-          ? value.neighbourRegionIds 
+        neighbourRegionIds: value.neighbourRegionIds instanceof Set
+          ? value.neighbourRegionIds
           : new Set(Array.isArray(value.neighbourRegionIds) ? value.neighbourRegionIds : [])
       });
     }

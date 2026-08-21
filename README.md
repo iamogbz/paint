@@ -16,13 +16,13 @@
 
 | Daily Challenges | [Art Link](https://pixabay.com/vectors/search/?order=ec)                  |
 | ---------------  | ------------------------------------------------------------------------- |
+| 2026-08-17       | <https://pixabay.com/vectors/painted-landscape-house-chicken-10246533/>   |
 | 2026-08-16       | <https://pixabay.com/vectors/girl-clouds-stars-art-calm-anime-8435340/>   |
 | 2026-08-15       | <https://pixabay.com/vectors/flower-seamless-textile-vintage-9294773/>    |
 | 2026-08-14       | <https://pixabay.com/vectors/girl-anime-manga-cloud-blue-star-10137717/>  |
 | 2026-08-13       | <https://pixabay.com/illustrations/digital-art-jungle-colorful-10356325/> |
 
 <!--
-https://pixabay.com/vectors/painted-landscape-house-chicken-10246533/
 https://pixabay.com/vectors/woman-stars-mind-sky-night-clouds-8706492/
 https://pixabay.com/vectors/mountain-snow-cold-blue-north-9979198/
 https://pixabay.com/vectors/anime-girl-stars-falling-fantasy-9063542/
