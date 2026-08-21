@@ -21,6 +21,7 @@ export const processingImageHeightSignal = signal<number>(0);
 export const soundEnabledSignal = signal<boolean>(true);
 export const dragToOpenFileSignal = signal<boolean>(false);
 export const isGalleryOpenSignal = signal<boolean>(false);
+export const isDailyChallengeModalOpenSignal = signal<boolean>(false);
 export const undoStackSignal = signal<UndoHistoryItem[]>([]);
 export const zoomScaleSignal = signal<number>(1.0);
 export const canvasPositionDeltaSignal = signal<{ x: number; y: number }>({ x: 0, y: 0 });

@@ -1,7 +1,7 @@
 import { html } from "lit";
 import { customElement } from "lit/decorators.js";
 import { SignalElement } from "../utils/SignalElement";
-import { currentArtworkSignal, isProcessingSignal, processingImageSrcSignal, processingImageWidthSignal, processingImageHeightSignal, activeHighlightColorSignal, dragToOpenFileSignal, zoomScaleSignal, handleImageSelected, handleSelectArtwork, draggedColorPositionSignal, pushUndoState, saveCurrentArtworkProgress, footerStyleSignal, isBrushModeSignal, artworksSignal, artworkIdsSortedSignal, panDragActiveSignal } from "../state/store";
+import { currentArtworkSignal, isProcessingSignal, processingImageSrcSignal, processingImageWidthSignal, processingImageHeightSignal, activeHighlightColorSignal, dragToOpenFileSignal, zoomScaleSignal, handleImageSelected, handleSelectArtwork, draggedColorPositionSignal, pushUndoState, saveCurrentArtworkProgress, footerStyleSignal, isBrushModeSignal, artworksSignal, artworkIdsSortedSignal, panDragActiveSignal, isDailyChallengeModalOpenSignal } from "../state/store";
 import { getDailyChallenge } from "../data/dailyChallenge";
 import { soundEffects } from "../utils/soundEffects";
 import { iconImage, iconUpload, iconPaintBucket } from "./icons";
@@ -1022,8 +1022,7 @@ export class EaselBoard extends SignalElement {
     const processingWidth = processingImageWidthSignal.get();
     const processingHeight = processingImageHeightSignal.get();
     const isDragOver = dragToOpenFileSignal.get();
-    const dailyChallengeImage = getDailyChallenge();
-    this.zoomScale = zoomScaleSignal.get();
+        this.zoomScale = zoomScaleSignal.get();
 
     const outerContainerStyle = {
       width: "95vmin",
@@ -1166,7 +1165,7 @@ export class EaselBoard extends SignalElement {
                             <button
                               @click=${(e: Event) => {
                                 e.stopPropagation();
-                                handleImageSelected(dailyChallengeImage.dataUrl, dailyChallengeImage.name);
+                                isDailyChallengeModalOpenSignal.set(true);
                               }}
                               style="background-color: #FFFFFF; color: #000000; border: 0.16em solid #000000; padding: 0.625em 0.875em; border-radius: 1em; font-weight: 900; font-size: 0.875em; display: flex; align-items: center; gap: 0.375em; box-shadow: 0.125em 0.125em 0 0 #000000; cursor: pointer;"
                             >

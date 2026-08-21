@@ -5,6 +5,7 @@ import { currentArtworkSignal, appBackgroundStyleSignal, loadSavedArtworks, drag
 import "./components/EaselBoard";
 import "./components/PaintingControls";
 import "./components/ArtworkGalleryModal";
+import "./components/DailyChallengeModal";
 import "./components/RadialColorPickerModal";
 import "./components/TourGuide";
 import { TRANSPARENT_HEX, transparentImgCss } from "./utils/constants";
@@ -77,6 +78,9 @@ export class PaintApp extends SignalElement {
 
         <!-- Gallery Clipboard Modal -->
         <artwork-gallery-modal></artwork-gallery-modal>
+
+        <!-- Daily Challenge Modal -->
+        <daily-challenge-modal></daily-challenge-modal>
 
         <!-- Radial Color Picker Modal -->
         <radial-color-picker-modal></radial-color-picker-modal>
