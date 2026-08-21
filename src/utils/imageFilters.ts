@@ -3,8 +3,7 @@ import {
   BILATERAL_SPATIAL_SIGMA,
   UNSHARP_MASK_AMOUNT,
   UNSHARP_MASK_THRESHOLD,
-  SATURATION_BOOST_AMOUNT,
-  CONTRAST_BOOST_AMOUNT,
+  SHARPEN_AMOUNT,
 } from "./constants.js";
 
 /**
@@ -161,78 +160,45 @@ export function applyThresholdedUnsharpMask(
 }
 
 /**
- * Boosts saturation and contrast to help the vectorizer clearly distinguish color regions
- * without blurring fine edges or losing original color vibrancy.
+ * Applies a 3x3 convolution sharpen filter.
+ * This explicitly enhances edges (improving vectorizer regional separation) 
+ * while strictly preserving the mathematical average of flat color regions, 
+ * completely avoiding the "washed out" or "false brightness" artifacts of other filters.
  */
-export function applySaturationAndContrast(
-  imageData: ImageData,
-  saturationAmount = SATURATION_BOOST_AMOUNT,
-  contrastAmount = CONTRAST_BOOST_AMOUNT
-): void {
-  const { data } = imageData;
+export function applySharpen(imageData: ImageData, amount = SHARPEN_AMOUNT): void {
+  const { width, height, data } = imageData;
+  const src = new Uint8ClampedArray(data);
+  const w = width * 4;
+  
+  // Matrix: [ 0, -amount, 0 ]
+  //         [-amount, 1 + 4*amount, -amount ]
+  //         [ 0, -amount, 0 ]
+  const center = 1 + 4 * amount;
 
-  for (let i = 0; i < data.length; i += 4) {
-    if (data[i + 3] === 0) continue;
+  for (let y = 1; y < height - 1; y++) {
+    for (let x = 1; x < width - 1; x++) {
+      const i = y * w + x * 4;
+      
+      if (src[i + 3] === 0) continue;
 
-    let r = data[i] / 255;
-    let g = data[i + 1] / 255;
-    let b = data[i + 2] / 255;
+      for (let c = 0; c < 3; c++) {
+        const val =
+          src[i + c] * center -
+          src[i - 4 + c] * amount -
+          src[i + 4 + c] * amount -
+          src[i - w + c] * amount -
+          src[i + w + c] * amount;
 
-    // 1. Convert RGB to HSL
-    const max = Math.max(r, g, b), min = Math.min(r, g, b);
-    let h = 0, s = 0, l = (max + min) / 2;
-
-    if (max !== min) {
-      const d = max - min;
-      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
-      switch (max) {
-        case r: h = (g - b) / d + (g < b ? 6 : 0); break;
-        case g: h = (b - r) / d + 2; break;
-        case b: h = (r - g) / d + 4; break;
+        data[i + c] = Math.min(255, Math.max(0, Math.round(val)));
       }
-      h /= 6;
     }
-
-    // 2. Apply Contrast to Lightness
-    // Expands distance from 0.5 (mid-gray), darkening darks and brightening lights
-    l = (l - 0.5) * contrastAmount + 0.5;
-    l = Math.max(0, Math.min(1, l));
-
-    // 3. Apply Saturation
-    s = s * saturationAmount;
-    s = Math.max(0, Math.min(1, s));
-
-    // 4. Convert HSL back to RGB
-    let fR = l, fG = l, fB = l;
-    if (s !== 0) {
-      const hue2rgb = (p: number, q: number, t: number) => {
-        if (t < 0) t += 1;
-        if (t > 1) t -= 1;
-        if (t < 1 / 6) return p + (q - p) * 6 * t;
-        if (t < 1 / 2) return q;
-        if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
-        return p;
-      };
-
-      const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
-      const p = 2 * l - q;
-      fR = hue2rgb(p, q, h + 1 / 3);
-      fG = hue2rgb(p, q, h);
-      fB = hue2rgb(p, q, h - 1 / 3);
-    }
-
-    // 5. Assign rounded values
-    data[i] = Math.round(fR * 255);
-    data[i + 1] = Math.round(fG * 255);
-    data[i + 2] = Math.round(fB * 255);
   }
 }
 
 /**
  * Pipeline that runs pre-processing on bitmap image data prior to vtracer vectorization.
- * Currently uses only a color vibrancy boost to ensure vectorizer receives distinct color 
- * regions without sacrificing any structural edge details.
+ * Uses a pure convolution sharpen to increase edge contrast without altering global color saturation or lightness.
  */
 export function enhanceBitmapForVectorization(imageData: ImageData): void {
-  applySaturationAndContrast(imageData);
+  applySharpen(imageData);
 }

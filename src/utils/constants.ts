@@ -12,8 +12,7 @@ export const UNSHARP_MASK_THRESHOLD = 10;
 export const UNSHARP_MASK_AMOUNT = 0.6;
 export const BILATERAL_SPATIAL_SIGMA = 1.5;
 export const BILATERAL_RANGE_SIGMA = 25.0;
-export const SATURATION_BOOST_AMOUNT = 1.25;
-export const CONTRAST_BOOST_AMOUNT = 1.15;
+export const SHARPEN_AMOUNT = 0.5;
 
 const fillableSvgElements = ["circle", "ellipse", "path", "polyline", "polygon", "rect", "text", "textPath", "tspan"] as const;
 export const FILLABLE_SVG_ELEMENTS = new Set(fillableSvgElements);
