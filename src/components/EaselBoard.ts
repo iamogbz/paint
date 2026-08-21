@@ -231,7 +231,6 @@ export class EaselBoard extends SignalElement {
       const newPanY = this.panY + my / newZoomScale - my / this.zoomScale;
 
       this.zoomScale = newZoomScale;
-      this.updateZoom();
 
       this.panX = this.clampPanX(newPanX, newZoomScale);
       this.panY = this.clampPanY(newPanY, newZoomScale);
@@ -243,6 +242,7 @@ export class EaselBoard extends SignalElement {
       }, 150);
     }
 
+    zoomScaleSignal.set(this.zoomScale);
     this.updateTransformDirectly();
   };
 
@@ -333,7 +333,6 @@ export class EaselBoard extends SignalElement {
         const newPanY = this.initialPanY + m_prime_y / newZoom - m_y / this.initialZoomScale;
 
         this.zoomScale = newZoom;
-        this.updateZoom();
 
         this.panX = this.clampPanX(newPanX, newZoom);
         this.panY = this.clampPanY(newPanY, newZoom);
@@ -348,6 +347,7 @@ export class EaselBoard extends SignalElement {
           this.updateTransformDirectly();
         }, 150);
 
+        zoomScaleSignal.set(this.zoomScale);
         this.updateTransformDirectly();
       }
       if (this.hoveredRegionId !== null) {
@@ -780,11 +780,12 @@ export class EaselBoard extends SignalElement {
   };
 
   private getTransitionCssProperty = () => {
+    const transitionSettings = `0.15s cubic-bezier(0.2, 0.5, 0.3, 0.8)`;
     if (this.isPointerDown || this.wheelSpinningTimeoutId !== null) {
-      return "none";
+      return `width ${transitionSettings}`;
     }
-    return ["transform", "width"]
-      .map(p => `${p} 0.15s cubic-bezier(0.2, 0.5, 0.3, 0.8)`)
+    return ["transform", "width", "zoom"]
+      .map(p => `${p} ${transitionSettings}`)
       .join(", ");
   };
 
@@ -1023,10 +1024,9 @@ export class EaselBoard extends SignalElement {
 
     const outerContainerStyle = {
       width: "95vmin",
-      maxWidth: "95vmin",
       margin: "0 auto",
-      paddingTop: "0.5rem",
-      paddingBottom: "1rem",
+      paddingTop: "0.5em",
+      paddingBottom: "1em",
       paddingLeft: "0",
       paddingRight: "0",
       position: "relative" as const,
@@ -1038,13 +1038,13 @@ export class EaselBoard extends SignalElement {
     };
 
     const easelTopClampStyle = {
-      width: "14rem",
-      height: "1.5rem",
+      width: "14em",
+      height: "1.5em",
       backgroundColor: "#845442",
-      border: "3px solid #845442",
-      borderTopLeftRadius: "0.75rem",
-      borderTopRightRadius: "0.75rem",
-      boxShadow: "0 4px 6px -1px rgba(0, 0, 0, 0.1)",
+      border: "0.1875em solid #845442",
+      borderTopLeftRadius: "0.75em",
+      borderTopRightRadius: "0.75em",
+      boxShadow: "0 0.25em 0.375em -0.0625em rgba(0, 0, 0, 0.1)",
       zIndex: 20,
       display: "flex",
       alignItems: "center",
@@ -1055,9 +1055,9 @@ export class EaselBoard extends SignalElement {
     const mainFrameStyle = {
       width: "100%",
       backgroundColor: "#FFFFFF",
-      border: "4px solid #845442",
-      borderRadius: "8px",
-      boxShadow: "12px 12px 0px 0px rgba(0,0,0,0.15)",
+      border: "0.25em solid #845442",
+      borderRadius: "0.5em",
+      boxShadow: "0.75em 0.75em 0 0 rgba(0,0,0,0.15)",
       position: "relative" as const,
       zIndex: 10,
       boxSizing: "border-box" as const,
@@ -1065,11 +1065,11 @@ export class EaselBoard extends SignalElement {
 
     const dropAreaStyle = {
       width: "100%",
-      maxWidth: "28rem",
-      margin: "1rem auto",
-      padding: "1.5rem",
-      borderRadius: "28px",
-      border: "3px dashed " + (isDragOver ? "#E63946" : "#000000"),
+      maxWidth: "28em",
+      margin: "1em auto",
+      padding: "1.5em",
+      borderRadius: "1.75em",
+      border: "0.1875em dashed " + (isDragOver ? "#E63946" : "#000000"),
       backgroundColor: isDragOver ? "rgba(255, 166, 201, 0.3)" : "rgba(255, 255, 255, 0.8)",
       transform: isDragOver ? "scale(1.02)" : "scale(1)",
       transition: "all 0.15s ease",
@@ -1078,7 +1078,7 @@ export class EaselBoard extends SignalElement {
       alignItems: "center",
       textAlign: "center" as const,
       cursor: "pointer",
-      boxShadow: isDragOver ? "none" : "6px 6px 0px 0px #000000",
+      boxShadow: isDragOver ? "none" : "0.375em 0.375em 0 0 #000000",
       boxSizing: "border-box" as const,
     };
 
@@ -1104,6 +1104,8 @@ export class EaselBoard extends SignalElement {
       zoom: this.zoomScale,
       transformOrigin: "center center",
       transition: this.getTransitionCssProperty(),
+      "-webkit-text-size-adjust": "none",
+      "text-size-adjust": "none",
     }
 
     return html`
@@ -1114,11 +1116,11 @@ export class EaselBoard extends SignalElement {
           <div id="easel-transform-element" style="${this.renderStyleObject(easelTransformElementStyle)}">
             <div style=${this.renderStyleObject(easelTopClampStyle)}></div>
             <div style=${this.renderStyleObject(mainFrameStyle)}>
-              <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; padding: 0.5rem; background-size: 0.5rem 0.5rem; background-image: ${transparentImgCss}; min-height: 40vh; overflow: hidden;">
+              <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; padding: 0.5em; background-size: 0.5em 0.5em; background-image: ${transparentImgCss}; min-height: 40vh; overflow: hidden;">
                 ${currentArtwork || isProcessing
                   ? html`
                       <div id="original-image" style="width: 100%; aspect-ratio: ${processingWidth} / ${processingHeight}; display: flex; flex-direction: column; justify-content: center; align-items: center; position: ${isProcessing ? "relative" : "absolute"}; animation: blur-pulse 2s infinite ease-in-out; transition: opacity 1s ease-out; opacity: ${isProcessing ? 1 : 0}; z-index: 1000; pointer-events: none;">
-                        <div style="position: relative; width: 100%; height: 100%; border-radius: 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; background-color: transparent;">
+                        <div style="position: relative; width: 100%; height: 100%; border-radius: 0.25em; overflow: hidden; display: flex; align-items: center; justify-content: center; background-color: transparent;">
                           <img src="${processingSrc || currentArtwork.originalDataUrl}" style="width: 100%; height: 100%; object-fit: cover;" />
                         </div>
                       </div>
@@ -1136,11 +1138,11 @@ export class EaselBoard extends SignalElement {
                         @click=${this.triggerFilePicker}
                         style=${this.renderStyleObject(dropAreaStyle)}
                       >
-                        <div style="width: 5rem; height: 5rem; border-radius: 24px; background-color: #FFD166; border: 3px solid #000000; display: flex; align-items: center; justify-content: center; box-shadow: 4px 4px 0px 0px #000000; margin-bottom: 1rem; color: #000000;">${iconUpload(40, "#000000")}</div>
-                        <h3 style="font-size: 1.5rem; font-weight: 900; font-style: italic; color: #3D2314; margin: 0 0 0.5rem 0; letter-spacing: -0.02em;">Upload Your Image</h3>
-                        <p style="font-size: 0.875rem; font-weight: 700; color: rgba(74, 40, 16, 0.8); margin: 0; line-height: 1.5;">Tap to select or drag & drop any photo.</p>
-                        <div style="margin-top: 2rem; padding-top: 2rem; border-top: 2px solid rgba(0, 0, 0, 0.15); width: 100%;">
-                          <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.5rem; width: 100%;">
+                        <div style="width: 5em; height: 5em; border-radius: 1.5em; background-color: #FFD166; border: 0.1875em solid #000000; display: flex; align-items: center; justify-content: center; box-shadow: 0.25em 0.25em 0 0 #000000; margin-bottom: 1em; color: #000000;">${iconUpload(40, "#000000")}</div>
+                        <h3 style="font-size: 1.5em; font-weight: 900; font-style: italic; color: #3D2314; margin: 0 0 0.5em 0; letter-spacing: -0.02em;">Upload Your Image</h3>
+                        <p style="font-size: 0.875em; font-weight: 700; color: rgba(74, 40, 16, 0.8); margin: 0; line-height: 1.5;">Tap to select or drag & drop any photo.</p>
+                        <div style="margin-top: 2em; padding-top: 2em; border-top: 0.125em solid rgba(0, 0, 0, 0.15); width: 100%;">
+                          <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; gap: 1.5em; width: 100%;">
                             ${artworkIdsSortedSignal.get().length > 0
                               ? html`
                                   <button
@@ -1152,7 +1154,7 @@ export class EaselBoard extends SignalElement {
                                         handleSelectArtwork(artworks.get(sorted[0]));
                                       }
                                     }}
-                                    style="background-color: #2A9D8F; color: #FFFFFF; border: 2.5px solid #000000; padding: 0.625rem 1.25rem; border-radius: 16px; font-weight: 900; font-size: 1rem; display: flex; align-items: center; gap: 0.5rem; box-shadow: 2px 2px 0px 0px #000000; cursor: pointer; text-transform: uppercase;"
+                                    style="background-color: #2A9D8F; color: #FFFFFF; border: 0.16em solid #000000; padding: 0.625em 1.25em; border-radius: 1em; font-weight: 900; font-size: 1em; display: flex; align-items: center; gap: 0.5em; box-shadow: 0.125em 0.125em 0 0 #000000; cursor: pointer; text-transform: uppercase;"
                                   >
                                     ${iconImage(24, "#FFFFFF")} Resume Painting
                                   </button>
@@ -1163,7 +1165,7 @@ export class EaselBoard extends SignalElement {
                                 e.stopPropagation();
                                 handleImageSelected(dailyChallengeImage.dataUrl, dailyChallengeImage.name);
                               }}
-                              style="background-color: #FFFFFF; color: #000000; border: 2.5px solid #000000; padding: 0.625rem 0.875rem; border-radius: 16px; font-weight: 900; font-size: 0.875rem; display: flex; align-items: center; gap: 0.375rem; box-shadow: 2px 2px 0px 0px #000000; cursor: pointer;"
+                              style="background-color: #FFFFFF; color: #000000; border: 0.16em solid #000000; padding: 0.625em 0.875em; border-radius: 1em; font-weight: 900; font-size: 0.875em; display: flex; align-items: center; gap: 0.375em; box-shadow: 0.125em 0.125em 0 0 #000000; cursor: pointer;"
                             >
                               ${iconPaintBucket(20, "#000000")} Or Try the Daily Challenge
                             </button>
@@ -1176,7 +1178,7 @@ export class EaselBoard extends SignalElement {
                           <a href="https://github.com/sponsors/iamogbz" target="_blank" style="color: inherit; text-decoration: inherit; cursor: pointer;">❤️ QBRKTS</a>
                           ©️ ${new Date().getFullYear()}
                         </p>
-                        <div style="margin-top: 1rem; display: inline-flex; align-items: center; justify-content: center; padding: 0.2rem 0.5rem; background-color: rgba(0, 0, 0, 0.01); border: 1px solid rgba(0, 0, 0, 0.05); border-radius: 12px; font-family: monospace; font-size: 0.7rem; font-weight: 700; letter-spacing: 0.05em; color: inherit;" title="version">
+                        <div style="margin-top: 1em; display: inline-flex; align-items: center; justify-content: center; padding: 0.2em 0.5em; background-color: rgba(0, 0, 0, 0.01); border: 0.05em solid rgba(0, 0, 0, 0.05); border-radius: 0.75em; font-family: monospace; font-size: 0.7em; font-weight: 700; letter-spacing: 0.05em; color: inherit;" title="version">
                           ${typeof __COMMIT_HASH__ !== "undefined" ? __COMMIT_HASH__.slice(0, 7) : ""}
                         </div>
                       </footer>
@@ -1185,7 +1187,7 @@ export class EaselBoard extends SignalElement {
                 ${currentArtwork && !isProcessing
                   ? html`
                       <div style="cursor: crosshair; width: 100%; display: flex; flex-direction: column; align-items: center; transition: opacity 1s ease-in-out; opacity: ${isProcessing ? 0 : 1};">
-                        <div style="position: relative; width: 100%; aspect-ratio: ${currentArtwork.width} / ${currentArtwork.height}; border-radius: 4px; overflow: hidden; display: flex; align-items: center; justify-content: center; background-color: transparent;">
+                        <div style="position: relative; width: 100%; aspect-ratio: ${currentArtwork.width} / ${currentArtwork.height}; border-radius: 0.25em; overflow: hidden; display: flex; align-items: center; justify-content: center; background-color: transparent;">
                           ${currentArtwork.regionsDrawingInfo
                             ? html`
                                 <!-- Lower SVG for color fills -->
@@ -1196,7 +1198,7 @@ export class EaselBoard extends SignalElement {
                               `
                             : html`
                                 <img src=${currentArtwork?.cartoonDataUrl || ""} style="width:100%;height:100%;object-fit:contain;opacity:0.5;filter:grayscale(1)" />
-                                <p style="position:absolute;color:black;font-weight:bold;background:white;padding:4px 8px;border-radius:4px">Legacy image format not supported by SVG engine.</p>
+                                <p style="position:absolute;color:black;font-weight:bold;background:white;padding:0.25em 0.5em;border-radius:0.25em">Legacy image format not supported by SVG engine.</p>
                               `}
                         </div>
                       </div>
@@ -1205,10 +1207,10 @@ export class EaselBoard extends SignalElement {
               </div>
             </div>
 
-            <div style="width: 100%; max-width: 28rem; display: flex; justify-content: space-between; padding: 0 2rem; margin-top: -0.5rem;">
-              <div style="width: 1.5rem; height: 4rem; background-color: #845442; border: 2px solid #845442; border-bottom-left-radius: 0.5rem; border-bottom-right-radius: 0.5rem; transform: rotate(12deg); box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
-              <div style="width: 1.5rem; height: 5rem; background-color: #845442; border: 2px solid #845442; border-bottom-left-radius: 0.5rem; border-bottom-right-radius: 0.5rem; box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
-              <div style="width: 1.5rem; height: 4rem; background-color: #845442; border: 2px solid #845442; border-bottom-left-radius: 0.5rem; border-bottom-right-radius: 0.5rem; transform: rotate(-12deg); box-shadow: 0 4px 6px rgba(0,0,0,0.1);"></div>
+            <div style="width: 100%; max-width: 28em; display: flex; justify-content: space-between; padding: 0 2em; margin-top: -0.5em;">
+              <div style="width: 1.5em; height: 4em; background-color: #845442; border: 0.125em solid #845442; border-bottom-left-radius: 0.5em; border-bottom-right-radius: 0.5em; transform: rotate(12deg); box-shadow: 0 0.25em 0.375em rgba(0,0,0,0.1);"></div>
+              <div style="width: 1.5em; height: 5em; background-color: #845442; border: 0.125em solid #845442; border-bottom-left-radius: 0.5em; border-bottom-right-radius: 0.5em; box-shadow: 0 0.25em 0.375em rgba(0,0,0,0.1);"></div>
+              <div style="width: 1.5em; height: 4em; background-color: #845442; border: 0.125em solid #845442; border-bottom-left-radius: 0.5em; border-bottom-right-radius: 0.5em; transform: rotate(-12deg); box-shadow: 0 0.25em 0.375em rgba(0,0,0,0.1);"></div>
             </div>
           </div>
         </div>

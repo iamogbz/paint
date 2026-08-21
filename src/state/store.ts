@@ -47,7 +47,7 @@ export const appBackgroundStyleSignal = computed(() => ({
 }));
 
 export const footerStyleSignal = computed(() => ({
-  marginTop: "2rem",
+  marginTop: "0.75rem",
   textAlign: "center" as const,
   fontSize: "0.75rem",
   fontWeight: "800",
