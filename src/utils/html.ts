@@ -16,6 +16,6 @@ export type SVGFillableElement = SVGElementTagNameMap[typeof FILLABLE_SVG_ELEMEN
 export function getSvgDimensions(svg: SVGSVGElement, fallbackValue = FALLBACK_IMAGE_SIZE_PX) {
   return {
     width: svg.viewBox.baseVal.width || svg.width.baseVal.value || fallbackValue,
-    height: svg.viewBox.baseVal.height ||svg.width.baseVal.value || fallbackValue,
+    height: svg.viewBox.baseVal.height || svg.height.baseVal.value || fallbackValue,
   };
 }

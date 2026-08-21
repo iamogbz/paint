@@ -17,9 +17,11 @@ export function getAllDailyChallenges(limit?: number): SampleImage[] {
     const match = key.match(/drawing_(\d{4}-\d{2}-\d{2})\.\w+$/);
     const dateStr = match ? match[1] : "Unknown Date";
 
+    const formattedDate = new Date(dateStr).toLocaleDateString('en-US', { timeZone: 'UTC', weekday: 'short', month: 'short', day: '2-digit' }).replace(',', '');
+
     return {
       id: `daily-challenge-${dateStr}`,
-      name: `Daily Challenge - ${new Date(dateStr).toString().substring(0,10)}`,
+      name: `Daily Challenge - ${formattedDate}`,
       dataUrl: challengeImgUrl,
     };
   });
