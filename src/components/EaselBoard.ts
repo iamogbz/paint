@@ -156,7 +156,6 @@ export class EaselBoard extends SignalElement {
   private hoveredRegionId: string | null = null;
   private wheelSpinningTimeoutId = null;
   private zoomScale = 1.0;
-  private baseZoomScale = 1.0;
   private isPointerDown = false;
   private touchStartX = null;
   private touchStartY = null;
@@ -895,24 +894,14 @@ export class EaselBoard extends SignalElement {
 
       const transformEl = this.querySelector<HTMLElement>("#easel-transform-element");
       if (transformEl) {
-        const isActivelyZooming = this.wheelSpinningTimeoutId !== null || this.isPinchAction;
-        
-        if (isActivelyZooming) {
-          const gestureScale = this.zoomScale / this.baseZoomScale;
-          transformEl.style.transform = this.getTransformCssProperty() + ` scale(${gestureScale})`;
-          transformEl.style.zoom = this.baseZoomScale.toString();
-        } else {
-          this.baseZoomScale = this.zoomScale;
-          transformEl.style.transform = this.getTransformCssProperty();
-          transformEl.style.zoom = this.zoomScale.toString();
-        }
-        
+        transformEl.style.transform = this.getTransformCssProperty();
         transformEl.style.transition = this.getTransitionCssProperty();
+        this.updateZoom();
       }
 
-      const fillLayer = this.querySelector<HTMLElement>("#fill-layer");
-      if (fillLayer) {
-        fillLayer.style.pointerEvents = this.isDragCanvasAction || this.isPinchAction || this.wheelSpinningTimeoutId !== null ? "none" : "auto";
+      const container = this.querySelector<HTMLElement>("#main-frame-container");
+      if (container) {
+        container.style.pointerEvents = this.isDragCanvasAction || this.isPinchAction ? "none" : "auto";
       }
     });
   };
@@ -1120,7 +1109,6 @@ export class EaselBoard extends SignalElement {
       transition: this.getTransitionCssProperty(),
       "-webkit-text-size-adjust": "none",
       "text-size-adjust": "none",
-      willChange: "transform",
     }
 
     return html`
