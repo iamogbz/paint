@@ -227,8 +227,8 @@ export class EaselBoard extends SignalElement {
 
       this.zoomScale = newZoomScale;
 
-      this.panX = this.clampPanX(newPanX, newZoomScale);
-      this.panY = this.clampPanY(newPanY, newZoomScale);
+      this.panX = this.clampPanX(newPanX);
+      this.panY = this.clampPanY(newPanY);
 
       this.wheelSpinningTimeoutId = window.setTimeout(() => {
         this.wheelSpinningTimeoutId = null;
