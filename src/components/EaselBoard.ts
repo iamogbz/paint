@@ -630,7 +630,7 @@ export class EaselBoard extends SignalElement {
 
     const regionHasBrushStrokes = Object.keys(currentArtwork.brushStrokePaths[regionId] ?? {}).length > 0;
     // theres a color change or brushes to replace
-    if (currentColor !== colorHex || !regionHasBrushStrokes) {
+    if (currentColor !== colorHex || regionHasBrushStrokes) {
       pushUndoState(currentArtwork);
     }
 
