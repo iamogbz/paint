@@ -218,7 +218,7 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
       /** If a pallete is defined maps colors to this */
       // palette: palette,
       /** Discard patches smaller than X px in size (0..=128) */
-      filterSpeckle: 4,
+      filterSpeckle: 2,
       /** default: 8 (best) - Significant bits per RGB channel (1..=8)  */
       colorPrecision: 8,
       pathPrecision: 8,
