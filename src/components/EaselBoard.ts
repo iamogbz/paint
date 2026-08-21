@@ -625,9 +625,10 @@ export class EaselBoard extends SignalElement {
     if (!expected || expected === TRANSPARENT_HEX) return;
 
     const regionHasBrushStrokes = Object.keys(currentArtwork.brushStrokePaths[regionId] ?? {}).length > 0;
-    // no color change, no brushes to replace
-    if (currentColor === colorHex && !regionHasBrushStrokes) return;
-    pushUndoState(currentArtwork);
+    // theres a color change or brushes to replace
+    if (currentColor !== colorHex || !regionHasBrushStrokes) {
+      pushUndoState(currentArtwork);
+    }
 
     // Unconditionally remove all brush strokes clipped by this region when a fill is applied
     if (currentArtwork.brushStrokePaths) delete currentArtwork.brushStrokePaths[regionId];
