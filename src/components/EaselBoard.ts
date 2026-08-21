@@ -771,12 +771,12 @@ export class EaselBoard extends SignalElement {
     const h = this.containerElement?.clientHeight || 350;
     const basePan = h / 2;
     const maxPanUp = basePan + (this.screenMinSize * 0.3) / s;
-    const maxPanDown = basePan + (this.screenMinSize * 0.8) / s;
+    const maxPanDown = basePan + (this.screenMinSize * 0.3) / s;
     return clamp(y, -maxPanUp, maxPanDown);
   }
 
   private getTransformCssProperty = () => {
-    return `translate(calc(-50% + ${this.panX + this.dragDeltaX / this.zoomScale}px), calc(-50% + ${this.panY + this.dragDeltaY / this.zoomScale}px))`;
+    return `translate(calc(-50% + ${this.panX + this.dragDeltaX / this.zoomScale}px), calc(-30% + ${this.panY + this.dragDeltaY / this.zoomScale}px))`;
   };
 
   private getTransitionCssProperty = () => {
