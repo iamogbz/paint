@@ -7,17 +7,11 @@ import { iconX, iconImage } from "./icons";
 
 @customElement("daily-challenge-modal")
 export class DailyChallengeModal extends SignalElement {
-  @property({ type: Boolean })
-  isOpen = false;
-
   private challenges: SampleImage[] = [];
 
   connectedCallback() {
     super.connectedCallback();
     this.challenges = getAllDailyChallenges();
-    this.subscribe(isDailyChallengeModalOpenSignal, (isOpen) => {
-      this.isOpen = isOpen;
-    });
   }
 
   private handleSelectChallenge(challenge: SampleImage) {
@@ -33,7 +27,8 @@ export class DailyChallengeModal extends SignalElement {
   }
 
   render() {
-    if (!this.isOpen) return html``;
+    const isOpen = isDailyChallengeModalOpenSignal.get();
+    if (!isOpen) return html``;
 
     const overlayStyle = {
       position: "fixed",
