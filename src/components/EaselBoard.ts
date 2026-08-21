@@ -2,15 +2,14 @@ import { html } from "lit";
 import { customElement } from "lit/decorators.js";
 import { SignalElement } from "../utils/SignalElement";
 import { currentArtworkSignal, isProcessingSignal, processingImageSrcSignal, processingImageWidthSignal, processingImageHeightSignal, activeHighlightColorSignal, dragToOpenFileSignal, zoomScaleSignal, handleImageSelected, handleSelectArtwork, draggedColorPositionSignal, pushUndoState, saveCurrentArtworkProgress, footerStyleSignal, isBrushModeSignal, artworksSignal, artworkIdsSortedSignal, panDragActiveSignal, isDailyChallengeModalOpenSignal } from "../state/store";
-import { getDailyChallenge } from "../data/dailyChallenge";
 import { soundEffects } from "../utils/soundEffects";
 import { iconImage, iconUpload, iconPaintBucket } from "./icons";
-import { BASE_BRUSH_RADIUS, FALLBACK_IMAGE_SIZE_PX, FILLABLE_SVG_ELEMENTS, MAX_ZOOM, TRANSPARENT_HEX, transparentImgCss } from "../utils/constants";
+import { BASE_BRUSH_RADIUS, FALLBACK_IMAGE_SIZE_PX, FILLABLE_SVG_ELEMENTS, TRANSPARENT_HEX, transparentImgCss } from "../utils/constants";
 import { normalizeHex } from "../utils/color";
 import { clamp, zoom } from "../utils/ui";
 import { unsafeSVG } from "lit/directives/unsafe-svg.js";
 import { updateArtworkSvgWithUserPaints } from "../utils/imageProcessor";
-import { XML_NS } from "../utils/html";
+import { getSvgDimensions, XML_NS } from "../utils/html";
 
 function erasePointsFromStrokePath(points: Array<{ x: number; y: number }>, cx: number, cy: number, r: number): Array<Array<{ x: number; y: number }>> {
   if (points.length === 0) return [];
@@ -117,11 +116,7 @@ function erasePointsFromStrokePath(points: Array<{ x: number; y: number }>, cx: 
   return result;
 }
 
-function eraseFromStrokesRecord(
-  strokes: Record<string, { points: Array<{ x: number; y: number }>; stroke: string; strokeWidth: number }>,
-  eraserPoints: Array<{ x: number; y: number }>,
-  eraserRadius: number
-): Record<string, { points: Array<{ x: number; y: number }>; stroke: string; strokeWidth: number }> {
+function eraseFromStrokesRecord(strokes: Record<string, { points: Array<{ x: number; y: number }>; stroke: string; strokeWidth: number }>, eraserPoints: Array<{ x: number; y: number }>, eraserRadius: number): Record<string, { points: Array<{ x: number; y: number }>; stroke: string; strokeWidth: number }> {
   let currentStrokes = { ...strokes };
 
   for (const ep of eraserPoints) {
@@ -181,7 +176,7 @@ export class EaselBoard extends SignalElement {
   private brushStartExpectedColor: string | null = null;
   private brushTargetRegionId: string | null = null;
   // faster buffering of painted paths without waiting for save logic
-  private brushPositionBuffer = [] as Array<{x: number; y: number}>;
+  private brushPositionBuffer = [] as Array<{ x: number; y: number }>;
 
   public triggerFilePicker = () => {
     if (this.isDragCanvasAction) return;
@@ -422,13 +417,10 @@ export class EaselBoard extends SignalElement {
           .filter(([_, info]) => info.fillColor === this.brushStartExpectedColor)
           .map(([id, _]) => id);
 
-        const svgPoints = this.brushPositionBuffer
-          .map((p) => this.getSvgCoordinates(p.x, p.y))
-          .filter((p) => p !== null);
+        const svgPoints = this.brushPositionBuffer.map((p) => this.getSvgCoordinates(p.x, p.y)).filter((p) => p !== null);
 
         if (svgPoints.length > 0) {
-          const imageScaleFactor = Math.max(currentArtwork.width, currentArtwork.height) / FALLBACK_IMAGE_SIZE_PX;
-          const strokeWidth = Math.max(1, (BASE_BRUSH_RADIUS * imageScaleFactor) / this.zoomScale);
+          const strokeWidth = this.getBrushStrokeWidth();
 
           // Determine which regions will actually receive points before pushing undo state or mutating
           const pendingUpdates: Array<{
@@ -445,12 +437,7 @@ export class EaselBoard extends SignalElement {
             const toleranceY = 4 * svgPoints[0].scaleY + 5;
 
             const regionPoints = svgPoints.filter((pos) => {
-              return (
-                pos.x >= boundingBox.x - toleranceX &&
-                pos.x <= boundingBox.x + boundingBox.width + toleranceX &&
-                pos.y >= boundingBox.y - toleranceY &&
-                pos.y <= boundingBox.y + boundingBox.height + toleranceY
-              );
+              return pos.x >= boundingBox.x - toleranceX && pos.x <= boundingBox.x + boundingBox.width + toleranceX && pos.y >= boundingBox.y - toleranceY && pos.y <= boundingBox.y + boundingBox.height + toleranceY;
             });
 
             if (regionPoints.length > 0) {
@@ -468,11 +455,7 @@ export class EaselBoard extends SignalElement {
               }
 
               if (activeColor === TRANSPARENT_HEX) {
-                currentArtwork.brushStrokePaths[regionId] = eraseFromStrokesRecord(
-                  currentArtwork.brushStrokePaths[regionId],
-                  points,
-                  strokeWidth / 2
-                );
+                currentArtwork.brushStrokePaths[regionId] = eraseFromStrokesRecord(currentArtwork.brushStrokePaths[regionId], points, strokeWidth / 2);
                 if (Object.keys(currentArtwork.brushStrokePaths[regionId]).length === 0) {
                   delete currentArtwork.brushStrokePaths[regionId];
                 }
@@ -537,7 +520,24 @@ export class EaselBoard extends SignalElement {
     this.updateTransformDirectly();
   };
 
-  private getSvgCoordinates(px: number, py: number): { x: number; y: number; scaleX: number; scaleY: number } | null {
+  private getStrokeWidth(mult = 1) {
+    const imageScaleFactor = this.getSvgMaxSize() / FALLBACK_IMAGE_SIZE_PX;
+    return Math.max(1, (mult * imageScaleFactor) / this.zoomScale);
+  }
+
+  private getBrushStrokeWidth() {
+    return this.getStrokeWidth(BASE_BRUSH_RADIUS);
+  }
+
+  private getSvgMaxSize() {
+    const svg = this.querySelector<SVGSVGElement>("#fill-layer>svg");
+    if (!svg) return null;
+
+    const svgDimensions = getSvgDimensions(svg);
+    return Math.max(svgDimensions.width, svgDimensions.height);
+  }
+
+  private getSvgCoordinates(px: number, py: number) {
     const svg = this.querySelector<SVGSVGElement>("#fill-layer>svg");
     if (!svg) return null;
 
@@ -553,18 +553,7 @@ export class EaselBoard extends SignalElement {
 
     const svgTouchPoint = screenPoint.matrixTransform(ctmMatrix.inverse());
 
-    let vbW = FALLBACK_IMAGE_SIZE_PX,
-      vbH = FALLBACK_IMAGE_SIZE_PX;
-    if (svg.viewBox.baseVal && svg.viewBox.baseVal.width > 0) {
-      vbW = svg.viewBox.baseVal.width;
-      vbH = svg.viewBox.baseVal.height;
-    } else {
-      const currentArtwork = currentArtworkSignal.get();
-      if (currentArtwork) {
-        vbW = currentArtwork.width;
-        vbH = currentArtwork.height;
-      }
-    }
+    const { width: vbW, height: vbH } = getSvgDimensions(svg);
 
     const scaleX = vbW / rect.width;
     const scaleY = vbH / rect.height;
@@ -784,9 +773,7 @@ export class EaselBoard extends SignalElement {
     if (this.isPointerDown || this.wheelSpinningTimeoutId !== null) {
       return `width ${transitionSettings}`;
     }
-    return ["transform", "width", "zoom"]
-      .map(p => `${p} ${transitionSettings}`)
-      .join(", ");
+    return ["transform", "width", "zoom"].map((p) => `${p} ${transitionSettings}`).join(", ");
   };
 
   disconnectedCallback() {
@@ -882,7 +869,7 @@ export class EaselBoard extends SignalElement {
     if (transformEl) {
       transformEl.style.zoom = this.zoomScale.toString();
     }
-  }
+  };
 
   private updateTransformDirectly = () => {
     if (this.requestedTransformAnimationFrame !== null) {
@@ -935,8 +922,7 @@ export class EaselBoard extends SignalElement {
               guideSvg.appendChild(livePath);
             }
 
-            const imageScaleFactor = Math.max(currentArtwork.width, currentArtwork.height) / FALLBACK_IMAGE_SIZE_PX;
-            const strokeWidth = Math.max(1, (BASE_BRUSH_RADIUS * imageScaleFactor) / this.zoomScale);
+            const strokeWidth = this.getBrushStrokeWidth();
 
             const svgPoints = this.brushPositionBuffer.map((p) => this.getSvgCoordinates(p.x, p.y)).filter((p) => p !== null);
 
@@ -969,8 +955,7 @@ export class EaselBoard extends SignalElement {
         let elemClass = "";
         const hueLoopCls = "animated-hue";
 
-        const artWidth = fillSvg.viewBox.baseVal.width || currentArtwork.width;
-        const baseStrokeWidth = Math.max(1.5, (artWidth / FALLBACK_IMAGE_SIZE_PX) / this.zoomScale);
+        const baseStrokeWidth = this.getStrokeWidth();
 
         const expectedHexUpper = normalizeHex(expectedColorHex);
         const currentHexUpper = fillLayer.querySelector(`[data-region-id="${region.id}"]`).getAttribute("fill").toUpperCase();
@@ -1022,7 +1007,7 @@ export class EaselBoard extends SignalElement {
     const processingWidth = processingImageWidthSignal.get();
     const processingHeight = processingImageHeightSignal.get();
     const isDragOver = dragToOpenFileSignal.get();
-        this.zoomScale = zoomScaleSignal.get();
+    this.zoomScale = zoomScaleSignal.get();
 
     const outerContainerStyle = {
       width: "95vmin",
@@ -1092,7 +1077,7 @@ export class EaselBoard extends SignalElement {
       touchAction: "none",
       userSelect: "none",
       "-webkitUserSelect": "none",
-    }
+    };
 
     const easelTransformElementStyle = {
       width: "95vmin",
@@ -1108,7 +1093,7 @@ export class EaselBoard extends SignalElement {
       transition: this.getTransitionCssProperty(),
       "-webkit-text-size-adjust": "none",
       "text-size-adjust": "none",
-    }
+    };
 
     return html`
       <div style=${this.renderStyleObject(outerContainerStyle)}>
@@ -1180,9 +1165,7 @@ export class EaselBoard extends SignalElement {
                           <a href="https://github.com/sponsors/iamogbz" target="_blank" style="color: inherit; text-decoration: inherit; cursor: pointer;">❤️ QBRKTS</a>
                           ©️ ${new Date().getFullYear()}
                         </p>
-                        <div style="margin-top: 1em; display: inline-flex; align-items: center; justify-content: center; padding: 0.2em 0.5em; background-color: rgba(0, 0, 0, 0.01); border: 0.05em solid rgba(0, 0, 0, 0.05); border-radius: 0.75em; font-family: monospace; font-size: 0.7em; font-weight: 700; letter-spacing: 0.05em; color: inherit;" title="version">
-                          ${typeof __COMMIT_HASH__ !== "undefined" ? __COMMIT_HASH__.slice(0, 7) : ""}
-                        </div>
+                        <div style="margin-top: 1em; display: inline-flex; align-items: center; justify-content: center; padding: 0.2em 0.5em; background-color: rgba(0, 0, 0, 0.01); border: 0.05em solid rgba(0, 0, 0, 0.05); border-radius: 0.75em; font-family: monospace; font-size: 0.7em; font-weight: 700; letter-spacing: 0.05em; color: inherit;" title="version">${typeof __COMMIT_HASH__ !== "undefined" ? __COMMIT_HASH__.slice(0, 7) : ""}</div>
                       </footer>
                     `
                   : ""}
