@@ -280,10 +280,10 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
   document.body.appendChild(hiddenContainer);
 
   const PRESERVE_ELEMENT_MARKER = "paint-preserve";
-  const selectorNotInDefElement = `:is(${FILLABLE_SVG_ELEMENTS_SELECTOR})`;
+  const isFillableElemSelector = `:is(${FILLABLE_SVG_ELEMENTS_SELECTOR})` as typeof FILLABLE_SVG_ELEMENTS_SELECTOR;
 
   const preservedTreeElements = new Set<SVGElement>();
-  const allFillableElements = renderNode.querySelectorAll<SVGElementTagNameMap[typeof FILLABLE_SVG_ELEMENTS_SELECTOR]>(selectorNotInDefElement);
+  const allFillableElements = renderNode.querySelectorAll(isFillableElemSelector);
   allFillableElements.forEach((fillElement, key) => {
     const fillRegionId = `region-${key}`;
     fillElement.setAttribute("data-region-id", fillRegionId);

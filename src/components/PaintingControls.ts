@@ -383,7 +383,7 @@ export class PaintingControls extends SignalElement {
           <!-- Middle Group: Canvas Zoom Controls (Only when image is loaded) -->
           ${showPhotoControls
             ? html`
-                <div id="easel-zoom-container" style="display: flex; align-items: center; gap: 0.5rem;">
+                <div id="zoom-controls-container" style="display: flex; align-items: center; gap: 0.5rem;">
                   <!-- Zoom Out Button -->
                   <button
                     title="Zoom Out"

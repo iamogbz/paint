@@ -5,7 +5,7 @@ import { currentArtworkSignal, isProcessingSignal, processingImageSrcSignal, pro
 import { getDailyChallenge } from "../data/dailyChallenge";
 import { soundEffects } from "../utils/soundEffects";
 import { iconImage, iconUpload, iconPaintBucket } from "./icons";
-import { BASE_BRUSH_RADIUS, FALLBACK_IMAGE_SIZE_PX, FILLABLE_SVG_ELEMENTS, TRANSPARENT_HEX, transparentImgCss } from "../utils/constants";
+import { BASE_BRUSH_RADIUS, FALLBACK_IMAGE_SIZE_PX, FILLABLE_SVG_ELEMENTS, MAX_ZOOM, TRANSPARENT_HEX, transparentImgCss } from "../utils/constants";
 import { normalizeHex } from "../utils/color";
 import { clamp, zoom } from "../utils/ui";
 import { unsafeSVG } from "lit/directives/unsafe-svg.js";
@@ -217,23 +217,24 @@ export class EaselBoard extends SignalElement {
 
     const newZoomScale = zoom(this.zoomScale, e.deltaY > 0);
 
-    if (newZoomScale !== this.zoomScale) {
-      const rect = this.containerElement?.getBoundingClientRect();
-      if (rect) {
-        const hw = rect.width / 2;
-        const hh = rect.height / 2;
-        const mx = e.clientX - rect.left - hw;
-        const my = e.clientY - rect.top - hh;
+    const easelElem = this.containerElement.firstElementChild as HTMLDivElement;
 
-        const scaleRatio = newZoomScale / this.zoomScale;
+    if (newZoomScale !== this.zoomScale && easelElem) {
+      const rect = this.containerElement.getBoundingClientRect();
+      const cx = rect.left + rect.width / 2;
+      const cy = rect.top + rect.height / 2;
 
-        this.panX = mx - (mx - this.panX) * scaleRatio;
-        this.panY = my - (my - this.panY) * scaleRatio;
+      const mx = e.clientX - cx;
+      const my = e.clientY - cy;
 
-        this.panX = this.clampPanX(this.panX, newZoomScale);
-        this.panY = this.clampPanY(this.panY, newZoomScale);
-      }
+      const newPanX = this.panX + mx / newZoomScale - mx / this.zoomScale;
+      const newPanY = this.panY + my / newZoomScale - my / this.zoomScale;
+
       this.zoomScale = newZoomScale;
+      this.updateZoom();
+
+      this.panX = this.clampPanX(newPanX, newZoomScale);
+      this.panY = this.clampPanY(newPanY, newZoomScale);
 
       this.wheelSpinningTimeoutId = window.setTimeout(() => {
         this.wheelSpinningTimeoutId = null;
@@ -310,31 +311,33 @@ export class EaselBoard extends SignalElement {
       const currentMidX = (pointers[0].clientX + pointers[1].clientX) / 2;
       const currentMidY = (pointers[0].clientY + pointers[1].clientY) / 2;
 
-      const rect = this.containerElement?.getBoundingClientRect();
+      const easelElem = this.containerElement.firstElementChild as HTMLDivElement;
 
-      if (this.initialPinchDistance && this.initialPinchDistance > 0 && rect) {
+      if (this.initialPinchDistance && this.initialPinchDistance > 0 && easelElem) {
         const scaleFactor = currentDistance / this.initialPinchDistance;
         const newZoom = zoom(this.initialZoomScale * scaleFactor, true);
 
-        const hw = rect.width / 2;
-        const hh = rect.height / 2;
+        const rect = this.containerElement.getBoundingClientRect();
+        const cx = rect.left + rect.width / 2;
+        const cy = rect.top + rect.height / 2;
+
         const initMidX = this.initialPinchMidX ?? currentMidX;
         const initMidY = this.initialPinchMidY ?? currentMidY;
 
-        const mx = initMidX - rect.left - hw;
-        const my = initMidY - rect.top - hh;
+        const m_x = initMidX - cx;
+        const m_y = initMidY - cy;
+        const m_prime_x = currentMidX - cx;
+        const m_prime_y = currentMidY - cy;
 
-        const scaleRatio = newZoom / (this.initialZoomScale || 1.0);
-
-        const zoomPanX = mx - (mx - this.initialPanX) * scaleRatio;
-        const zoomPanY = my - (my - this.initialPanY) * scaleRatio;
-
-        const translationX = currentMidX - initMidX;
-        const translationY = currentMidY - initMidY;
+        const newPanX = this.initialPanX + m_prime_x / newZoom - m_x / this.initialZoomScale;
+        const newPanY = this.initialPanY + m_prime_y / newZoom - m_y / this.initialZoomScale;
 
         this.zoomScale = newZoom;
-        this.panX = this.clampPanX(zoomPanX + translationX, newZoom);
-        this.panY = this.clampPanY(zoomPanY + translationY, newZoom);
+        this.updateZoom();
+
+        this.panX = this.clampPanX(newPanX, newZoom);
+        this.panY = this.clampPanY(newPanY, newZoom);
+
         this.dragDeltaX = 0;
         this.dragDeltaY = 0;
 
@@ -400,8 +403,8 @@ export class EaselBoard extends SignalElement {
 
     if (this.isPointerDown) {
       if (this.isDragCanvasAction) {
-        this.panX = this.clampPanX(this.panX + this.dragDeltaX, this.zoomScale);
-        this.panY = this.clampPanY(this.panY + this.dragDeltaY, this.zoomScale);
+        this.panX = this.clampPanX(this.panX + this.dragDeltaX / this.zoomScale, this.zoomScale);
+        this.panY = this.clampPanY(this.panY + this.dragDeltaY / this.zoomScale, this.zoomScale);
         this.hoveredRegionId = null; // Reset hover after pan to drag
       } else {
         // was not drag action when the touch ended
@@ -521,8 +524,8 @@ export class EaselBoard extends SignalElement {
     if (!panDragActiveSignal.get()) return;
     this.dragDeltaX = 0;
     this.dragDeltaY = 0;
-    this.panX += e?.detail.dx ?? 0;
-    this.panY += e?.detail.dy ?? 0;
+    this.panX += (e?.detail.dx ?? 0) / this.zoomScale;
+    this.panY += (e?.detail.dy ?? 0) / this.zoomScale;
     this.updateTransformDirectly();
   };
 
@@ -760,30 +763,33 @@ export class EaselBoard extends SignalElement {
 
   private clampPanX(x: number, s: number): number {
     const w = this.containerElement?.clientWidth || 350;
-    const maxPan = (w * s) / 2;
+    const maxPan = w / 2;
     return clamp(x, -maxPan, maxPan);
   }
 
   private clampPanY(y: number, s: number): number {
     const h = this.containerElement?.clientHeight || 350;
-    // half the scaled easel size cause panning is calculated from the middle
-    const basePan = (h * s) / 2;
-    // give some extra room at the bottom depending on screen size
-    const maxPanUp = basePan + this.screenMinSize * 0.3;
-    // stop it from going to far down, limit adjustment by half screen size
-    const maxPanDown = Math.max(0, basePan - this.screenMinSize * 0.3);
+    const basePan = h / 2;
+    const maxPanUp = basePan + (this.screenMinSize * 0.3) / s;
+    const maxPanDown = Math.max(0, basePan - (this.screenMinSize * 0.3) / s);
     return clamp(y, -maxPanUp, maxPanDown);
   }
 
+  private getZoomableCssProperty = (prop) => {
+    return `calc(${prop} * ${this.zoomScale})`;
+  }
+
   private getTransformCssProperty = () => {
-    return `translate(${this.panX + this.dragDeltaX}px, ${this.panY + this.dragDeltaY}px) scale(${this.zoomScale})`;
+    return `translate(calc(${this.panX + this.dragDeltaX / this.zoomScale}px - 50%), calc(${this.panY + this.dragDeltaY / this.zoomScale}px - 50%))`;
   };
 
   private getTransitionCssProperty = () => {
     if (this.isPointerDown || this.wheelSpinningTimeoutId !== null) {
       return "none";
     }
-    return "transform 0.15s cubic-bezier(0.2, 0.5, 0.3, 0.8)";
+    return ["transform", "width"]
+      .map(p => `${p} 0.15s cubic-bezier(0.2, 0.5, 0.3, 0.8)`)
+      .join(", ");
   };
 
   disconnectedCallback() {
@@ -874,7 +880,13 @@ export class EaselBoard extends SignalElement {
     this.updateArtwork();
   }
 
-  private updateTransformDirectly = async () => {
+  private updateZoom = () => {
+    const transformEl = this.querySelector<HTMLElement>("#easel-transform-element");
+    transformEl.style.zoom = this.zoomScale.toString();
+    transformEl.style.width = this.getZoomableCssProperty("95vmin");
+  }
+
+  private updateTransformDirectly = () => {
     if (this.requestedTransformAnimationFrame !== null) {
       window.cancelAnimationFrame(this.requestedTransformAnimationFrame);
     }
@@ -884,6 +896,7 @@ export class EaselBoard extends SignalElement {
       if (transformEl) {
         transformEl.style.transform = this.getTransformCssProperty();
         transformEl.style.transition = this.getTransitionCssProperty();
+        this.updateZoom();
       }
       const container = this.querySelector<HTMLElement>("#main-frame-container");
       if (container) {
@@ -909,7 +922,7 @@ export class EaselBoard extends SignalElement {
         if (guideSvg && currentArtwork) {
           const livePathId = "live-brush-stroke";
           let livePath = guideSvg.querySelector(`#${livePathId}`) as SVGPathElement;
-          
+
           if (this.isBrushPainting && this.brushPositionBuffer.length > 0 && activeColor) {
             if (!livePath) {
               livePath = document.createElementNS(XML_NS, "path") as SVGPathElement;
@@ -920,12 +933,12 @@ export class EaselBoard extends SignalElement {
               livePath.setAttribute("pointer-events", "none");
               guideSvg.appendChild(livePath);
             }
-            
+
             const imageScaleFactor = Math.max(currentArtwork.width, currentArtwork.height) / FALLBACK_IMAGE_SIZE_PX;
             const strokeWidth = Math.max(1, (BASE_BRUSH_RADIUS * imageScaleFactor) / this.zoomScale);
-            
+
             const svgPoints = this.brushPositionBuffer.map((p) => this.getSvgCoordinates(p.x, p.y)).filter((p) => p !== null);
-            
+
             if (svgPoints.length > 0) {
               const pathStr = svgPoints.map((p, idx) => `${idx === 0 ? "M" : "L"} ${p.x.toFixed(1)} ${p.y.toFixed(1)}`).join(" ");
               livePath.setAttribute("d", pathStr);
@@ -1011,6 +1024,8 @@ export class EaselBoard extends SignalElement {
     const dailyChallengeImage = getDailyChallenge();
     this.zoomScale = zoomScaleSignal.get();
 
+    const zcss = (prop) => this.getZoomableCssProperty(prop);
+
     const outerContainerStyle = {
       width: "95vmin",
       maxWidth: "95vmin",
@@ -1072,12 +1087,35 @@ export class EaselBoard extends SignalElement {
       boxSizing: "border-box" as const,
     };
 
+    const easelContainerStyle = {
+      position: "relative",
+      width: `100%`,
+      height: `100%`,
+      touchAction: "none",
+      userSelect: "none",
+      "-webkitUserSelect": "none",
+    }
+
+    const easelTransformElementStyle = {
+      width: zcss`95vmin`,
+      position: "absolute",
+      top: "50%",
+      left: "50%",
+      display: "flex",
+      flexDirection: "column",
+      alignItems: "center",
+      transform: this.getTransformCssProperty(),
+      zoom: this.zoomScale,
+      transformOrigin: "center center",
+      transition: this.getTransitionCssProperty(),
+    }
+
     return html`
       <div style=${this.renderStyleObject(outerContainerStyle)}>
         <input id="easel-file-input" type="file" accept="image/*" style="display: none;" @change=${this.handleFileChange} />
 
-        <div id="easel-zoom-container" style="position: relative; width: 100%; touch-action: none; user-select: none; -webkit-user-select: none;">
-          <div id="easel-transform-element" style="width: 100%; display: flex; flex-direction: column; align-items: center; transform: ${this.getTransformCssProperty()}; transform-origin: center center; transition: ${this.getTransitionCssProperty()}">
+        <div id="easel-zoom-container" style="${this.renderStyleObject(easelContainerStyle)}">
+          <div id="easel-transform-element" style="${this.renderStyleObject(easelTransformElementStyle)}">
             <div style=${this.renderStyleObject(easelTopClampStyle)}></div>
             <div style=${this.renderStyleObject(mainFrameStyle)}>
               <div style="display: flex; flex-direction: column; align-items: center; justify-content: center; position: relative; padding: 0.5rem; background-size: 0.5rem 0.5rem; background-image: ${transparentImgCss}; min-height: 40vh; overflow: hidden;">
