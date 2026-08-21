@@ -79,18 +79,18 @@ export class DailyChallengeModal extends SignalElement {
             </button>
           </div>
 
-          <!-- Grid -->
-          <div style="flex: 1; overflow-y: auto; padding: 1.5rem; display: grid; grid-template-columns: repeat(auto-fit, minmax(140px, 1fr)); gap: 1.5rem; background-color: #FAF8F5;">
+          <!-- Flex Gallery -->
+          <div style="flex: 1; overflow-y: auto; padding: 1.5rem; display: flex; flex-wrap: wrap; justify-content: center; gap: 1.5rem; background-color: #FAF8F5;">
             ${this.challenges.map((challenge) => {
               return html`
                 <div
-                  style="display: flex; flex-direction: column; background-color: #FFFFFF; border: 3px solid #000000; border-radius: 16px; overflow: hidden; box-shadow: 4px 4px 0 0 #000000; cursor: pointer; transition: transform 0.1s ease-in-out;"
+                  style="width: 140px; flex-grow: 1; max-width: 200px; display: flex; flex-direction: column; background-color: #FFFFFF; border: 3px solid #000000; border-radius: 16px; overflow: hidden; box-shadow: 4px 4px 0 0 #000000; cursor: pointer; transition: transform 0.1s ease-in-out;"
                   @click=${() => this.handleSelectChallenge(challenge)}
                   onmouseover="this.style.transform='translate(-2px, -2px)'; this.style.boxShadow='6px 6px 0 0 #000000';"
                   onmouseout="this.style.transform='translate(0, 0)'; this.style.boxShadow='4px 4px 0 0 #000000';"
                 >
                   <!-- Preview Image -->
-                  <div style="aspect-ratio: 1 / 1; width: 100%; flex-shrink: 0; position: relative; border-bottom: 3px solid #000000; background-color: #f0f0f0; background-image: ${transparentImgCss}; background-size: 1rem 1rem; overflow: hidden;">
+                  <div style="padding-bottom: 100%; width: 100%; position: relative; border-bottom: 3px solid #000000; background-color: #f0f0f0; background-image: ${transparentImgCss}; background-size: 1rem 1rem; overflow: hidden;">
                     <img src="${challenge.dataUrl}" alt="${challenge.name}" style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none;" />
                   </div>
                   <!-- Details -->
