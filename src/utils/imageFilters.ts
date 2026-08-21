@@ -163,6 +163,6 @@ export function applyThresholdedUnsharpMask(
  * on bitmap image data prior to vtracer vectorization.
  */
 export function enhanceBitmapForVectorization(imageData: ImageData): void {
-  applyBilateralFilter(imageData);
+  // applyBilateralFilter(imageData); // Causes fine details to be lost
   applyThresholdedUnsharpMask(imageData);
 }
