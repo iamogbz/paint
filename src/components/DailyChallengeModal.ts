@@ -80,7 +80,7 @@ export class DailyChallengeModal extends SignalElement {
           </div>
 
           <!-- Grid -->
-          <div style="flex: 1; overflow-y: auto; padding: 1.5rem; display: grid; grid-template-columns: repeat(auto-fill, minmax(200px, 1fr)); gap: 1.5rem; background-color: #FAF8F5;">
+          <div style="flex: 1; overflow-y: auto; padding: 1.5rem; display: grid; grid-template-columns: repeat(auto-fill, minmax(min(100%, 140px), 1fr)); gap: 1.5rem; background-color: #FAF8F5;">
             ${this.challenges.map((challenge) => {
               return html`
                 <div
@@ -90,7 +90,7 @@ export class DailyChallengeModal extends SignalElement {
                   onmouseout="this.style.transform='translate(0, 0)'; this.style.boxShadow='4px 4px 0 0 #000000';"
                 >
                   <!-- Preview Image -->
-                  <div style="aspect-ratio: 1; width: 100%; position: relative; border-bottom: 3px solid #000000; background-color: #f0f0f0; background-image: ${transparentImgCss}; background-size: 1rem 1rem; overflow: hidden;">
+                  <div style="padding-bottom: 100%; width: 100%; position: relative; border-bottom: 3px solid #000000; background-color: #f0f0f0; background-image: ${transparentImgCss}; background-size: 1rem 1rem; overflow: hidden;">
                     <img src="${challenge.dataUrl}" alt="${challenge.name}" style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none;" />
                   </div>
                   <!-- Details -->
