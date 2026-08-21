@@ -170,31 +170,61 @@ export function applySaturationAndContrast(
   contrastAmount = CONTRAST_BOOST_AMOUNT
 ): void {
   const { data } = imageData;
-  const intercept = 128 * (1 - contrastAmount);
 
   for (let i = 0; i < data.length; i += 4) {
-    const a = data[i + 3];
-    if (a === 0) continue;
+    if (data[i + 3] === 0) continue;
 
-    let r = data[i];
-    let g = data[i + 1];
-    let b = data[i + 2];
+    let r = data[i] / 255;
+    let g = data[i + 1] / 255;
+    let b = data[i + 2] / 255;
 
-    // 1. Apply Contrast
-    r = r * contrastAmount + intercept;
-    g = g * contrastAmount + intercept;
-    b = b * contrastAmount + intercept;
+    // 1. Convert RGB to HSL
+    const max = Math.max(r, g, b), min = Math.min(r, g, b);
+    let h = 0, s = 0, l = (max + min) / 2;
 
-    // 2. Apply Saturation (luminance preserving)
-    const l = 0.299 * r + 0.587 * g + 0.114 * b;
-    r = l + saturationAmount * (r - l);
-    g = l + saturationAmount * (g - l);
-    b = l + saturationAmount * (b - l);
+    if (max !== min) {
+      const d = max - min;
+      s = l > 0.5 ? d / (2 - max - min) : d / (max + min);
+      switch (max) {
+        case r: h = (g - b) / d + (g < b ? 6 : 0); break;
+        case g: h = (b - r) / d + 2; break;
+        case b: h = (r - g) / d + 4; break;
+      }
+      h /= 6;
+    }
 
-    // 3. Clamp and assign
-    data[i] = Math.min(255, Math.max(0, Math.round(r)));
-    data[i + 1] = Math.min(255, Math.max(0, Math.round(g)));
-    data[i + 2] = Math.min(255, Math.max(0, Math.round(b)));
+    // 2. Apply Contrast to Lightness
+    // Expands distance from 0.5 (mid-gray), darkening darks and brightening lights
+    l = (l - 0.5) * contrastAmount + 0.5;
+    l = Math.max(0, Math.min(1, l));
+
+    // 3. Apply Saturation
+    s = s * saturationAmount;
+    s = Math.max(0, Math.min(1, s));
+
+    // 4. Convert HSL back to RGB
+    let fR = l, fG = l, fB = l;
+    if (s !== 0) {
+      const hue2rgb = (p: number, q: number, t: number) => {
+        if (t < 0) t += 1;
+        if (t > 1) t -= 1;
+        if (t < 1 / 6) return p + (q - p) * 6 * t;
+        if (t < 1 / 2) return q;
+        if (t < 2 / 3) return p + (q - p) * (2 / 3 - t) * 6;
+        return p;
+      };
+
+      const q = l < 0.5 ? l * (1 + s) : l + s - l * s;
+      const p = 2 * l - q;
+      fR = hue2rgb(p, q, h + 1 / 3);
+      fG = hue2rgb(p, q, h);
+      fB = hue2rgb(p, q, h - 1 / 3);
+    }
+
+    // 5. Assign rounded values
+    data[i] = Math.round(fR * 255);
+    data[i + 1] = Math.round(fG * 255);
+    data[i + 2] = Math.round(fB * 255);
   }
 }
 
