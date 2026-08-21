@@ -156,6 +156,7 @@ export class EaselBoard extends SignalElement {
   private hoveredRegionId: string | null = null;
   private wheelSpinningTimeoutId = null;
   private zoomScale = 1.0;
+  private baseZoomScale = 1.0;
   private isPointerDown = false;
   private touchStartX = null;
   private touchStartY = null;
@@ -771,7 +772,7 @@ export class EaselBoard extends SignalElement {
     const h = this.containerElement?.clientHeight || 350;
     const basePan = h / 2;
     const maxPanUp = basePan + (this.screenMinSize * 0.3) / s;
-    const maxPanDown = Math.max(0, basePan - (this.screenMinSize * 0.3) / s);
+    const maxPanDown = basePan + (this.screenMinSize * 0.8) / s;
     return clamp(y, -maxPanUp, maxPanDown);
   }
 
@@ -888,17 +889,30 @@ export class EaselBoard extends SignalElement {
     if (this.requestedTransformAnimationFrame !== null) {
       window.cancelAnimationFrame(this.requestedTransformAnimationFrame);
     }
+
     this.requestedTransformAnimationFrame = window.requestAnimationFrame(() => {
       this.requestedTransformAnimationFrame = null;
+
       const transformEl = this.querySelector<HTMLElement>("#easel-transform-element");
       if (transformEl) {
-        transformEl.style.transform = this.getTransformCssProperty();
+        const isActivelyZooming = this.wheelSpinningTimeoutId !== null || this.isPinchAction;
+        
+        if (isActivelyZooming) {
+          const gestureScale = this.zoomScale / this.baseZoomScale;
+          transformEl.style.transform = this.getTransformCssProperty() + ` scale(${gestureScale})`;
+          transformEl.style.zoom = this.baseZoomScale.toString();
+        } else {
+          this.baseZoomScale = this.zoomScale;
+          transformEl.style.transform = this.getTransformCssProperty();
+          transformEl.style.zoom = this.zoomScale.toString();
+        }
+        
         transformEl.style.transition = this.getTransitionCssProperty();
-        this.updateZoom();
       }
-      const container = this.querySelector<HTMLElement>("#main-frame-container");
-      if (container) {
-        container.style.pointerEvents = this.isDragCanvasAction || this.isPinchAction ? "none" : "auto";
+
+      const fillLayer = this.querySelector<HTMLElement>("#fill-layer");
+      if (fillLayer) {
+        fillLayer.style.pointerEvents = this.isDragCanvasAction || this.isPinchAction || this.wheelSpinningTimeoutId !== null ? "none" : "auto";
       }
     });
   };
@@ -1106,6 +1120,7 @@ export class EaselBoard extends SignalElement {
       transition: this.getTransitionCssProperty(),
       "-webkit-text-size-adjust": "none",
       "text-size-adjust": "none",
+      willChange: "transform",
     }
 
     return html`
