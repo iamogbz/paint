@@ -37,8 +37,8 @@ export class DailyChallengeModal extends SignalElement {
       width: "100vw",
       height: "100vh",
       backgroundColor: "rgba(0, 0, 0, 0.5)",
-      backdropFilter: "blur(4px)",
-      WebkitBackdropFilter: "blur(4px)",
+      backdropFilter: "blur(1rem)",
+      WebkitBackdropFilter: "blur(1rem)",
       zIndex: 9999,
       display: "flex",
       alignItems: "center",
@@ -65,7 +65,7 @@ export class DailyChallengeModal extends SignalElement {
     return html`
       <div style=${this.renderStyleObject(overlayStyle)} @click=${() => isDailyChallengeModalOpenSignal.set(false)}>
         <div style=${this.renderStyleObject(modalStyle)} @click=${(e: Event) => e.stopPropagation()}>
-          
+
           <!-- Header -->
           <div style="padding: 1.25rem 1.5rem; border-bottom: 3px solid #000000; display: flex; align-items: center; justify-content: space-between; background-color: #E9C46A;">
             <h2 style="margin: 0; font-size: 1.5rem; font-weight: 900; color: #000000; display: flex; align-items: center; gap: 0.5rem;">

@@ -31,7 +31,7 @@ export class ArtworkGalleryModal extends SignalElement {
       inset: 0,
       zIndex: 15000,
       backgroundColor: "rgba(255,255,255, 0.6)",
-      backdropFilter: "blur(8px)",
+      backdropFilter: "blur(1rem)",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
@@ -41,7 +41,7 @@ export class ArtworkGalleryModal extends SignalElement {
 
     const modalContentStyle = {
       backgroundColor: "rgba(255, 255, 255, 0.8)",
-      backdropFilter: "blur(16px)",
+      backdropFilter: "blur(1rem)",
       border: "4px solid #000000",
       width: "100%",
       maxWidth: "95vmin",
@@ -150,7 +150,7 @@ export class ArtworkGalleryModal extends SignalElement {
                 fontSize: "0.625rem",
                 fontWeight: "900",
                 padding: "0.125rem 0.5rem",
-                borderRadius: "9999px",
+                borderRadius: "100%",
                 border: "1px solid #FFFFFF",
                 textTransform: "uppercase" as const,
               };

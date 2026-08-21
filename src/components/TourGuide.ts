@@ -135,7 +135,7 @@ export class AppTour extends SignalElement {
       inset: 0,
       zIndex: 20000,
       backgroundColor: "rgba(255, 255, 255, 0.6)",
-      backdropFilter: "blur(8px)",
+      backdropFilter: "blur(1rem)",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
