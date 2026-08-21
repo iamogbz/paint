@@ -524,8 +524,8 @@ export class EaselBoard extends SignalElement {
     if (!panDragActiveSignal.get()) return;
     this.dragDeltaX = 0;
     this.dragDeltaY = 0;
-    this.panX += (e?.detail.dx ?? 0) / this.zoomScale;
-    this.panY += (e?.detail.dy ?? 0) / this.zoomScale;
+    this.panX = this.clampPanX(this.panX + (e?.detail.dx ?? 0) / this.zoomScale, this.zoomScale);
+    this.panY = this.clampPanY(this.panY + (e?.detail.dy ?? 0) / this.zoomScale, this.zoomScale);
     this.updateTransformDirectly();
   };
 
