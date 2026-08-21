@@ -16,6 +16,7 @@
 
 | Daily Challenges | [Art Link](https://pixabay.com/vectors/search/?order=ec)                  |
 | ---------------  | ------------------------------------------------------------------------- |
+| 2026-08-21       | <https://pixabay.com/vectors/brazil-brazilian-favela-favelas-10104348/>   |
 | 2026-08-20       | <https://pixabay.com/vectors/anime-girl-stars-falling-fantasy-9063542/>   |
 | 2026-08-19       | <https://pixabay.com/vectors/mountain-snow-cold-blue-north-9979198/>      |
 | 2026-08-18       | <https://pixabay.com/vectors/woman-stars-mind-sky-night-clouds-8706492/>  |
