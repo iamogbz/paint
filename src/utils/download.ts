@@ -129,9 +129,20 @@ export async function exportArtworkHighResPng(artwork: ProcessedArtwork): Promis
 }
 
 export async function exportArtworkPdfDataUrl(artwork: ProcessedArtwork): Promise<string> {
-  // Use exact SVG dimensions
-  const w = artwork.width;
-  const h = artwork.height;
+  const MAX_PDF_DIMENSION = 1200; // Reasonable max dimension for PDF page
+  let w = artwork.width;
+  let h = artwork.height;
+
+  if (w > MAX_PDF_DIMENSION || h > MAX_PDF_DIMENSION) {
+    const aspect = w / h;
+    if (w > h) {
+      w = MAX_PDF_DIMENSION;
+      h = Math.round(MAX_PDF_DIMENSION / aspect);
+    } else {
+      h = MAX_PDF_DIMENSION;
+      w = Math.round(MAX_PDF_DIMENSION * aspect);
+    }
+  }
 
   // Create jsPDF instance with exact points
   // 'pt' unit means 1 point = 1 pixel at 72dpi.
@@ -144,6 +155,10 @@ export async function exportArtworkPdfDataUrl(artwork: ProcessedArtwork): Promis
 
   // Get svg element
   const svgElement = renderArtworkToSVG(artwork);
+  
+  // Set the scaled dimensions on the SVG so the PDF renders it to fit the page
+  svgElement.setAttribute("width", String(w));
+  svgElement.setAttribute("height", String(h));
 
   // Render SVG to PDF
   await doc.svg(svgElement, {
