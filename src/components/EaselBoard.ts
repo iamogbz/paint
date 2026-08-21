@@ -191,6 +191,7 @@ export class EaselBoard extends SignalElement {
     const container = this.querySelector<HTMLElement>("#easel-zoom-container");
     if (container && container !== this.containerElement) {
       if (this.containerElement) {
+        if (this.rectCacheObserver) this.rectCacheObserver.unobserve(this.containerElement);
         this.containerElement.removeEventListener("wheel", this.handleWheel);
         this.containerElement.removeEventListener("pointerdown", this.handlePointerDown);
         this.containerElement.removeEventListener("pointermove", this.handlePointerMove);
@@ -198,6 +199,8 @@ export class EaselBoard extends SignalElement {
         this.containerElement.removeEventListener("pointerleave", this.handlePointerLeave);
       }
       this.containerElement = container;
+      if (this.rectCacheObserver) this.rectCacheObserver.observe(this.containerElement);
+      this.updateRectCache();
       this.containerElement.addEventListener("wheel", this.handleWheel, { passive: false });
       this.containerElement.addEventListener("pointerdown", this.handlePointerDown);
       this.containerElement.addEventListener("pointermove", this.handlePointerMove);
@@ -215,7 +218,7 @@ export class EaselBoard extends SignalElement {
     const easelElem = this.containerElement.firstElementChild as HTMLDivElement;
 
     if (newZoomScale !== this.zoomScale && easelElem) {
-      const rect = this.containerElement.getBoundingClientRect();
+      const rect = this.cachedContainerRect || this.containerElement.getBoundingClientRect();
       const cx = rect.left + rect.width / 2;
       const cy = rect.top + rect.height / 2;
 
@@ -242,6 +245,7 @@ export class EaselBoard extends SignalElement {
   };
 
   private handlePointerDown = (e: PointerEvent) => {
+    this.updateRectCache(); // ensure accurate coordinates before parsing interactions
     this.activePointers.set(e.pointerId, e);
 
     if (this.activePointers.size === 1) {
@@ -312,7 +316,7 @@ export class EaselBoard extends SignalElement {
         const scaleFactor = currentDistance / this.initialPinchDistance;
         const newZoom = zoom(this.initialZoomScale * scaleFactor, true);
 
-        const rect = this.containerElement.getBoundingClientRect();
+        const rect = this.cachedContainerRect || this.containerElement.getBoundingClientRect();
         const cx = rect.left + rect.width / 2;
         const cy = rect.top + rect.height / 2;
 
@@ -541,10 +545,10 @@ export class EaselBoard extends SignalElement {
     const svg = this.querySelector<SVGSVGElement>("#fill-layer>svg");
     if (!svg) return null;
 
-    const rect = svg.getBoundingClientRect();
+    const rect = this.cachedSvgRect || svg.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return null;
 
-    const ctmMatrix = svg.getScreenCTM();
+    const ctmMatrix = this.cachedSvgCtm || svg.getScreenCTM();
     if (!ctmMatrix) return null;
 
     const screenPoint = svg.createSVGPoint();
@@ -795,7 +799,37 @@ export class EaselBoard extends SignalElement {
     return ["transform", "width", "zoom"].map((p) => `${p} ${transitionSettings}`).join(", ");
   };
 
+  private cachedContainerRect: DOMRect | null = null;
+  private cachedSvgRect: DOMRect | null = null;
+  private cachedSvgCtm: DOMMatrix | null = null;
+  private rectCacheIntervalId: number | null = null;
+  private rectCacheObserver: ResizeObserver | null = null;
+
+  private updateRectCache = () => {
+    if (this.containerElement) {
+      this.cachedContainerRect = this.containerElement.getBoundingClientRect();
+    }
+    const svg = this.querySelector<SVGSVGElement>("#fill-layer>svg");
+    if (svg) {
+      this.cachedSvgRect = svg.getBoundingClientRect();
+      this.cachedSvgCtm = svg.getScreenCTM();
+    }
+  };
+
+  connectedCallback() {
+    super.connectedCallback();
+    this.rectCacheIntervalId = window.setInterval(this.updateRectCache, 200);
+    this.rectCacheObserver = new ResizeObserver(() => {
+      this.updateRectCache();
+    });
+  }
+
   disconnectedCallback() {
+    if (this.rectCacheIntervalId !== null) window.clearInterval(this.rectCacheIntervalId);
+    if (this.rectCacheObserver) {
+      this.rectCacheObserver.disconnect();
+      this.rectCacheObserver = null;
+    }
     super.disconnectedCallback();
     window.removeEventListener("easel-pan-delta", this.handlePanDelta);
     window.removeEventListener("easel-reset-pan", this.handlePanReset);
@@ -974,7 +1008,7 @@ export class EaselBoard extends SignalElement {
         let elemClass = "";
         const hueLoopCls = "animated-hue";
 
-        const baseStrokeWidth = this.getStrokeWidth();
+        const baseStrokeWidth = this.getStrokeWidth(2);
 
         const expectedHexUpper = normalizeHex(expectedColorHex);
         const currentHexUpper = fillLayer.querySelector(`[data-region-id="${region.id}"]`).getAttribute("fill").toUpperCase();
