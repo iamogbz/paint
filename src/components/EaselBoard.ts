@@ -775,12 +775,8 @@ export class EaselBoard extends SignalElement {
     return clamp(y, -maxPanUp, maxPanDown);
   }
 
-  private getZoomableCssProperty = (prop) => {
-    return `calc(${prop} * ${this.zoomScale})`;
-  }
-
   private getTransformCssProperty = () => {
-    return `translate(calc(${this.panX + this.dragDeltaX / this.zoomScale}px - 50%), calc(${this.panY + this.dragDeltaY / this.zoomScale}px - 50%))`;
+    return `translate(calc(-50% + ${this.panX + this.dragDeltaX / this.zoomScale}px), calc(-50% + ${this.panY + this.dragDeltaY / this.zoomScale}px))`;
   };
 
   private getTransitionCssProperty = () => {
@@ -882,8 +878,9 @@ export class EaselBoard extends SignalElement {
 
   private updateZoom = () => {
     const transformEl = this.querySelector<HTMLElement>("#easel-transform-element");
-    transformEl.style.zoom = this.zoomScale.toString();
-    transformEl.style.width = this.getZoomableCssProperty("95vmin");
+    if (transformEl) {
+      transformEl.style.zoom = this.zoomScale.toString();
+    }
   }
 
   private updateTransformDirectly = () => {
@@ -1024,8 +1021,6 @@ export class EaselBoard extends SignalElement {
     const dailyChallengeImage = getDailyChallenge();
     this.zoomScale = zoomScaleSignal.get();
 
-    const zcss = (prop) => this.getZoomableCssProperty(prop);
-
     const outerContainerStyle = {
       width: "95vmin",
       maxWidth: "95vmin",
@@ -1091,13 +1086,14 @@ export class EaselBoard extends SignalElement {
       position: "relative",
       width: `100%`,
       height: `100%`,
+      minHeight: "95vmin",
       touchAction: "none",
       userSelect: "none",
       "-webkitUserSelect": "none",
     }
 
     const easelTransformElementStyle = {
-      width: zcss`95vmin`,
+      width: "95vmin",
       position: "absolute",
       top: "50%",
       left: "50%",
