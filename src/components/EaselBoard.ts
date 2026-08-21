@@ -329,8 +329,8 @@ export class EaselBoard extends SignalElement {
 
         this.zoomScale = newZoom;
 
-        this.panX = this.clampPanX(newPanX, newZoom);
-        this.panY = this.clampPanY(newPanY, newZoom);
+        this.panX = this.clampPanX(newPanX);
+        this.panY = this.clampPanY(newPanY);
 
         this.dragDeltaX = 0;
         this.dragDeltaY = 0;
@@ -398,8 +398,8 @@ export class EaselBoard extends SignalElement {
 
     if (this.isPointerDown) {
       if (this.isDragCanvasAction) {
-        this.panX = this.clampPanX(this.panX + this.dragDeltaX / this.zoomScale, this.zoomScale);
-        this.panY = this.clampPanY(this.panY + this.dragDeltaY / this.zoomScale, this.zoomScale);
+        this.panX = this.clampPanX(this.panX + this.dragDeltaX / this.zoomScale);
+        this.panY = this.clampPanY(this.panY + this.dragDeltaY / this.zoomScale);
         this.hoveredRegionId = null; // Reset hover after pan to drag
       } else {
         // was not drag action when the touch ended
@@ -507,8 +507,8 @@ export class EaselBoard extends SignalElement {
     if (!panDragActiveSignal.get()) return;
     this.dragDeltaX = 0;
     this.dragDeltaY = 0;
-    this.panX = this.clampPanX(this.panX + (e?.detail.dx ?? 0) / this.zoomScale, this.zoomScale);
-    this.panY = this.clampPanY(this.panY + (e?.detail.dy ?? 0) / this.zoomScale, this.zoomScale);
+    this.panX = this.clampPanX(this.panX + (e?.detail.dx ?? 0) / this.zoomScale);
+    this.panY = this.clampPanY(this.panY + (e?.detail.dy ?? 0) / this.zoomScale);
     this.updateTransformDirectly();
   };
 
@@ -769,17 +769,17 @@ export class EaselBoard extends SignalElement {
     return Math.min(window.innerHeight, window.innerWidth);
   }
 
-  private clampPanX(x: number, s: number): number {
+  private clampPanX(x: number): number {
     const w = this.containerElement?.clientWidth || 350;
     const maxPan = w / 2;
     return clamp(x, -maxPan, maxPan);
   }
 
-  private clampPanY(y: number, s: number): number {
+  private clampPanY(y: number): number {
     const h = this.containerElement?.clientHeight || 350;
     const basePan = h / 2;
-    const maxPanUp = basePan + (this.screenMinSize * 0.3) / s;
-    const maxPanDown = basePan + (this.screenMinSize * 0.3) / s;
+    const maxPanUp = basePan;
+    const maxPanDown = basePan;
     return clamp(y, -maxPanUp, maxPanDown);
   }
 
