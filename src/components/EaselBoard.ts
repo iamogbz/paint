@@ -660,51 +660,65 @@ export class EaselBoard extends SignalElement {
 
     const selectedColorHex = activeHighlightColorSignal.get();
 
-    const getRegionAt = (x: number, y: number) => {
-      const el = document.elementFromPoint(x, y);
-      if (el && FILLABLE_SVG_ELEMENTS.has(el.tagName.toLowerCase() as any)) {
-        return el.getAttribute("data-region-id");
+    const elements = document.elementsFromPoint(px, py);
+    const stackedRegionIds = elements
+      .filter((el) => FILLABLE_SVG_ELEMENTS.has(el.tagName.toLowerCase() as any))
+      .map((el) => el.getAttribute("data-region-id"))
+      .filter(Boolean) as string[];
+
+    let targetRegionId: string | null = null;
+    const allNeighboringRegionIds = new Set<string>();
+
+    if (selectedColorHex && stackedRegionIds.length > 0) {
+      for (const regionId of stackedRegionIds) {
+        const regionInfo = currentArtwork.regionsDrawingInfo.get(regionId);
+        if (!regionInfo) continue;
+
+        if (regionInfo.neighbourRegionIds) {
+          for (const nId of regionInfo.neighbourRegionIds) {
+            allNeighboringRegionIds.add(nId);
+          }
+        }
+
+        const currentFill = currentArtwork.regionsCurrentFillInfo.get(regionId);
+        const isAlreadyFilledWithAssignedColor = Boolean(currentFill && regionInfo.fillColor && currentFill === regionInfo.fillColor);
+        const isAlreadyFilledWithActiveColor = currentFill === selectedColorHex;
+        const isExpectedColorDifferent = regionInfo.fillColor !== selectedColorHex;
+
+        if (!targetRegionId && !(isExpectedColorDifferent || isAlreadyFilledWithActiveColor || isAlreadyFilledWithAssignedColor)) {
+          targetRegionId = regionId;
+          break;
+        }
       }
-      return null;
-    };
 
-    const regionIdA = getRegionAt(px, py);
-
-    if (regionIdA !== null && selectedColorHex) {
-      const { fillColor: regionAExpectedColor, neighbourRegionIds: neighbors } = currentArtwork.regionsDrawingInfo.get(regionIdA);
-      const regionACurrentFill = currentArtwork.regionsCurrentFillInfo.get(regionIdA);
-
-      const isAlreadyFilledWithAssignedColor = Boolean(regionACurrentFill && regionAExpectedColor && regionACurrentFill === regionAExpectedColor);
-      const isAlreadyFilledWithActiveColor = regionACurrentFill === selectedColorHex;
-      const isExpectedColorDifferent = regionAExpectedColor !== selectedColorHex;
-
-      if ((isExpectedColorDifferent || isAlreadyFilledWithActiveColor || isAlreadyFilledWithAssignedColor) && neighbors) {
+      if (!targetRegionId && allNeighboringRegionIds.size > 0) {
         let closestRegion: string | null = null;
         let minDistance = Infinity;
+        let minArea = Infinity;
 
         const svgCoords = this.getSvgCoordinates(px, py);
 
         if (svgCoords) {
           const { x: svgX, y: svgY, scaleX, scaleY } = svgCoords;
 
-          // Expand the bounding box check by an 8px physical screen distance to make hitting thin/small elements easier
           const toleranceX = 8 * scaleX;
           const toleranceY = 8 * scaleY;
-          let minArea = Infinity;
 
-          for (const nId of neighbors) {
+          for (const nId of allNeighboringRegionIds) {
             const nInfo = currentArtwork.regionsDrawingInfo.get(nId);
             if (nInfo && nInfo.fillColor === selectedColorHex && nInfo.boundingBox) {
               const bb = nInfo.boundingBox;
-              // Strictly check if the tapped point falls within the neighbor's mathematical bounding box (+ tolerance)
-              if (svgX >= bb.x - toleranceX && svgX <= bb.x + bb.width + toleranceX && svgY >= bb.y - toleranceY && svgY <= bb.y + bb.height + toleranceY) {
+              if (
+                svgX >= bb.x - toleranceX &&
+                svgX <= bb.x + bb.width + toleranceX &&
+                svgY >= bb.y - toleranceY &&
+                svgY <= bb.y + bb.height + toleranceY
+              ) {
                 const cx = bb.x + bb.width / 2;
                 const cy = bb.y + bb.height / 2;
                 const dist = Math.hypot(cx - svgX, cy - svgY);
                 const area = bb.width * bb.height;
 
-                // We strongly prefer the smaller shape to make it easier to hit fine details
-                // Only fallback to distance if areas are functionally identical
                 const isSignificantlySmallerArea = area < minArea * 0.8;
                 const isSimilarAreaButCloser = Math.abs(area - minArea) / minArea <= 0.2 && dist < minDistance;
 
@@ -716,15 +730,19 @@ export class EaselBoard extends SignalElement {
               }
             }
           }
-        }
 
-        if (closestRegion !== null) {
-          return closestRegion;
+          if (closestRegion !== null) {
+            targetRegionId = closestRegion;
+          }
         }
       }
     }
 
-    return regionIdA;
+    if (!targetRegionId && stackedRegionIds.length > 0) {
+      targetRegionId = stackedRegionIds[0];
+    }
+
+    return targetRegionId;
   }
 
   private updateHoverRegion = (e: Pick<PointerEvent, "clientX" | "clientY">) => {
