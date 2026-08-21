@@ -1,5 +1,4 @@
 import { FALLBACK_IMAGE_SIZE_PX, FILLABLE_SVG_ELEMENTS_SELECTOR, PAINTABLE_REGION_HEX, TRANSPARENT_HEX } from "./constants.js";
-import { enhanceBitmapForVectorization } from "./imageFilters.js";
 import { processingImageHeightSignal, processingImageWidthSignal } from "../state/store.js";
 import { MutableMap, ProcessedArtwork } from "../types";
 import { getHexCode, normalizeHex } from "./color.js";
@@ -201,10 +200,6 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     if (!origCtx) throw new Error("Failed to initialize canvas 2D context");
 
     const origImgData = origCtx.getImageData(0, 0, imgWidth, imgHeight);
-
-    // Apply bilateral filter & thresholded unsharp mask to bitmap images prior to vectorization
-    enhanceBitmapForVectorization(origImgData);
-
     const rawPixels = origImgData.data;
 
     // Run vtracer in worker with optimized parameters
