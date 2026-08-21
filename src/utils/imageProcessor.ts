@@ -3,15 +3,15 @@ import { enhanceBitmapForVectorization } from "./imageFilters.js";
 import { processingImageHeightSignal, processingImageWidthSignal } from "../state/store.js";
 import { MutableMap, ProcessedArtwork } from "../types";
 import { getHexCode, normalizeHex } from "./color.js";
-import { parseSVG, XML_NS } from "./html.js";
+import { getSvgDimensions, parseSVG, XML_NS } from "./html.js";
 
 let _worker: Worker | null = null;
 let _msgId = 0;
-const _callbacks = new Map<number, { resolve: Function, reject: Function }>();
+const _callbacks = new Map<number, { resolve: Function; reject: Function }>();
 
 function getWorker() {
   if (!_worker) {
-    _worker = new Worker(new URL('./imageProcessorWorker.ts', import.meta.url), { type: 'module' });
+    _worker = new Worker(new URL("./imageProcessorWorker.ts", import.meta.url), { type: "module" });
     _worker.onmessage = (e) => {
       const { id, type, payload } = e.data;
       const cb = _callbacks.get(id);
@@ -33,28 +33,17 @@ function runInWorker(type: string, payload: any): Promise<any> {
   });
 }
 
-function parseSvgDimension(value) {
-  if (!value) return 0;
-
-  // Handle percentage strings explicitly if needed
-  if (String(value).endsWith("%")) {
-    return FALLBACK_IMAGE_SIZE_PX; // since we would be scaling the SVG regardless
-  }
-
-  const num = parseFloat(value);
-  return isNaN(num) ? 0 : num;
-}
-
-async function loadImage(src: string): Promise<Readonly<({ type: "err"; data: unknown } | { type: "svg"; data: SVGElement } | { type: "bin"; data: HTMLImageElement }) & { format: string }>> {
+async function loadImage(src: string): Promise<Readonly<({ type: "err"; data: unknown } | { type: "svg"; data: SVGSVGElement } | { type: "bin"; data: HTMLImageElement }) & { format: string }>> {
   const response = await fetch(src);
   const contentType = response.headers.get("content-type");
   if (contentType && contentType.includes("image/")) {
     if (contentType.includes("image/svg+xml")) {
       const text = await response.text();
-      const svgElement = parseSVG(text);
+      const svgElement = parseSVG<SVGSVGElement>(text);
       if (svgElement) {
-        processingImageWidthSignal.set(parseSvgDimension(svgElement.getAttribute("width")) || FALLBACK_IMAGE_SIZE_PX);
-        processingImageHeightSignal.set(parseSvgDimension(svgElement.getAttribute("height")) || FALLBACK_IMAGE_SIZE_PX);
+        const dimensions = getSvgDimensions(svgElement);
+        processingImageWidthSignal.set(dimensions.width);
+        processingImageHeightSignal.set(dimensions.height);
         return {
           type: "svg",
           format: contentType,
@@ -118,11 +107,7 @@ async function loadImage(src: string): Promise<Readonly<({ type: "err"; data: un
  * Multi-step halving downscaler to target dimensions (capped at FALLBACK_IMAGE_SIZE_PX).
  * Downscaling incrementally in halves prevents aliasing, blur, and pixelation artifacts.
  */
-function downscaleCanvasMultiStep(
-  source: HTMLCanvasElement | HTMLImageElement,
-  targetWidth: number,
-  targetHeight: number
-): HTMLCanvasElement {
+function downscaleCanvasMultiStep(source: HTMLCanvasElement | HTMLImageElement, targetWidth: number, targetHeight: number): HTMLCanvasElement {
   let currentWidth = source instanceof HTMLImageElement ? source.naturalWidth : source.width;
   let currentHeight = source instanceof HTMLImageElement ? source.naturalHeight : source.height;
 
@@ -174,7 +159,7 @@ function downscaleCanvasMultiStep(
 /**
  * Turns svg outlines into paths and fragments overlapping shapes into non-overlapping islands.
  */
-async function transformSVGForPainting(svg: SVGElement): Promise<SVGElement> {
+async function transformSVGForPainting(svg: SVGSVGElement) {
   // TODO
   // 1. turn all the strokes with >0 widths into paths, the stroke color is now the fill and the new path has no stroke
   // 2. check all the paths in the document including the strokes that just got turned to paths and divide them into unique islands until they are no overlapping paths
@@ -201,7 +186,7 @@ async function transformSVGForPainting(svg: SVGElement): Promise<SVGElement> {
 export async function processImageToCartoonPalette(imageSrc: string, artworkName: string): Promise<ProcessedArtwork> {
   const maybeImage = await loadImage(imageSrc);
 
-  let svgDoc: SVGElement | null = null;
+  let svgDoc: SVGSVGElement | null = null;
 
   if (maybeImage.type === "svg") {
     svgDoc = maybeImage.data;
@@ -358,10 +343,11 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
   // remove all other elements from the perserved SVG
   renderNode.querySelectorAll(`*:not([${PRESERVE_ELEMENT_MARKER}]`).forEach((elem) => elem.remove());
 
+  const width = processingImageWidthSignal.get();
+  const height = processingImageHeightSignal.get();
+
   if (!renderNode.hasAttribute("viewBox")) {
-    const w = renderNode.getAttribute("width") || processingImageWidthSignal.get();
-    const h = renderNode.getAttribute("height") || processingImageHeightSignal.get();
-    renderNode.setAttribute("viewBox", `0 0 ${parseFloat(String(w))} ${parseFloat(String(h))}`);
+    renderNode.setAttribute("viewBox", `0 0 ${width} ${height}`);
   }
 
   // ensure final svg scales to container;
@@ -393,11 +379,9 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
   });
 
   try {
-    const imgWidth = processingImageWidthSignal.get() || FALLBACK_IMAGE_SIZE_PX;
-    const imgHeight = processingImageHeightSignal.get() || FALLBACK_IMAGE_SIZE_PX;
-    const maxDim = Math.max(imgWidth, imgHeight);
+    const maxDim = Math.max(width, height);
     const expandPx = Math.max(8, maxDim * 0.015);
-    const regions = Array.from(regionsDrawingInfo.values()).map(r => ({ id: r.id, boundingBox: r.boundingBox }));
+    const regions = Array.from(regionsDrawingInfo.values()).map((r) => ({ id: r.id, boundingBox: r.boundingBox }));
     const computedNeighbours = await runInWorker("COMPUTE_NEIGHBORS", { regions, expandPx });
 
     for (const [id, neighbours] of computedNeighbours) {
@@ -416,8 +400,8 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     originalDataUrl: imageSrc,
     cartoonDataUrl: "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgDoc.outerHTML))),
     cartoonSVG: renderNode.outerHTML,
-    width: processingImageWidthSignal.get(),
-    height: processingImageHeightSignal.get(),
+    width,
+    height,
     createdAt: Date.now(),
     modifiedAt: Date.now(),
     /** A color can existing in here without a any region e.g. custom added colors */
