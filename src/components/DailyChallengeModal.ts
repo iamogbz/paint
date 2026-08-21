@@ -11,7 +11,7 @@ export class DailyChallengeModal extends SignalElement {
 
   connectedCallback() {
     super.connectedCallback();
-    this.challenges = getAllDailyChallenges();
+    this.challenges = getAllDailyChallenges(10);
   }
 
   private handleSelectChallenge(challenge: SampleImage) {
@@ -90,8 +90,8 @@ export class DailyChallengeModal extends SignalElement {
                   onmouseout="this.style.transform='translate(0, 0)'; this.style.boxShadow='4px 4px 0 0 #000000';"
                 >
                   <!-- Preview Image -->
-                  <div style="aspect-ratio: 1; width: 100%; border-bottom: 3px solid #000000; background-color: #f0f0f0; background-image: ${transparentImgCss}; background-size: 1rem 1rem; display: flex; align-items: center; justify-content: center; overflow: hidden;">
-                    <img src="${challenge.dataUrl}" alt="${challenge.name}" style="width: 100%; height: 100%; object-fit: contain; pointer-events: none;" />
+                  <div style="aspect-ratio: 1; width: 100%; position: relative; border-bottom: 3px solid #000000; background-color: #f0f0f0; background-image: ${transparentImgCss}; background-size: 1rem 1rem; overflow: hidden;">
+                    <img src="${challenge.dataUrl}" alt="${challenge.name}" style="position: absolute; inset: 0; width: 100%; height: 100%; object-fit: contain; pointer-events: none;" />
                   </div>
                   <!-- Details -->
                   <div style="padding: 0.75rem; display: flex; flex-direction: column; gap: 0.25rem;">
