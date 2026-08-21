@@ -3,6 +3,8 @@ import {
   BILATERAL_SPATIAL_SIGMA,
   UNSHARP_MASK_AMOUNT,
   UNSHARP_MASK_THRESHOLD,
+  SATURATION_BOOST_AMOUNT,
+  CONTRAST_BOOST_AMOUNT,
 } from "./constants.js";
 
 /**
@@ -159,10 +161,48 @@ export function applyThresholdedUnsharpMask(
 }
 
 /**
- * Pipeline that runs bilateral edge-preserving smoothing followed by thresholded unsharp mask
- * on bitmap image data prior to vtracer vectorization.
+ * Boosts saturation and contrast to help the vectorizer clearly distinguish color regions
+ * without blurring fine edges or losing original color vibrancy.
+ */
+export function applySaturationAndContrast(
+  imageData: ImageData,
+  saturationAmount = SATURATION_BOOST_AMOUNT,
+  contrastAmount = CONTRAST_BOOST_AMOUNT
+): void {
+  const { data } = imageData;
+  const intercept = 128 * (1 - contrastAmount);
+
+  for (let i = 0; i < data.length; i += 4) {
+    const a = data[i + 3];
+    if (a === 0) continue;
+
+    let r = data[i];
+    let g = data[i + 1];
+    let b = data[i + 2];
+
+    // 1. Apply Contrast
+    r = r * contrastAmount + intercept;
+    g = g * contrastAmount + intercept;
+    b = b * contrastAmount + intercept;
+
+    // 2. Apply Saturation (luminance preserving)
+    const l = 0.299 * r + 0.587 * g + 0.114 * b;
+    r = l + saturationAmount * (r - l);
+    g = l + saturationAmount * (g - l);
+    b = l + saturationAmount * (b - l);
+
+    // 3. Clamp and assign
+    data[i] = Math.min(255, Math.max(0, Math.round(r)));
+    data[i + 1] = Math.min(255, Math.max(0, Math.round(g)));
+    data[i + 2] = Math.min(255, Math.max(0, Math.round(b)));
+  }
+}
+
+/**
+ * Pipeline that runs pre-processing on bitmap image data prior to vtracer vectorization.
+ * Currently uses only a color vibrancy boost to ensure vectorizer receives distinct color 
+ * regions without sacrificing any structural edge details.
  */
 export function enhanceBitmapForVectorization(imageData: ImageData): void {
-  // applyBilateralFilter(imageData); // Causes fine details to be lost
-  // applyThresholdedUnsharpMask(imageData); // Causes colors to be washed out
+  applySaturationAndContrast(imageData);
 }
