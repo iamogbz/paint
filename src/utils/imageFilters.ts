@@ -164,5 +164,5 @@ export function applyThresholdedUnsharpMask(
  */
 export function enhanceBitmapForVectorization(imageData: ImageData): void {
   // applyBilateralFilter(imageData); // Causes fine details to be lost
-  applyThresholdedUnsharpMask(imageData);
+  // applyThresholdedUnsharpMask(imageData); // Causes colors to be washed out
 }
