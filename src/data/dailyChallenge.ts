@@ -19,7 +19,7 @@ export function getAllDailyChallenges(limit?: number): SampleImage[] {
 
     return {
       id: `daily-challenge-${dateStr}`,
-      name: `Daily Challenge - ${dateStr}`,
+      name: `Daily Challenge - ${new Date(dateStr).toString().substring(0,10)}`,
       dataUrl: challengeImgUrl,
     };
   });
