@@ -664,10 +664,15 @@ export class EaselBoard extends SignalElement {
     const selectedColorHex = activeHighlightColorSignal.get();
 
     const elements = document.elementsFromPoint(px, py);
-    const stackedRegionIds = elements
-      .filter((el) => FILLABLE_SVG_ELEMENTS.has(el.tagName.toLowerCase() as any))
-      .map((el) => el.getAttribute("data-region-id"))
-      .filter(Boolean) as string[];
+    const stackedRegionIds: string[] = [];
+    for (const el of elements) {
+      // if the painting controls is in the way terminate early
+      if (el.id === "color-palette-section") return;
+      if (!FILLABLE_SVG_ELEMENTS.has(el.tagName.toLowerCase() as any)) continue;
+      const dataRegionId = el.getAttribute("data-region-id");
+      if (!dataRegionId) continue;
+      stackedRegionIds.push(dataRegionId);
+    }
 
     let targetRegionId: string | null = null;
     const allNeighboringRegionIds = new Set<string>();
