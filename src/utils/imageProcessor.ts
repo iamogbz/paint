@@ -355,7 +355,7 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     maskElem.removeAttribute("data-region-id");
     maskElem.setAttribute("fill", "none");
     maskElem.setAttribute("stroke", "none");
-    maskElem.setAttribute("touch-actions", "none");
+    maskElem.setAttribute("touch-action", "none");
     maskElem.setAttribute("pointer-events", "none");
     clipPath.appendChild(maskElem);
     brushStrokeDefElem.append(clipPath);
@@ -451,7 +451,7 @@ export function updateArtworkSvgWithUserPaints(svgElem: SVGSVGElement, artwork: 
         strokePathElem.setAttribute("stroke-linecap", "round");
         strokePathElem.setAttribute("stroke-linejoin", "round");
         strokePathElem.setAttribute("pointer-events", "none");
-        strokePathElem.setAttribute("touch-actions", "none");
+        strokePathElem.setAttribute("touch-action", "none");
         strokesContainer.append(strokePathElem);
       }
       strokePathElem.setAttribute("id", strokePathElemId);
