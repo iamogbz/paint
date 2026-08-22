@@ -1242,7 +1242,9 @@ export class EaselBoard extends SignalElement {
                           <a href="https://github.com/sponsors/iamogbz" target="_blank" style="color: inherit; text-decoration: inherit; cursor: pointer;">❤️ QBRKTS</a>
                           ©️ ${new Date().getFullYear()}
                         </p>
-                        <div style="margin-top: 1em; display: inline-flex; align-items: center; justify-content: center; padding: 0.2em 0.5em; background-color: rgba(0, 0, 0, 0.01); border: 0.05em solid rgba(0, 0, 0, 0.05); border-radius: 0.75em; font-family: monospace; font-size: 0.7em; font-weight: 700; letter-spacing: 0.05em; color: inherit;" title="version">${typeof __COMMIT_HASH__ !== "undefined" ? __COMMIT_HASH__.slice(0, 7) : ""}</div>
+                        <div style="margin-top: 1em; display: inline-flex; align-items: center; justify-content: center; padding: 0.2em 0.5em; background-color: rgba(0, 0, 0, 0.01); border: 0.05em solid rgba(0, 0, 0, 0.05); border-radius: 0.75em;" title="version">
+                          <a href="https://github.com/iamogbz/paint/commit/${__COMMIT_HASH__ || ""}" target="_blank" style="font-family: monospace; font-size: 0.7em; font-weight: 700; letter-spacing: 0.05em; color: inherit; text-decoration: none; text-transform: uppercase">${typeof __COMMIT_HASH__ !== "undefined" ? __COMMIT_HASH__.slice(0, 7) : ""}</a>
+                        </div>
                       </footer>
                     `
                   : ""}
