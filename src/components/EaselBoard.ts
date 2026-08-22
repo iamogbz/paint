@@ -188,24 +188,18 @@ export class EaselBoard extends SignalElement {
     }
   };
 
-  private setupPointerListeners() {
+  private setupContainerListeners() {
     const container = this.querySelector<HTMLElement>("#easel-zoom-container");
     if (container && container !== this.containerElement) {
       if (this.containerElement) {
         if (this.rectCacheObserver) this.rectCacheObserver.unobserve(this.containerElement);
         this.containerElement.removeEventListener("wheel", this.handleWheel);
-        this.containerElement.removeEventListener("pointerdown", this.handlePointerDown);
-        this.containerElement.removeEventListener("pointermove", this.handlePointerMove);
-        this.containerElement.removeEventListener("pointerup", this.handlePointerUp);
         this.containerElement.removeEventListener("pointerleave", this.handlePointerLeave);
       }
       this.containerElement = container;
       if (this.rectCacheObserver) this.rectCacheObserver.observe(this.containerElement);
       this.updateRectCache();
       this.containerElement.addEventListener("wheel", this.handleWheel, { passive: false });
-      this.containerElement.addEventListener("pointerdown", this.handlePointerDown);
-      this.containerElement.addEventListener("pointermove", this.handlePointerMove);
-      this.containerElement.addEventListener("pointerup", this.handlePointerUp);
       this.containerElement.addEventListener("pointerleave", this.handlePointerLeave);
     }
   }
@@ -247,7 +241,31 @@ export class EaselBoard extends SignalElement {
     this.updateTransformDirectly();
   };
 
-  private handlePointerDown = (e: PointerEvent) => {
+  private handlePointerLeave = (e: PointerEvent) => {
+    if (e.pointerType === "mouse") {
+      this.updateHoverRegion(e);
+    } else if (this.hoveredRegionId !== null) {
+      this.hoveredRegionId = null;
+      this.updateArtwork();
+    }
+  };
+
+  private handleGlobalPointerDown = (e: PointerEvent) => {
+    if (!this.containerElement) return;
+
+    // Check if the tap happened outside the canvas container
+    const isOutsideCanvas = !e.composedPath().includes(this.containerElement);
+    if (isOutsideCanvas) {
+      if (this.hoveredRegionId !== null) {
+        this.hoveredRegionId = null;
+        this.updateArtwork();
+      }
+    } else {
+      this._handlePointerDown(e);
+    }
+  };
+
+  private _handlePointerDown = (e: PointerEvent) => {
     this.updateRectCache(); // ensure accurate coordinates before parsing interactions
     this.activePointers.set(e.pointerId, e);
 
@@ -282,8 +300,6 @@ export class EaselBoard extends SignalElement {
       if (this.artworkId) {
         this.updateHoverRegion(e);
       }
-
-      window.addEventListener("pointercancel", this.handlePointerUp);
     } else if (this.activePointers.size === 2) {
       this.isPinchAction = true;
       this.isDragCanvasAction = true;
@@ -301,7 +317,14 @@ export class EaselBoard extends SignalElement {
     }
   };
 
-  private handlePointerMove = (e: PointerEvent) => {
+  private handleGlobalPointerMove = (e: PointerEvent) => {
+    if (draggedColorPositionSignal.get() !== null) {
+      this.updateHoverRegion(e);
+    }
+    this._handlePointerMove(e);
+  };
+
+  private _handlePointerMove = (e: PointerEvent) => {
     if (this.activePointers.has(e.pointerId)) {
       this.activePointers.set(e.pointerId, e);
     }
@@ -393,7 +416,26 @@ export class EaselBoard extends SignalElement {
     }
   };
 
-  private handlePointerUp = (e: PointerEvent) => {
+  private handleGlobalPointerUp = (e: PointerEvent) => {
+    const previousHoveredRegionId = this.hoveredRegionId;
+    if (draggedColorPositionSignal.get() !== null) {
+      if (this.hoveredRegionId) {
+        const activeColor = activeHighlightColorSignal.get();
+        if (activeColor) {
+          this.fillRegion(this.hoveredRegionId, activeColor);
+        }
+      }
+    }
+
+    this._handlePointerUp(e);
+    this.handleResetCanvasState();
+    // Clear hover state after dropping, since there's no persistent mouse cursor
+    if (previousHoveredRegionId !== null) {
+      this.updateArtwork();
+    }
+  };
+
+  private _handlePointerUp = (e: PointerEvent) => {
     if (e && e.pointerId !== undefined) {
       this.activePointers.delete(e.pointerId);
     }
@@ -502,30 +544,12 @@ export class EaselBoard extends SignalElement {
     this.updateArtwork(); // update render state at the end of drag
   };
 
-  private handlePointerLeave = (e: PointerEvent) => {
-    if (e.pointerType === "mouse") {
-      this.updateHoverRegion(e);
-    } else if (this.hoveredRegionId !== null) {
-      this.hoveredRegionId = null;
-      this.updateArtwork();
-    }
-  };
-
-  private handlePanDelta = (e: CustomEvent<PanCanvasDelta>) => {
-    if (!panDragActiveSignal.get()) return;
-    this.dragDeltaX = 0;
-    this.dragDeltaY = 0;
-    this.panX = this.clampPanX(this.panX + (e?.detail.dx ?? 0) / this.zoomScale);
-    this.panY = this.clampPanY(this.panY + (e?.detail.dy ?? 0) / this.zoomScale);
-    this.updateTransformDirectly();
-  };
-
-  private handlePanReset = () => {
-    this.panX = 0;
-    this.panY = 0;
-    this.dragDeltaX = 0;
-    this.dragDeltaY = 0;
-    this.updateTransformDirectly();
+  private handleGlobalPointerCancel = (e: PointerEvent) => {
+    this.handleResetCanvasState();
+    this.updateArtwork();
+    try {
+      this.containerElement?.releasePointerCapture(e.pointerId);
+    } catch (err) {}
   };
 
   private getStrokeWidth(mult = 1) {
@@ -819,56 +843,24 @@ export class EaselBoard extends SignalElement {
     return fixedCtm;
   }
 
-  private updateRectCache = () => {
-    if (this.containerElement) {
-      this.cachedContainerRect = this.containerElement.getBoundingClientRect();
-    }
-    const svg = this.querySelector<SVGSVGElement>("#fill-layer>svg");
-    if (svg) {
-      this.cachedSvgRect = svg.getBoundingClientRect();
-      this.cachedSvgCtm = this.calculateSvgScreenCTM(this.cachedSvgRect, getSvgDimensions(svg), svg);
-    }
+  private handlePanDelta = (e: CustomEvent<PanCanvasDelta>) => {
+    if (!panDragActiveSignal.get()) return;
+    this.dragDeltaX = 0;
+    this.dragDeltaY = 0;
+    this.panX = this.clampPanX(this.panX + (e?.detail.dx ?? 0) / this.zoomScale);
+    this.panY = this.clampPanY(this.panY + (e?.detail.dy ?? 0) / this.zoomScale);
+    this.updateTransformDirectly();
   };
 
-  connectedCallback() {
-    super.connectedCallback();
-    this.rectCacheIntervalId = window.setInterval(this.updateRectCache, 200);
-    this.rectCacheObserver = new ResizeObserver(() => {
-      this.updateRectCache();
-    });
-  }
-
-  disconnectedCallback() {
-    if (this.rectCacheIntervalId !== null) window.clearInterval(this.rectCacheIntervalId);
-    if (this.rectCacheObserver) {
-      this.rectCacheObserver.disconnect();
-      this.rectCacheObserver = null;
-    }
-    super.disconnectedCallback();
-    window.removeEventListener("easel-pan-delta", this.handlePanDelta as EventListener);
-    window.removeEventListener("easel-reset-pan", this.handlePanReset);
-    window.removeEventListener("pointerdown", this.handleGlobalPointerDown);
-    window.removeEventListener("pointermove", this.handleGlobalPointerMove);
-    window.removeEventListener("pointerup", this.handleGlobalPointerUp);
-  }
-
-  private handleGlobalPointerMove = (e: PointerEvent) => {
-    if (draggedColorPositionSignal.get() !== null) {
-      this.updateHoverRegion(e);
-    }
+  private handlePanReset = () => {
+    this.panX = 0;
+    this.panY = 0;
+    this.dragDeltaX = 0;
+    this.dragDeltaY = 0;
+    this.updateTransformDirectly();
   };
 
-  private handleGlobalPointerUp = (e: PointerEvent) => {
-    const previousHoveredRegionId = this.hoveredRegionId;
-    if (draggedColorPositionSignal.get() !== null) {
-      if (this.hoveredRegionId) {
-        const activeColor = activeHighlightColorSignal.get();
-        if (activeColor) {
-          this.fillRegion(this.hoveredRegionId, activeColor);
-        }
-      }
-    }
-
+  private handleResetCanvasState = () => {
     this.isPointerDown = false;
     this.touchStartX = null;
     this.touchStartY = null;
@@ -882,30 +874,10 @@ export class EaselBoard extends SignalElement {
     this.brushTargetRegionId = null;
     this.brushPositionBuffer = [];
     this.hoveredRegionId = null;
-    // Clear hover state after dropping, since there's no persistent mouse cursor
-    if (previousHoveredRegionId !== null) {
-      this.updateArtwork();
-    }
   };
 
-  private handleGlobalPointerDown = (e: PointerEvent) => {
-    if (!this.containerElement) return;
-
-    // Check if the tap happened outside the canvas container
-    const isOutsideCanvas = !e.composedPath().includes(this.containerElement);
-    if (isOutsideCanvas && this.hoveredRegionId !== null) {
-      this.hoveredRegionId = null;
-      this.updateArtwork();
-    }
-  };
-
-  firstUpdated() {
-    this.setupPointerListeners();
-    window.addEventListener("easel-pan-delta", this.handlePanDelta as EventListener);
-    window.addEventListener("easel-reset-pan", this.handlePanReset);
-    window.addEventListener("pointerdown", this.handleGlobalPointerDown);
-    window.addEventListener("pointermove", this.handleGlobalPointerMove);
-    window.addEventListener("pointerup", this.handleGlobalPointerUp);
+  connectedCallback() {
+    super.connectedCallback();
 
     (window as any).regionsByColors = () => {
       const currentArtwork = currentArtworkSignal.get();
@@ -926,10 +898,45 @@ export class EaselBoard extends SignalElement {
     };
   }
 
-  updated() {
-    this.setupPointerListeners();
-    this.updateArtwork();
+  protected firstUpdated() {
+    this.rectCacheIntervalId = window.setInterval(this.updateRectCache, 200);
+    this.rectCacheObserver = new ResizeObserver(() => {
+      this.updateRectCache();
+    });
+    this.setupContainerListeners();
+    window.addEventListener("easel-pan-delta", this.handlePanDelta as EventListener);
+    window.addEventListener("easel-reset-pan", this.handlePanReset);
+    window.addEventListener("pointerdown", this.handleGlobalPointerDown);
+    window.addEventListener("pointermove", this.handleGlobalPointerMove);
+    window.addEventListener("pointerup", this.handleGlobalPointerUp);
+    window.addEventListener("pointercancel", this.handleGlobalPointerCancel);
   }
+
+  disconnectedCallback() {
+    if (this.rectCacheIntervalId !== null) window.clearInterval(this.rectCacheIntervalId);
+    if (this.rectCacheObserver) {
+      this.rectCacheObserver.disconnect();
+      this.rectCacheObserver = null;
+    }
+    window.removeEventListener("easel-pan-delta", this.handlePanDelta as EventListener);
+    window.removeEventListener("easel-reset-pan", this.handlePanReset);
+    window.removeEventListener("pointerdown", this.handleGlobalPointerDown);
+    window.removeEventListener("pointermove", this.handleGlobalPointerMove);
+    window.removeEventListener("pointerup", this.handleGlobalPointerUp);
+    window.removeEventListener("pointercancel", this.handleGlobalPointerCancel);
+    super.disconnectedCallback();
+  }
+
+  private updateRectCache = () => {
+    if (this.containerElement) {
+      this.cachedContainerRect = this.containerElement.getBoundingClientRect();
+    }
+    const svg = this.querySelector<SVGSVGElement>("#fill-layer>svg");
+    if (svg) {
+      this.cachedSvgRect = svg.getBoundingClientRect();
+      this.cachedSvgCtm = this.calculateSvgScreenCTM(this.cachedSvgRect, getSvgDimensions(svg), svg);
+    }
+  };
 
   private updateZoom = () => {
     const transformEl = this.querySelector<HTMLElement>("#easel-transform-element");
@@ -1063,6 +1070,10 @@ export class EaselBoard extends SignalElement {
       }
     });
   };
+
+  updated() {
+    this.updateArtwork();
+  }
 
   render() {
     activeHighlightColorSignal.get(); // Track dependency for repaints on color change
