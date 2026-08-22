@@ -625,8 +625,7 @@ export class EaselBoard extends SignalElement {
 
     const currentColor = currentArtwork.regionsCurrentFillInfo.get(regionId);
     const expected = currentArtwork.regionsDrawingInfo.get(regionId).fillColor;
-    // TODO: decide if original artwork transparent regions can be painted in
-    if (!expected || expected === TRANSPARENT_HEX) return;
+    if (!expected) return;
 
     const regionHasBrushStrokes = Object.keys(currentArtwork.brushStrokePaths[regionId] ?? {}).length > 0;
     // theres a color change or brushes to replace

@@ -326,10 +326,6 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     fillElement.setAttribute("fill", fill);
     fillElement.setAttribute("stroke", "none");
     fillElement.setAttribute("stroke-linejoin", "round");
-    // TODO: decide if transparent regions should be interactable
-    // For deferring setting them as not interactable to when the svg is rendered to the user
-    // fillElement.setAttribute("touch-actions", isTransparentRegion ? "none" : "all");
-    // fillElement.setAttribute("pointer-events", isTransparentRegion ? "none" : "all");
   });
   document.body.removeChild(hiddenContainer);
 
