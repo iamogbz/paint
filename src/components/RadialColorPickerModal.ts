@@ -19,6 +19,7 @@ export class RadialColorPickerModal extends SignalElement {
 
   private wheelSize = 220;
   private wheelRadius = 100; // size/2 - 10px padding
+  private isOpen = false;
 
   private handleKeyDown = (e: KeyboardEvent) => {
     if (e.key === "Escape" && isColorPickerOpenSignal.get()) {
@@ -44,10 +45,28 @@ export class RadialColorPickerModal extends SignalElement {
   }
 
   private closeModal = () => {
-    isColorPickerOpenSignal.set(false);
+    this.isOpen = false;
+    isColorPickerOpenSignal.set(this.isOpen);
   };
 
   private drawWheelCanvas() {
+    const isOpen = isColorPickerOpenSignal.get();
+    if (isOpen && !this.isOpen) {
+      this.isOpen = true;
+      // set the wheel to the current highlighted color by default
+      const activeColor = activeHighlightColorSignal.get();
+      if (activeColor) {
+        const rgba = hexToRgb(activeColor);
+        if (rgba) {
+          const [r, g, b] = rgba;
+          const [h, s, v] = rgbToHsv(r, g, b);
+          this.hue = h;
+          this.sat = s;
+          this.val = v;
+        }
+      }
+    }
+
     const canvas = this.renderRoot?.querySelector("#radial-color-canvas") as HTMLCanvasElement;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
