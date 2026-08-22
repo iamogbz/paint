@@ -628,6 +628,7 @@ export class PaintingControls extends SignalElement {
                           display: inline-flex;
                           border-radius: 100%;
                           justify-content: center;
+                          user-select: none;
                           cursor: ${!isCoreColor && isSelected ? "pointer" : "inherit"};
                           pointer-events: ${isSelected && !isCoreColor ? "auto" : "none"};"
                         title=${!isCoreColor && isSelected ? "Delete colour swatch" : ""}
