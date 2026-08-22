@@ -32,7 +32,7 @@ function runInWorker(type: string, payload: any): Promise<any> {
   });
 }
 
-async function loadImage(src: string): Promise<Readonly<({ type: "err"; data: unknown } | { type: "svg"; data: SVGSVGElement } | { type: "bin"; data: HTMLImageElement }) & { format: string }>> {
+async function loadImage(src: string): Promise<Readonly<({ type: "err"; data: unknown } | { type: "svg"; data: SVGSVGElement } | { type: "bin"; data: HTMLImageElement }) & { format: string | null }>> {
   const response = await fetch(src);
   const contentType = response.headers.get("content-type");
   if (contentType && contentType.includes("image/")) {
@@ -232,24 +232,28 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
       maxIterations: 10,
     };
     const svgStr = await runInWorker("VECTORIZE", { rawPixels, imgWidth, imgHeight, options });
-    svgDoc = parseSVG(svgStr.includes("xmlns=") ? svgStr : svgStr.replace("<svg", `<svg xmlns="${XML_NS}"`));
+    svgDoc = parseSVG<SVGSVGElement>(svgStr.includes("xmlns=") ? svgStr : svgStr.replace("<svg", `<svg xmlns="${XML_NS}"`));
   } else if (maybeImage.type === "err") {
     console.error(maybeImage);
-    throw new Error(maybeImage.format);
+    throw new Error(maybeImage.format?.toString());
   }
 
   // Parse output SVG
-  svgDoc = await transformSVGForPainting(svgDoc);
+  svgDoc = await transformSVGForPainting(svgDoc!);
 
   // all the path/region
   const regionsDrawingInfo: MutableMap<ProcessedArtwork["regionsDrawingInfo"]> = new Map();
   const colorsAssignedToRegions: ProcessedArtwork["colorsAssignedToRegions"] = new Map();
   const regionsCurrentFillInfo: ProcessedArtwork["regionsCurrentFillInfo"] = new Map();
+  const colorsFilledInRegions: ProcessedArtwork["colorsFilledInRegions"] = new Map();
   /** Region ID to the elements for creating brush stroke clipping paths */
   const regionSVGElements: Map<string, SVGElement> = new Map();
 
   // Add transparent color default mapping
   colorsAssignedToRegions.set(TRANSPARENT_HEX, new Set());
+  colorsFilledInRegions.set(TRANSPARENT_HEX, new Set());
+  // Add paintable color default mapping
+  colorsFilledInRegions.set(PAINTABLE_REGION_HEX, new Set());
 
   const renderNode = svgDoc.cloneNode(true) as typeof svgDoc;
   const hiddenContainer = document.createElement("div");
@@ -282,7 +286,7 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     }
 
     const computedStyle = fillElement.computedStyleMap();
-    const elementFill = computedStyle.get("fill").toString();
+    const elementFill = computedStyle.get("fill")?.toString();
 
     // skip elements in defintions
     if (fillElement.closest("defs") !== null) {
@@ -303,11 +307,12 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
         fillColor: TRANSPARENT_HEX,
       });
       regionsCurrentFillInfo.set(fillRegionId, TRANSPARENT_HEX);
-      colorsAssignedToRegions.get(TRANSPARENT_HEX).add(fillRegionId);
+      colorsAssignedToRegions.get(TRANSPARENT_HEX)!.add(fillRegionId);
+      colorsFilledInRegions.get(TRANSPARENT_HEX)!.add(fillRegionId);
     } else {
-      // a fill was set, normalise the hex value and add it
-      // but it starts as white to be filled in
-      const fillColor = getHexCode(elementFill);
+      // if a fill was set, normalise the hex value and add it
+      // or black if not, but all start as white to be filled in
+      const fillColor = elementFill ? getHexCode(elementFill) : "#00000000";
       regionsDrawingInfo.set(fillRegionId, {
         ...drawingInfo,
         fillColor,
@@ -316,11 +321,12 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
         colorsAssignedToRegions.set(fillColor, new Set());
       }
       regionsCurrentFillInfo.set(fillRegionId, PAINTABLE_REGION_HEX);
-      colorsAssignedToRegions.get(fillColor).add(fillRegionId);
+      colorsAssignedToRegions.get(fillColor)!.add(fillRegionId);
+      colorsFilledInRegions.get(PAINTABLE_REGION_HEX)!.add(fillRegionId);
     }
 
     // prepare for blank rendering colors will be applied afterwards
-    fillElement.setAttribute("fill", regionsCurrentFillInfo.get(fillRegionId));
+    fillElement.setAttribute("fill", regionsCurrentFillInfo.get(fillRegionId)!);
     fillElement.setAttribute("stroke", "none");
     fillElement.setAttribute("stroke-linejoin", "round");
   });
@@ -395,8 +401,8 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     /** A color can existing in here without a any region e.g. custom added colors */
     colorsAssignedToRegions,
     regionsDrawingInfo,
-    // Two maps cause what even are bidirectional maps in JS
-    colorsFilledInRegions: new Map(),
+    // TODO: write helper functions for modifying these values
+    colorsFilledInRegions,
     regionsCurrentFillInfo,
     brushStrokePaths: {},
   };
