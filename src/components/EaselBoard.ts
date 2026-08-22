@@ -772,14 +772,6 @@ export class EaselBoard extends SignalElement {
     }
   };
 
-  get screenMaxSize() {
-    return Math.max(window.innerHeight, window.innerWidth);
-  }
-
-  get screenMinSize() {
-    return Math.min(window.innerHeight, window.innerWidth);
-  }
-
   private clampPanX(x: number): number {
     const w = this.containerElement?.clientWidth || 350;
     const maxPan = w / 2;
