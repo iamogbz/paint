@@ -234,7 +234,9 @@ export class PaintingControls extends SignalElement {
           assignedNonRegionedColors.add(colorHex);
         }
       }
-      const nonRegionedColors = assignedNonRegionedColors.union(new Set(currentArtwork.regionsCurrentFillInfo.values())).difference(new Set(regionedColors));
+      const nonRegionedColors = assignedNonRegionedColors
+        .union(new Set(currentArtwork.regionsCurrentFillInfo.values()))
+        .difference(new Set([TRANSPARENT_HEX, ...regionedColors]));
 
       // Un-regioned colors maintain their preserved order
       // Regioned colors maintain order but uncompleted show first
