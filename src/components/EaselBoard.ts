@@ -1010,7 +1010,7 @@ export class EaselBoard extends SignalElement {
         const baseStrokeWidth = this.getStrokeWidth(2);
 
         const expectedHexUpper = normalizeHex(expectedColorHex);
-        const currentHexUpper = fillLayer.querySelector(`[data-region-id="${region.id}"]`).getAttribute("fill").toUpperCase();
+        const currentHexUpper = currentArtwork.regionsCurrentFillInfo.get(region.id)?.toUpperCase();
 
         const activeBrushTargetColor = this.brushTargetRegionId ? normalizeHex(currentArtwork.regionsDrawingInfo.get(this.brushTargetRegionId)?.fillColor) : null;
         const isTarget = (!!activeHexUpper && expectedHexUpper === activeHexUpper) || (!!activeBrushTargetColor && expectedHexUpper === activeBrushTargetColor);
