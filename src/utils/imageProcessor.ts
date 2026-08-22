@@ -369,7 +369,7 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     const brushStrokesContainer = document.createElementNS(XML_NS, "g") as SVGGElement;
     brushStrokesContainer.setAttribute("id", `brush-strokes-${regionId}`);
     brushStrokesContainer.setAttribute("clip-path", `url(#${clipMaskId})`);
-    renderNode.append(brushStrokesContainer);
+    regionSVG.after(brushStrokesContainer);
   });
 
   try {
