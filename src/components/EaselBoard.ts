@@ -809,6 +809,25 @@ export class EaselBoard extends SignalElement {
   private rectCacheIntervalId: number | null = null;
   private rectCacheObserver: ResizeObserver | null = null;
 
+  /** Needed to avoid the drift issue on safari (webkit) */
+  private calculateSvgScreenCTM(
+    svgBoundingClientRect: DOMRect,
+    svgDimensions: { width: number; height: number },
+    svgElement: SVGSVGElement,
+  ) {
+    // Calculate the actual visual scale factors enforced by CSS zoom
+    const realScaleX = svgBoundingClientRect.width / svgDimensions.width;
+    const realScaleY = svgBoundingClientRect.height / svgDimensions.height;
+
+    const fixedCtm = svgElement.createSVGMatrix();
+    fixedCtm.a = realScaleX; // Set exact X scale
+    fixedCtm.d = realScaleY; // Set exact Y scale
+    fixedCtm.e = svgBoundingClientRect.left; // Set exact screen X origin
+    fixedCtm.f = svgBoundingClientRect.top; // Set exact screen Y origin
+
+    return fixedCtm;
+  }
+
   private updateRectCache = () => {
     if (this.containerElement) {
       this.cachedContainerRect = this.containerElement.getBoundingClientRect();
@@ -816,7 +835,7 @@ export class EaselBoard extends SignalElement {
     const svg = this.querySelector<SVGSVGElement>("#fill-layer>svg");
     if (svg) {
       this.cachedSvgRect = svg.getBoundingClientRect();
-      this.cachedSvgCtm = svg.getScreenCTM();
+      this.cachedSvgCtm = this.calculateSvgScreenCTM(this.cachedSvgRect, getSvgDimensions(svg), svg);
     }
   };
 
