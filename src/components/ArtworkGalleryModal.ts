@@ -149,7 +149,7 @@ export class ArtworkGalleryModal extends SignalElement {
                 fontSize: "0.625rem",
                 fontWeight: "900",
                 padding: "0.125rem 0.5rem",
-                borderRadius: "100%",
+                borderRadius: "0.75rem",
                 border: "1px solid #FFFFFF",
                 textTransform: "uppercase" as const,
               };
