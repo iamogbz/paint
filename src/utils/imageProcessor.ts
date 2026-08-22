@@ -289,9 +289,11 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
       return;
     }
 
+    const { width, height, x, y } = fillElement.getBBox();
     const drawingInfo = {
       id: fillRegionId,
       neighbourRegionIds: new Set<string>(),
+      boundingBox: { width, height, x, y },
     };
     if (elementFill === "none") {
       // element was specifically instructed to not have a fill
@@ -299,18 +301,16 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
       regionsDrawingInfo.set(fillRegionId, {
         ...drawingInfo,
         fillColor: TRANSPARENT_HEX,
-        boundingBox: null,
       });
+      regionsCurrentFillInfo.set(fillRegionId, TRANSPARENT_HEX);
       colorsAssignedToRegions.get(TRANSPARENT_HEX).add(fillRegionId);
     } else {
       // a fill was set, normalise the hex value and add it
       // but it starts as white to be filled in
       const fillColor = getHexCode(elementFill);
-      const { width, height, x, y } = fillElement.getBBox();
       regionsDrawingInfo.set(fillRegionId, {
         ...drawingInfo,
         fillColor,
-        boundingBox: { width, height, x, y },
       });
       if (!colorsAssignedToRegions.has(fillColor)) {
         colorsAssignedToRegions.set(fillColor, new Set());
@@ -320,10 +320,7 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     }
 
     // prepare for blank rendering colors will be applied afterwards
-    const isTransparentRegion = regionsDrawingInfo.get(fillRegionId).fillColor === TRANSPARENT_HEX;
-    const fill = regionsCurrentFillInfo.get(fillRegionId) || (isTransparentRegion ? "none" : PAINTABLE_REGION_HEX);
-
-    fillElement.setAttribute("fill", fill);
+    fillElement.setAttribute("fill", regionsCurrentFillInfo.get(fillRegionId));
     fillElement.setAttribute("stroke", "none");
     fillElement.setAttribute("stroke-linejoin", "round");
   });
