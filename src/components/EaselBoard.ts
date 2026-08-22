@@ -1021,7 +1021,7 @@ export class EaselBoard extends SignalElement {
 
         if (isHovered) {
           const isTransparentPaintFill = activeHexUpper.substring(7) === "00";
-          stroke = isTransparentPaintFill ? "#FFFFFF" : activeColor || "#000000";
+          stroke = (!isTransparentPaintFill && activeColor) || "#000000";
           elemClass = isTransparentPaintFill ? hueLoopCls : "";
         } else {
           if (isTarget) {
