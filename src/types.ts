@@ -38,7 +38,6 @@ export interface ProcessedArtwork {
     string,
     {
       readonly id: string;
-      // TODO: ensure this can not become stale due to map of color to region being mutated
       readonly fillColor: string;
       readonly neighbourRegionIds: Set<string>;
       readonly boundingBox: {

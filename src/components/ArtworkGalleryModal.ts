@@ -115,7 +115,6 @@ export class ArtworkGalleryModal extends SignalElement {
                 hour: "2-digit",
                 minute: "2-digit",
               });
-              // TODO: decide if showing the colors the user has place on the artwork is worth it
               const usedColorsByCount = art.colorsAssignedToRegions
                 .entries()
                 .map(([hexCode, regionIds]) => [regionIds.size, hexCode] as const)
