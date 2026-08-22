@@ -10,6 +10,7 @@ import { clamp, zoom } from "../utils/ui";
 import { unsafeSVG } from "lit/directives/unsafe-svg.js";
 import { updateArtworkSvgWithUserPaints } from "../utils/imageProcessor";
 import { getSvgDimensions, XML_NS } from "../utils/html";
+import { PanCanvasDelta } from "./PaintingControls";
 
 function erasePointsFromStrokePath(points: Array<{ x: number; y: number }>, cx: number, cy: number, r: number): Array<Array<{ x: number; y: number }>> {
   if (points.length === 0) return [];
@@ -143,17 +144,17 @@ function eraseFromStrokesRecord(strokes: Record<string, { points: Array<{ x: num
 @customElement("easel-board")
 export class EaselBoard extends SignalElement {
   private containerElement: HTMLElement | null = null;
-  private requestedTransformAnimationFrame: number = null;
-  private requestedRepaintAnimationFrame: number = null;
+  private requestedTransformAnimationFrame: number | null = null;
+  private requestedRepaintAnimationFrame: number | null = null;
 
   // Interactive Canvas State
-  private artworkId: string = null;
+  private artworkId: string | undefined = undefined;
   private hoveredRegionId: string | null = null;
-  private wheelSpinningTimeoutId = null;
+  private wheelSpinningTimeoutId: number | undefined;
   private zoomScale = 1.0;
   private isPointerDown = false;
-  private touchStartX = null;
-  private touchStartY = null;
+  private touchStartX: number | null = null;
+  private touchStartY: number | null = null;
   private isDragCanvasAction = false;
   private dragDeltaX = 0;
   private dragDeltaY = 0;
@@ -215,10 +216,12 @@ export class EaselBoard extends SignalElement {
 
     const newZoomScale = zoom(this.zoomScale, e.deltaY > 0);
 
-    const easelElem = this.containerElement.firstElementChild as HTMLDivElement;
+    if (!this.cachedContainerRect) {
+      this.updateRectCache();
+    }
 
-    if (newZoomScale !== this.zoomScale && easelElem) {
-      const rect = this.cachedContainerRect || this.containerElement.getBoundingClientRect();
+    if (newZoomScale !== this.zoomScale && this.cachedContainerRect) {
+      const rect = this.cachedContainerRect;
       const cx = rect.left + rect.width / 2;
       const cy = rect.top + rect.height / 2;
 
@@ -234,7 +237,7 @@ export class EaselBoard extends SignalElement {
       this.panY = this.clampPanY(newPanY);
 
       this.wheelSpinningTimeoutId = window.setTimeout(() => {
-        this.wheelSpinningTimeoutId = null;
+        this.wheelSpinningTimeoutId = undefined;
         zoomScaleSignal.set(this.zoomScale);
         this.updateTransformDirectly();
       }, 150);
@@ -310,13 +313,15 @@ export class EaselBoard extends SignalElement {
       const currentMidX = (pointers[0].clientX + pointers[1].clientX) / 2;
       const currentMidY = (pointers[0].clientY + pointers[1].clientY) / 2;
 
-      const easelElem = this.containerElement.firstElementChild as HTMLDivElement;
+      if (!this.cachedContainerRect) {
+        this.updateRectCache();
+      }
 
-      if (this.initialPinchDistance && this.initialPinchDistance > 0 && easelElem) {
+      if (this.initialPinchDistance && this.initialPinchDistance > 0 && this.cachedContainerRect) {
         const scaleFactor = currentDistance / this.initialPinchDistance;
         const newZoom = zoom(this.initialZoomScale * scaleFactor, true);
 
-        const rect = this.cachedContainerRect || this.containerElement.getBoundingClientRect();
+        const rect = this.cachedContainerRect;
         const cx = rect.left + rect.width / 2;
         const cy = rect.top + rect.height / 2;
 
@@ -341,7 +346,7 @@ export class EaselBoard extends SignalElement {
 
         window.clearTimeout(this.wheelSpinningTimeoutId);
         this.wheelSpinningTimeoutId = window.setTimeout(() => {
-          this.wheelSpinningTimeoutId = null;
+          this.wheelSpinningTimeoutId = undefined;
           zoomScaleSignal.set(this.zoomScale);
           this.updateTransformDirectly();
         }, 150);
@@ -353,7 +358,7 @@ export class EaselBoard extends SignalElement {
         this.hoveredRegionId = null;
         this.updateArtwork();
       }
-    } else if (this.isPointerDown && !this.isPinchAction) {
+    } else if (this.isPointerDown && !this.isPinchAction && this.touchStartX !== null && this.touchStartY !== null) {
       const dx = e.clientX - this.touchStartX;
       const dy = e.clientY - this.touchStartY;
       const distance = Math.hypot(dx, dy);
@@ -381,8 +386,7 @@ export class EaselBoard extends SignalElement {
       if (e.pointerType === "mouse") {
         this.updateHoverRegion(e);
       } else if (this.hoveredRegionId !== null) {
-        // This could be a stylus hovering over and moving through regions
-        // properly identify when this condition is met
+        console.warn("Unhandled mouse interaction with a hovered region, resetting artwork.");
         this.hoveredRegionId = null;
         this.updateArtwork();
       }
@@ -484,7 +488,7 @@ export class EaselBoard extends SignalElement {
         // helpfully select the color of the clicked region
         // but do nothing else incase the user forgot to tap on a color
         const currentArtwork = currentArtworkSignal.get();
-        activeHighlightColorSignal.set(currentArtwork.regionsCurrentFillInfo.get(this.hoveredRegionId) || TRANSPARENT_HEX);
+        activeHighlightColorSignal.set(currentArtwork?.regionsCurrentFillInfo.get(this.hoveredRegionId) || TRANSPARENT_HEX);
       }
     }
     try {
@@ -507,7 +511,7 @@ export class EaselBoard extends SignalElement {
     }
   };
 
-  private handlePanDelta = (e) => {
+  private handlePanDelta = (e: CustomEvent<PanCanvasDelta>) => {
     if (!panDragActiveSignal.get()) return;
     this.dragDeltaX = 0;
     this.dragDeltaY = 0;
@@ -525,7 +529,11 @@ export class EaselBoard extends SignalElement {
   };
 
   private getStrokeWidth(mult = 1) {
-    const imageScaleFactor = this.getSvgMaxSize() / FALLBACK_IMAGE_SIZE_PX;
+    const svgMaxSize = this.getSvgMaxSize();
+    if (!svgMaxSize) {
+      console.warn("Attempt to retrieve artwork size failed.");
+    }
+    const imageScaleFactor = (svgMaxSize || 0) / FALLBACK_IMAGE_SIZE_PX;
     return Math.max(1, (mult * imageScaleFactor) / this.zoomScale);
   }
 
@@ -624,7 +632,7 @@ export class EaselBoard extends SignalElement {
     if (isBrushMode && !isDragDrop) return;
 
     const currentColor = currentArtwork.regionsCurrentFillInfo.get(regionId);
-    const expected = currentArtwork.regionsDrawingInfo.get(regionId).fillColor;
+    const expected = currentArtwork.regionsDrawingInfo.get(regionId)?.fillColor;
     if (!expected) return;
 
     const regionHasBrushStrokes = Object.keys(currentArtwork.brushStrokePaths[regionId] ?? {}).length > 0;
@@ -637,8 +645,8 @@ export class EaselBoard extends SignalElement {
     if (currentArtwork.brushStrokePaths) delete currentArtwork.brushStrokePaths[regionId];
     // remove region from previously filled in record for that color
     const regionPreviousColor = currentArtwork.regionsCurrentFillInfo.get(regionId);
-    if (currentArtwork.colorsFilledInRegions.has(regionPreviousColor)) {
-      currentArtwork.colorsFilledInRegions.get(regionPreviousColor).delete(regionId);
+    if (regionPreviousColor && currentArtwork.colorsFilledInRegions.has(regionPreviousColor)) {
+      currentArtwork.colorsFilledInRegions.get(regionPreviousColor)?.delete(regionId);
     }
     // overwrite region color
     currentArtwork.regionsCurrentFillInfo.set(regionId, colorHex);
@@ -646,7 +654,7 @@ export class EaselBoard extends SignalElement {
     if (!currentArtwork.colorsFilledInRegions.has(colorHex)) {
       currentArtwork.colorsFilledInRegions.set(colorHex, new Set());
     }
-    currentArtwork.colorsFilledInRegions.get(colorHex).add(regionId);
+    currentArtwork.colorsFilledInRegions.get(colorHex)!.add(regionId);
 
     saveCurrentArtworkProgress(currentArtwork);
 
@@ -667,7 +675,7 @@ export class EaselBoard extends SignalElement {
     const stackedRegionIds: string[] = [];
     for (const el of elements) {
       // if the painting controls is in the way terminate early
-      if (el.id === "color-palette-section") return;
+      if (el.id === "color-palette-section") return null;
       if (!FILLABLE_SVG_ELEMENTS.has(el.tagName.toLowerCase() as any)) continue;
       const dataRegionId = el.getAttribute("data-region-id");
       if (!dataRegionId) continue;
@@ -716,12 +724,7 @@ export class EaselBoard extends SignalElement {
             const nInfo = currentArtwork.regionsDrawingInfo.get(nId);
             if (nInfo && nInfo.fillColor === selectedColorHex && nInfo.boundingBox) {
               const bb = nInfo.boundingBox;
-              if (
-                svgX >= bb.x - toleranceX &&
-                svgX <= bb.x + bb.width + toleranceX &&
-                svgY >= bb.y - toleranceY &&
-                svgY <= bb.y + bb.height + toleranceY
-              ) {
+              if (svgX >= bb.x - toleranceX && svgX <= bb.x + bb.width + toleranceX && svgY >= bb.y - toleranceY && svgY <= bb.y + bb.height + toleranceY) {
                 const cx = bb.x + bb.width / 2;
                 const cy = bb.y + bb.height / 2;
                 const dist = Math.hypot(cx - svgX, cy - svgY);
@@ -810,11 +813,7 @@ export class EaselBoard extends SignalElement {
   private rectCacheObserver: ResizeObserver | null = null;
 
   /** Needed to avoid the drift issue on safari (webkit) */
-  private calculateSvgScreenCTM(
-    svgBoundingClientRect: DOMRect,
-    svgDimensions: { width: number; height: number },
-    svgElement: SVGSVGElement,
-  ) {
+  private calculateSvgScreenCTM(svgBoundingClientRect: DOMRect, svgDimensions: { width: number; height: number }, svgElement: SVGSVGElement) {
     // Calculate the actual visual scale factors enforced by CSS zoom
     const realScaleX = svgBoundingClientRect.width / svgDimensions.width;
     const realScaleY = svgBoundingClientRect.height / svgDimensions.height;
@@ -854,7 +853,7 @@ export class EaselBoard extends SignalElement {
       this.rectCacheObserver = null;
     }
     super.disconnectedCallback();
-    window.removeEventListener("easel-pan-delta", this.handlePanDelta);
+    window.removeEventListener("easel-pan-delta", this.handlePanDelta as EventListener);
     window.removeEventListener("easel-reset-pan", this.handlePanReset);
     window.removeEventListener("pointerdown", this.handleGlobalPointerDown);
     window.removeEventListener("pointermove", this.handleGlobalPointerMove);
@@ -910,7 +909,7 @@ export class EaselBoard extends SignalElement {
 
   firstUpdated() {
     this.setupPointerListeners();
-    window.addEventListener("easel-pan-delta", this.handlePanDelta);
+    window.addEventListener("easel-pan-delta", this.handlePanDelta as EventListener);
     window.addEventListener("easel-reset-pan", this.handlePanReset);
     window.addEventListener("pointerdown", this.handleGlobalPointerDown);
     window.addEventListener("pointermove", this.handleGlobalPointerMove);
@@ -1019,55 +1018,57 @@ export class EaselBoard extends SignalElement {
       // update the artwork to show the current paint interaction state
       if (!currentArtwork || !fillLayer) return;
       const activeHexUpper = normalizeHex(activeColor);
-      const activeColorIsCore = currentArtwork.colorsAssignedToRegions.get(activeHexUpper)?.size > 0 || activeHexUpper === TRANSPARENT_HEX;
+      const activeColorIsCore = currentArtwork.colorsAssignedToRegions.get(activeHexUpper)?.size || activeHexUpper === TRANSPARENT_HEX;
       const fillSvg = fillLayer.querySelector("svg");
-      updateArtworkSvgWithUserPaints(fillSvg, currentArtwork);
-      // update the guide layer with current user interaction
-      currentArtwork?.regionsDrawingInfo.forEach((region) => {
-        const expectedColorHex = region.fillColor;
+      if (fillSvg) updateArtworkSvgWithUserPaints(fillSvg, currentArtwork);
+      if (guideLayer) {
+        // update the guide layer with current user interaction
+        currentArtwork?.regionsDrawingInfo.forEach((region) => {
+          const expectedColorHex = region.fillColor;
 
-        let stroke = "none";
-        let strokeWidth = 0;
-        let elemClass = "";
-        const hueLoopCls = "animated-hue";
+          let stroke = "none";
+          let strokeWidth = 0;
+          let elemClass = "";
+          const hueLoopCls = "animated-hue";
 
-        const baseStrokeWidth = this.getStrokeWidth(2);
+          const baseStrokeWidth = this.getStrokeWidth(2);
 
-        const expectedHexUpper = normalizeHex(expectedColorHex);
-        const currentHexUpper = currentArtwork.regionsCurrentFillInfo.get(region.id)?.toUpperCase();
+          const expectedHexUpper = normalizeHex(expectedColorHex);
+          const currentHexUpper = currentArtwork.regionsCurrentFillInfo.get(region.id)?.toUpperCase();
 
-        const activeBrushTargetColor = this.brushTargetRegionId ? normalizeHex(currentArtwork.regionsDrawingInfo.get(this.brushTargetRegionId)?.fillColor) : null;
-        const isTarget = (!!activeHexUpper && expectedHexUpper === activeHexUpper) || (!!activeBrushTargetColor && expectedHexUpper === activeBrushTargetColor);
-        const isPaintedCorrect = !!currentHexUpper && currentHexUpper === expectedHexUpper;
-        const isPaintedWrong = !!currentHexUpper && currentHexUpper !== expectedHexUpper;
-        const isHovered = region.id === this.hoveredRegionId || region.id === this.brushTargetRegionId;
-        strokeWidth = baseStrokeWidth * (isPaintedWrong ? 1.2 : 1.0);
+          const activeBrushTargetColor = this.brushTargetRegionId ? normalizeHex(currentArtwork.regionsDrawingInfo.get(this.brushTargetRegionId)?.fillColor) : null;
+          const isTarget = (!!activeHexUpper && expectedHexUpper === activeHexUpper) || (!!activeBrushTargetColor && expectedHexUpper === activeBrushTargetColor);
+          const isPaintedCorrect = !!currentHexUpper && currentHexUpper === expectedHexUpper;
+          const isPaintedWrong = !!currentHexUpper && currentHexUpper !== expectedHexUpper;
+          const isHovered = region.id === this.hoveredRegionId || region.id === this.brushTargetRegionId;
+          strokeWidth = baseStrokeWidth * (isPaintedWrong ? 1.2 : 1.0);
 
-        if (isHovered) {
-          const isTransparentPaintFill = activeHexUpper.substring(7) === "00";
-          stroke = (!isTransparentPaintFill && activeColor) || "#000000";
-          elemClass = isTransparentPaintFill ? hueLoopCls : "";
-        } else {
-          if (isTarget) {
-            if (isPaintedCorrect) {
-              stroke = "none";
-              strokeWidth = 0;
-            } else {
-              stroke = "hsl(var(--hue), 100%, 50%)";
-              elemClass = hueLoopCls;
+          if (isHovered) {
+            const isTransparentPaintFill = activeHexUpper.substring(7) === "00";
+            stroke = (!isTransparentPaintFill && activeColor) || "#000000";
+            elemClass = isTransparentPaintFill ? hueLoopCls : "";
+          } else {
+            if (isTarget) {
+              if (isPaintedCorrect) {
+                stroke = "none";
+                strokeWidth = 0;
+              } else {
+                stroke = "hsl(var(--hue), 100%, 50%)";
+                elemClass = hueLoopCls;
+              }
+            } else if (!activeHexUpper || !activeColorIsCore) {
+              stroke = "#00000088";
+              strokeWidth = baseStrokeWidth;
             }
-          } else if (!activeHexUpper || !activeColorIsCore) {
-            stroke = "#00000088";
-            strokeWidth = baseStrokeWidth;
           }
-        }
 
-        const guideElem = guideLayer.querySelector(`[data-region-id=${region.id}]`) as SVGElement;
-        guideElem.setAttribute("fill", "none");
-        guideElem.setAttribute("stroke", stroke);
-        guideElem.setAttribute("stroke-width", strokeWidth.toString());
-        guideElem.setAttribute("class", elemClass);
-      });
+          const guideElem = guideLayer.querySelector(`[data-region-id=${region.id}]`);
+          guideElem?.setAttribute("fill", "none");
+          guideElem?.setAttribute("stroke", stroke);
+          guideElem?.setAttribute("stroke-width", strokeWidth.toString());
+          guideElem?.setAttribute("class", elemClass);
+        });
+      }
     });
   };
 
@@ -1184,7 +1185,7 @@ export class EaselBoard extends SignalElement {
                   ? html`
                       <div id="original-image" style="width: 100%; aspect-ratio: ${processingWidth} / ${processingHeight}; display: flex; flex-direction: column; justify-content: center; align-items: center; position: ${isProcessing ? "relative" : "absolute"}; animation: blur-pulse 2s infinite ease-in-out; transition: opacity 1s ease-out; opacity: ${isProcessing ? 1 : 0}; z-index: 1000; pointer-events: none;">
                         <div style="position: relative; width: 100%; height: 100%; border-radius: 0.25em; overflow: hidden; display: flex; align-items: center; justify-content: center; background-color: transparent;">
-                          <img src="${processingSrc || currentArtwork.originalDataUrl}" style="width: 100%; height: 100%; object-fit: cover;" />
+                          <img src="${processingSrc || currentArtwork?.originalDataUrl}" style="width: 100%; height: 100%; object-fit: cover;" />
                         </div>
                       </div>
                     `

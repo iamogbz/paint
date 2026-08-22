@@ -8,7 +8,7 @@ import { soundEffects } from "../utils/soundEffects";
 import { zoom } from "../utils/ui";
 import "./DownloadPopup";
 
-export interface PanCanvasDeltaEvent {
+export interface PanCanvasDelta {
   dx: number;
   dy: number;
 }
@@ -40,7 +40,7 @@ export class PaintingControls extends SignalElement {
       if (hasDragged) {
         const speedFactor = 0.2;
         window.dispatchEvent(
-          new CustomEvent<PanCanvasDeltaEvent>("easel-pan-delta", {
+          new CustomEvent<PanCanvasDelta>("easel-pan-delta", {
             detail: {
               dx: currentDx * speedFactor,
               dy: currentDy * speedFactor,
@@ -552,9 +552,9 @@ export class PaintingControls extends SignalElement {
           ? html`
               <div style=${this.renderStyleObject(scrollRowStyle)}>
                 ${allColors.map((hexCode) => {
-                  const assignedRegions = currentArtwork.colorsAssignedToRegions.get(hexCode) ?? new Set();
+                  const assignedRegions = currentArtwork?.colorsAssignedToRegions.get(hexCode) ?? new Set();
                   const assignedRegionCount = assignedRegions.size;
-                  const paintedRegionCount = currentArtwork.colorsFilledInRegions.get(hexCode)?.intersection(assignedRegions)?.difference(dirtyRegions).size ?? 0;
+                  const paintedRegionCount = currentArtwork?.colorsFilledInRegions.get(hexCode)?.intersection(assignedRegions)?.difference(dirtyRegions).size ?? 0;
                   const isCoreColor = assignedRegionCount > 0;
                   const isFullyPainted = isCoreColor ? assignedRegionCount === paintedRegionCount : false;
 
