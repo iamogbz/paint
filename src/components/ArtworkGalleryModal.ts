@@ -240,7 +240,7 @@ export class ArtworkGalleryModal extends SignalElement {
                                 : ""}
                             </h3>
                           `}
-                      <p style="font-size: 0.75rem; color: #4A2810; font-weight: 700; margin: 0.25rem 0 0 0;">Created: ${dateStr} • ${art.width}×${art.height}px</p>
+                      <p style="font-size: 0.75rem; color: #4A2810; font-weight: 700; margin: 0.25rem 0 0 0;">Created: ${dateStr} • ${Math.round(art.width)}×${Math.round(art.height)}px</p>
 
                       <!-- Color Swatches -->
                       <div style="display: flex; align-items: center; gap: 0.25rem; margin-top: 0.5rem; flex-wrap: wrap;">
