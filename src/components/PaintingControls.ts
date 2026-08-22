@@ -688,7 +688,7 @@ export class PaintingControls extends SignalElement {
                       animation: "hue-loop linear 10s infinite",
                     })}
                   >
-                    <div style="position: absolute; inset: 0; width: 0; height: 0; margin: auto; background-color: #FFFFFF; border: solid 2px #FFFFFF; border-radius: 100%; corner-shape: round !important; display: flex; align-items: center; justify-content: center;"></div>
+                    <div style="position: absolute; inset: 0; width: 0; height: 0; margin: auto; background-color: #FFFFFF; border: solid 4px #FFFFFF; border-radius: 100%; corner-shape: round !important; display: flex; align-items: center; justify-content: center; filter: blur(2px);"></div>
                   </div>
 
                   <!-- Color Label/Progress -->
