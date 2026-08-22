@@ -1,9 +1,9 @@
-import { LitElement, html, css } from "lit";
-import { customElement, property } from "lit/decorators.js";
+import { html } from "lit";
+import { customElement } from "lit/decorators.js";
 import { getAllDailyChallenges, SampleImage } from "../data/dailyChallenge";
 import { handleImageSelected, isDailyChallengeModalOpenSignal } from "../state/store";
 import { SignalElement } from "../utils/SignalElement";
-import { iconX, iconImage } from "./icons";
+import { iconX, iconCalendar } from "./icons";
 
 @customElement("daily-challenge-modal")
 export class DailyChallengeModal extends SignalElement {
@@ -69,7 +69,7 @@ export class DailyChallengeModal extends SignalElement {
           <!-- Header -->
           <div style="padding: 1.25rem 1.5rem; border-bottom: 3px solid #000000; display: flex; align-items: center; justify-content: space-between; background-color: #E9C46A;">
             <h2 style="margin: 0; font-size: 1.5rem; font-weight: 900; color: #000000; display: flex; align-items: center; gap: 0.5rem;">
-              ${iconImage(24, "#000000")} Daily Challenges
+              ${iconCalendar(24, "#000000")} Daily Challenges
             </h2>
             <button
               @click=${() => isDailyChallengeModalOpenSignal.set(false)}
