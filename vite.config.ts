@@ -3,6 +3,7 @@ import fs from "fs";
 import { execSync } from "child_process";
 import { defineConfig } from "vite";
 import { ManifestOptions, VitePWA } from "vite-plugin-pwa";
+import basicSsl from "@vitejs/plugin-basic-ssl";
 import manifestJson from "./public/manifest.json";
 
 const getCommitHash = () => {
@@ -67,6 +68,7 @@ export default defineConfig(() => {
       __COMMIT_HASH__: JSON.stringify(getCommitHash()),
     },
     plugins: [
+      basicSsl(),
       directoryListingPlugin(),
       VitePWA({
         registerType: "autoUpdate",
@@ -89,6 +91,7 @@ export default defineConfig(() => {
       },
     },
     server: {
+      host: true,
       // HMR is disabled in AI Studio via DISABLE_HMR env var.
       // Do not modify—file watching is disabled to prevent flickering during agent edits.
       hmr: process.env.DISABLE_HMR !== "true",
