@@ -238,8 +238,8 @@ function sampleAndClusterRegionColors(
   });
 
   const idImgData = idCtx.getImageData(0, 0, width, height);
-  const idData = idImgData.data;
-  const origData = origImgData.data;
+  const id32 = new Uint32Array(idImgData.data.buffer);
+  const orig32 = new Uint32Array(origImgData.data.buffer);
 
   // Pixel color accumulators for each 1-based region ID
   const sumR = new Float64Array(regionCount + 1);
@@ -251,26 +251,24 @@ function sampleAndClusterRegionColors(
   for (let y = 0; y < height; y++) {
     const rowOffset = y * width;
     for (let x = 0; x < width; x++) {
-      const idx = (rowOffset + x) * 4;
-      const r = idData[idx];
-      const g = idData[idx + 1];
-      const b = idData[idx + 2];
-      const a = idData[idx + 3];
+      const idx = rowOffset + x;
+      const idPixel = id32[idx];
 
-      if (a === 0) continue;
+      if ((idPixel >>> 24) === 0) continue;
 
-      const regionNum = r | (g << 8) | (b << 16);
+      const regionNum = idPixel & 0x00ffffff;
       if (regionNum > 0 && regionNum <= regionCount) {
-        sumR[regionNum] += origData[idx];
-        sumG[regionNum] += origData[idx + 1];
-        sumB[regionNum] += origData[idx + 2];
+        const origPixel = orig32[idx];
+        sumR[regionNum] += origPixel & 0xff;
+        sumG[regionNum] += (origPixel >> 8) & 0xff;
+        sumB[regionNum] += (origPixel >> 16) & 0xff;
         pixelCounts[regionNum]++;
 
         // Adjacency check to the right
         if (x + 1 < width) {
-          const rightIdx = (rowOffset + x + 1) * 4;
-          if (idData[rightIdx + 3] > 0) {
-            const rightNum = idData[rightIdx] | (idData[rightIdx + 1] << 8) | (idData[rightIdx + 2] << 16);
+          const rightPixel = id32[idx + 1];
+          if (rightPixel >>> 24 > 0) {
+            const rightNum = rightPixel & 0x00ffffff;
             if (rightNum > 0 && rightNum <= regionCount && rightNum !== regionNum) {
               const idA = `region-${regionNum - 1}`;
               const idB = `region-${rightNum - 1}`;
@@ -282,9 +280,9 @@ function sampleAndClusterRegionColors(
 
         // Adjacency check downwards
         if (y + 1 < height) {
-          const downIdx = ((y + 1) * width + x) * 4;
-          if (idData[downIdx + 3] > 0) {
-            const downNum = idData[downIdx] | (idData[downIdx + 1] << 8) | (idData[downIdx + 2] << 16);
+          const downPixel = id32[idx + width];
+          if (downPixel >>> 24 > 0) {
+            const downNum = downPixel & 0x00ffffff;
             if (downNum > 0 && downNum <= regionCount && downNum !== regionNum) {
               const idA = `region-${regionNum - 1}`;
               const idB = `region-${downNum - 1}`;
@@ -319,10 +317,11 @@ function sampleAndClusterRegionColors(
         cx = Math.max(0, Math.min(width - 1, Math.floor(bbox.x + bbox.width / 2)));
         cy = Math.max(0, Math.min(height - 1, Math.floor(bbox.y + bbox.height / 2)));
       } catch (_) {}
-      const fallbackIdx = (cy * width + cx) * 4;
-      r = origData[fallbackIdx];
-      g = origData[fallbackIdx + 1];
-      b = origData[fallbackIdx + 2];
+      const fallbackIdx = cy * width + cx;
+      const fallbackPixel = orig32[fallbackIdx];
+      r = fallbackPixel & 0xff;
+      g = (fallbackPixel >> 8) & 0xff;
+      b = (fallbackPixel >> 16) & 0xff;
     }
     rawRgbList.push({ id: regionId, r, g, b, count });
   }
