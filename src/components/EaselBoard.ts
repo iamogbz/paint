@@ -406,13 +406,9 @@ export class EaselBoard extends SignalElement {
         }
       }
     } else if (this.artworkId) {
-      if (e.pointerType === "mouse") {
-        this.updateHoverRegion(e);
-      } else if (this.hoveredRegionId !== null) {
-        console.warn("Unhandled mouse interaction with a hovered region, resetting artwork.");
-        this.hoveredRegionId = null;
-        this.updateArtwork();
-      }
+      // happens when dragging a colour
+      this.updateHoverRegion(e);
+      this.updateArtwork();
     }
   };
 
