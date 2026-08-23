@@ -107,7 +107,7 @@ export class ArtworkGalleryModal extends SignalElement {
           <div style="flex: 1; overflow-y: auto; padding: 1rem 0; display: flex; flex-direction: column; gap: 0.75rem;">
             ${artworksSortedIds.length === 0 ? html` <div style="text-align: center; color: #4A2810; font-weight: 700; font-size: 0.875rem; font-style: italic;">An empty canvas is an invitation<br />to start your journey with a painting</div> ` : ""}
             ${artworksSortedIds.map((artId) => {
-              const art = artworks.get(artId);
+              const art = artworks.get(artId)!;
               const isActive = art.id === activeArtworkId;
               const dateStr = new Date(art.createdAt).toLocaleDateString(undefined, {
                 month: "short",
@@ -115,6 +115,7 @@ export class ArtworkGalleryModal extends SignalElement {
                 hour: "2-digit",
                 minute: "2-digit",
               });
+              const regionCount = art.regionsCurrentFillInfo.size;
               const usedColorsByCount = art.colorsAssignedToRegions
                 .entries()
                 .map(([hexCode, regionIds]) => [regionIds.size, hexCode] as const)
@@ -244,7 +245,7 @@ export class ArtworkGalleryModal extends SignalElement {
 
                       <!-- Color Swatches -->
                       <div style="display: flex; align-items: center; gap: 0.25rem; margin-top: 0.5rem; flex-wrap: wrap;">
-                        <span style="font-size: 0.625rem; font-weight: 900; color: #000000; text-transform: uppercase; margin-right: 0.25rem;"> ${usedColorsSorted.length} colors: </span>
+                        <span style="font-size: 0.625rem; font-weight: 900; color: #000000; text-transform: uppercase; margin-right: 0.25rem;">${regionCount} cells & ${usedColorsSorted.length} colours: </span>
                         ${colorsToDisplay.map((hexCode) => html` <div style="width: 1rem; height: 1rem; border-radius: 9999px; border: 1px solid #000000; background-color: ${hexCode};" title="${hexCode}"></div> `)}
                       </div>
                     </div>
