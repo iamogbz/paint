@@ -1,18 +1,24 @@
 import { signal, computed } from "@lit-labs/signals";
-import { get, set } from "idb-keyval";
-import { ProcessedArtwork, UndoHistoryItem } from "../types";
+import { get, set, del } from "idb-keyval";
+import { ProcessedArtwork, ArtworkSummary, UndoHistoryItem } from "../types";
 import { processImageToCartoonPalette } from "../utils/imageProcessor";
 import { soundEffects } from "../utils/soundEffects";
 import confetti from "canvas-confetti";
 import { copyMapSet, deepCopy } from "../utils/object";
 import { TRANSPARENT_HEX, PAINTABLE_REGION_HEX, FALLBACK_IMAGE_SIZE_PX } from "../utils/constants";
 import { normalizeHex } from "../utils/color";
+import { exportArtworkSvgDataUrl } from "../utils/download";
 
-const STORAGE_KEY_ALL_ARTWORKS = "paint_part_sd_artworks_v1";
+const STORAGE_KEY_ARTWORKS_META = "paint_artworks_meta_v2";
+const STORAGE_KEY_ALL_ARTWORKS_LEGACY = "paint_part_sd_artworks_v1";
+
+function getArtworkStorageKey(id: string) {
+  return `paint_artwork_v2_${id}`;
+}
 
 // Core State Signals using Lit Signals
 export const artworkIdsSortedSignal = signal<string[]>([]);
-export const artworksSignal = signal<Map<string, ProcessedArtwork>>(new Map());
+export const artworkSummariesSignal = signal<Map<string, ArtworkSummary>>(new Map());
 export const currentArtworkSignal = signal<ProcessedArtwork | null>(null);
 export const isProcessingSignal = signal<boolean>(false);
 export const processingImageSrcSignal = signal<string | null>(null);
@@ -55,38 +61,145 @@ export const footerStyleSignal = computed(() => ({
   color: "#4A2810",
 }));
 
+export function createArtworkSummary(art: ProcessedArtwork): ArtworkSummary {
+  const regionCount = art.regionsCurrentFillInfo?.size ?? art.regionsDrawingInfo?.size ?? 0;
+  const usedColorsByCount = art.colorsAssignedToRegions
+    ? Array.from(art.colorsAssignedToRegions.entries())
+        .map(([hexCode, regionIds]) => [regionIds.size, hexCode] as const)
+        .filter(([size, hexCode]) => hexCode !== TRANSPARENT_HEX && size !== 0)
+    : [];
+  const usedColorsSorted = usedColorsByCount.sort((a, b) => b[0] - a[0]);
+  const colorCountToDisplay = 6;
+  const stepSize = Math.max(1, Math.floor(usedColorsSorted.length / colorCountToDisplay));
+  const colorsToDisplay = new Array(colorCountToDisplay)
+    .fill(null)
+    .map((_, i) => usedColorsSorted[i * stepSize]?.[1])
+    .filter(Boolean) as string[];
+
+  const thumbnailSvgDataUrl = exportArtworkSvgDataUrl(art);
+
+  return {
+    id: art.id,
+    name: art.name,
+    width: art.width,
+    height: art.height,
+    createdAt: art.createdAt,
+    modifiedAt: art.modifiedAt,
+    regionCount,
+    usedColorsCount: usedColorsSorted.length,
+    colorsToDisplay,
+    thumbnailSvgDataUrl,
+  };
+}
+
 // Storage Helpers
 export async function loadSavedArtworks() {
   try {
-    let idbData: any = await get(STORAGE_KEY_ALL_ARTWORKS);
+    let metaData: any = await get(STORAGE_KEY_ARTWORKS_META);
 
-    // Migrate from localStorage if it exists to avoid data loss
-    const localSaved = localStorage.getItem(STORAGE_KEY_ALL_ARTWORKS);
-    if (localSaved) {
-      try {
-        const parsed = JSON.parse(localSaved);
-        if (!idbData) {
-          idbData = parsed;
-        }
-      } catch (e) {
-        // ignore invalid JSON
+    if (!metaData || (metaData instanceof Map ? metaData.size === 0 : Object.keys(metaData).length === 0)) {
+      // Check legacy storage
+      let legacyData: any = await get(STORAGE_KEY_ALL_ARTWORKS_LEGACY);
+      const localSaved = localStorage.getItem(STORAGE_KEY_ALL_ARTWORKS_LEGACY);
+      if (localSaved) {
+        try {
+          const parsed = JSON.parse(localSaved);
+          if (!legacyData) legacyData = parsed;
+        } catch (_) {}
+        localStorage.removeItem(STORAGE_KEY_ALL_ARTWORKS_LEGACY);
       }
-      localStorage.removeItem(STORAGE_KEY_ALL_ARTWORKS);
+
+      if (legacyData) {
+        const migratedArtworks = migrateAndValidateArtworks(legacyData);
+        const summariesMap = new Map<string, ArtworkSummary>();
+        for (const [id, artwork] of migratedArtworks.entries()) {
+          await set(getArtworkStorageKey(id), artwork);
+          summariesMap.set(id, createArtworkSummary(artwork));
+        }
+        metaData = summariesMap;
+        await set(STORAGE_KEY_ARTWORKS_META, summariesMap);
+        del(STORAGE_KEY_ALL_ARTWORKS_LEGACY).catch(() => {});
+      }
     }
 
-    const validArtworksMap = migrateAndValidateArtworks(idbData);
-
-    if (validArtworksMap.size > 0) {
-      const sorted = Array.from(validArtworksMap.keys()).sort((a, b) => (validArtworksMap.get(b)!.modifiedAt || 0) - (validArtworksMap.get(a)!.modifiedAt || 0));
+    const summariesMap = migrateAndValidateSummaries(metaData);
+    if (summariesMap.size > 0) {
+      const sorted = Array.from(summariesMap.keys()).sort(
+        (a, b) => (summariesMap.get(b)?.modifiedAt || 0) - (summariesMap.get(a)?.modifiedAt || 0)
+      );
       artworkIdsSortedSignal.set(sorted);
-      artworksSignal.set(validArtworksMap);
-
-      // Save fixed structure back to IDB
-      set(STORAGE_KEY_ALL_ARTWORKS, validArtworksMap).catch(() => {});
+      artworkSummariesSignal.set(summariesMap);
     }
   } catch (e) {
-    console.warn("Could not restore saved artworks from idb", e);
+    console.warn("Could not restore saved artworks metadata from idb", e);
   }
+}
+
+export async function loadArtworkById(id: string): Promise<ProcessedArtwork | null> {
+  const current = currentArtworkSignal.get();
+  if (current?.id === id) {
+    return current;
+  }
+
+  try {
+    const rawData = await get(getArtworkStorageKey(id));
+    if (!rawData) return null;
+    return hydrateArtwork(rawData);
+  } catch (e) {
+    console.warn(`Failed to load artwork ${id} from idb`, e);
+    return null;
+  }
+}
+
+function migrateAndValidateSummaries(rawData: any): Map<string, ArtworkSummary> {
+  const result = new Map<string, ArtworkSummary>();
+  if (!rawData) return result;
+
+  let items: any[] = [];
+  if (rawData instanceof Map) {
+    items = Array.from(rawData.values());
+  } else if (Array.isArray(rawData)) {
+    items = rawData;
+  } else if (typeof rawData === "object") {
+    items = Object.values(rawData);
+  }
+
+  for (const item of items) {
+    if (!item || typeof item !== "object" || !item.id) continue;
+    result.set(item.id, {
+      id: item.id,
+      name: item.name || "Untitled",
+      width: item.width || FALLBACK_IMAGE_SIZE_PX,
+      height: item.height || FALLBACK_IMAGE_SIZE_PX,
+      createdAt: item.createdAt || Date.now(),
+      modifiedAt: item.modifiedAt || Date.now(),
+      regionCount: item.regionCount || 0,
+      usedColorsCount: item.usedColorsCount || 0,
+      colorsToDisplay: Array.isArray(item.colorsToDisplay) ? item.colorsToDisplay : [],
+      thumbnailSvgDataUrl: item.thumbnailSvgDataUrl || "",
+    });
+  }
+
+  return result;
+}
+
+function hydrateArtwork(item: any): ProcessedArtwork {
+  return {
+    id: item.id,
+    name: item.name || "Untitled",
+    originalDataUrl: item.originalDataUrl || "",
+    cartoonDataUrl: item.cartoonDataUrl || "",
+    cartoonSVG: item.cartoonSVG || "",
+    width: item.width || FALLBACK_IMAGE_SIZE_PX,
+    height: item.height || FALLBACK_IMAGE_SIZE_PX,
+    createdAt: item.createdAt || Date.now(),
+    modifiedAt: item.modifiedAt || Date.now(),
+    colorsAssignedToRegions: migrateMapOfSets(item.colorsAssignedToRegions),
+    colorsFilledInRegions: migrateMapOfSets(item.colorsFilledInRegions),
+    regionsCurrentFillInfo: migrateMapOfStrings(item.regionsCurrentFillInfo),
+    regionsDrawingInfo: migrateRegionsDrawingInfo(item.regionsDrawingInfo),
+    brushStrokePaths: item.brushStrokePaths && typeof item.brushStrokePaths === "object" ? item.brushStrokePaths : {},
+  };
 }
 
 function migrateAndValidateArtworks(rawData: any): Map<string, ProcessedArtwork> {
@@ -107,25 +220,7 @@ function migrateAndValidateArtworks(rawData: any): Map<string, ProcessedArtwork>
       if (!item || typeof item !== "object" || !item.id) {
         continue;
       }
-
-      const artwork: ProcessedArtwork = {
-        id: item.id,
-        name: item.name || "Untitled",
-        originalDataUrl: item.originalDataUrl || "",
-        cartoonDataUrl: item.cartoonDataUrl || "",
-        cartoonSVG: item.cartoonSVG || "",
-        width: item.width || FALLBACK_IMAGE_SIZE_PX,
-        height: item.height || FALLBACK_IMAGE_SIZE_PX,
-        createdAt: item.createdAt || Date.now(),
-        modifiedAt: item.modifiedAt || Date.now(),
-        colorsAssignedToRegions: migrateMapOfSets(item.colorsAssignedToRegions),
-        colorsFilledInRegions: migrateMapOfSets(item.colorsFilledInRegions),
-        regionsCurrentFillInfo: migrateMapOfStrings(item.regionsCurrentFillInfo),
-        regionsDrawingInfo: migrateRegionsDrawingInfo(item.regionsDrawingInfo),
-        brushStrokePaths: item.brushStrokePaths && typeof item.brushStrokePaths === "object" ? item.brushStrokePaths : {},
-      };
-
-      result.set(artwork.id, artwork);
+      result.set(item.id, hydrateArtwork(item));
     } catch (err) {
       console.warn(`Failed to migrate artwork ${item?.id}`, err);
     }
@@ -180,23 +275,9 @@ function migrateRegionsDrawingInfo(data: any): Map<string, any> {
   return map;
 }
 
-/**
- * This triggers a rerender because the art ids return a new reference for sorting
- * But only for components listening to the `artworkIdsSortedSignal`
- */
-export function saveArtworks(data: Map<string, ProcessedArtwork>) {
-  artworksSignal.set(data);
-  const existingArtIdsSorted = Array.from(data.keys()).sort((a, b) => data.get(b).modifiedAt - data.get(a).modifiedAt);
-  artworkIdsSortedSignal.set(existingArtIdsSorted);
-
-  set(STORAGE_KEY_ALL_ARTWORKS, data).catch((e) => {
-    console.warn("Could not save to idb", e);
-  });
-}
-
-export function handleSelectArtwork(selectedArtwork?: ProcessedArtwork) {
+export function handleSelectArtwork(selectedArtwork?: ProcessedArtwork | null) {
   const currentArtwork = currentArtworkSignal.get();
-  if (currentArtwork?.id === selectedArtwork?.id) {
+  if (currentArtwork?.id === selectedArtwork?.id && currentArtwork !== null) {
     return;
   }
 
@@ -206,7 +287,21 @@ export function handleSelectArtwork(selectedArtwork?: ProcessedArtwork) {
   canvasPositionDeltaSignal.set({ x: 0, y: 0 });
   activeHighlightColorSignal.set(null);
 
-  saveCurrentArtworkProgress(selectedArtwork);
+  if (selectedArtwork) {
+    saveCurrentArtworkProgress(selectedArtwork);
+  } else {
+    currentArtworkSignal.set(null);
+  }
+}
+
+export async function handleSelectArtworkById(id: string): Promise<void> {
+  const current = currentArtworkSignal.get();
+  if (current?.id === id) return;
+
+  const artwork = await loadArtworkById(id);
+  if (artwork) {
+    handleSelectArtwork(artwork);
+  }
 }
 
 export async function handleImageSelected(imageSrc: string, name: string = "Untitled") {
@@ -235,19 +330,51 @@ export async function handleImageSelected(imageSrc: string, name: string = "Unti
   }
 }
 
-export function handleRenameArtwork(id: string, newName: string) {
-  const existingArtworks = artworksSignal.get();
-  const targetArtwork = existingArtworks.get(id);
-  if (!targetArtwork) return;
-  targetArtwork.name = newName;
-  targetArtwork.modifiedAt = Date.now();
-  saveArtworks(existingArtworks);
+export async function handleRenameArtwork(id: string, newName: string): Promise<void> {
+  const summaries = artworkSummariesSignal.get();
+  const summary = summaries.get(id);
+  if (!summary) return;
+
+  const trimmedName = newName.trim() || "Untitled";
+  summary.name = trimmedName;
+  summary.modifiedAt = Date.now();
+
+  const sorted = Array.from(summaries.keys()).sort(
+    (a, b) => (summaries.get(b)?.modifiedAt || 0) - (summaries.get(a)?.modifiedAt || 0)
+  );
+  artworkIdsSortedSignal.set(sorted);
+  artworkSummariesSignal.set(new Map(summaries));
+
+  set(STORAGE_KEY_ARTWORKS_META, summaries).catch(() => {});
+
+  const current = currentArtworkSignal.get();
+  if (current?.id === id) {
+    current.name = trimmedName;
+    current.modifiedAt = summary.modifiedAt;
+    set(getArtworkStorageKey(id), current).catch(() => {});
+    currentArtworkSignal.set({ ...current });
+  } else {
+    const artwork = await loadArtworkById(id);
+    if (artwork) {
+      artwork.name = trimmedName;
+      artwork.modifiedAt = summary.modifiedAt;
+      set(getArtworkStorageKey(id), artwork).catch(() => {});
+    }
+  }
 }
 
-export function handleDeleteArtwork(id: string) {
-  const existingArtworks = artworksSignal.get();
-  existingArtworks.delete(id);
-  saveArtworks(existingArtworks);
+export async function handleDeleteArtwork(id: string): Promise<void> {
+  const summaries = artworkSummariesSignal.get();
+  summaries.delete(id);
+
+  const sorted = Array.from(summaries.keys()).sort(
+    (a, b) => (summaries.get(b)?.modifiedAt || 0) - (summaries.get(a)?.modifiedAt || 0)
+  );
+  artworkIdsSortedSignal.set(sorted);
+  artworkSummariesSignal.set(new Map(summaries));
+
+  del(getArtworkStorageKey(id)).catch(() => {});
+  set(STORAGE_KEY_ARTWORKS_META, summaries).catch(() => {});
 
   if (currentArtworkSignal.get()?.id === id) {
     handleSelectArtwork(null);
@@ -260,17 +387,36 @@ export function handleToggleSound() {
   soundEffects.enabled = next;
 }
 
-export function saveCurrentArtworkProgress(currentArtwork: ProcessedArtwork) {
+export function saveCurrentArtworkProgress(currentArtwork: ProcessedArtwork | null) {
   if (currentArtwork) {
     currentArtwork.modifiedAt = Date.now();
-    const existingArtworks = artworksSignal.get();
-    existingArtworks.set(currentArtwork.id, currentArtwork);
-    saveArtworks(existingArtworks);
+    const summaries = artworkSummariesSignal.get();
+    const existingSummary = summaries.get(currentArtwork.id);
+    const updatedSummary = createArtworkSummary(currentArtwork);
+
+    if (existingSummary) {
+      Object.assign(existingSummary, updatedSummary);
+    } else {
+      summaries.set(currentArtwork.id, updatedSummary);
+    }
+
+    const sorted = Array.from(summaries.keys()).sort(
+      (a, b) => (summaries.get(b)?.modifiedAt || 0) - (summaries.get(a)?.modifiedAt || 0)
+    );
+    artworkIdsSortedSignal.set(sorted);
+    artworkSummariesSignal.set(new Map(summaries));
+
+    set(getArtworkStorageKey(currentArtwork.id), currentArtwork).catch((e) => {
+      console.warn("Could not save to idb", e);
+    });
+    set(STORAGE_KEY_ARTWORKS_META, summaries).catch((e) => {
+      console.warn("Could not save summaries to idb", e);
+    });
   }
   // Even though references are used we want to trigger a render of other components
   // calling set with the exact same object reference does not trigger a rerender
   // This should be the only place we do this update references of mutable properties
-  currentArtworkSignal.set(currentArtwork && { ...currentArtwork });
+  currentArtworkSignal.set(currentArtwork ? { ...currentArtwork } : null);
 }
 
 const MAX_UNDO_HISTORY = 10;
@@ -308,7 +454,7 @@ export function handleDeleteSwatchColor(color: string) {
   if (!current) return;
 
   // Check if this is a core color (stat.count > 0 in original image)
-  const isCoreColor = current.colorsAssignedToRegions.get(hexCode)?.size > 0;
+  const isCoreColor = (current.colorsAssignedToRegions.get(hexCode)?.size ?? 0) > 0;
   if (isCoreColor) {
     // Core color with regions in original artwork cannot be deleted
     return;
@@ -319,7 +465,7 @@ export function handleDeleteSwatchColor(color: string) {
 
   // Unpaint any region that was painted with this color
   for (const regionId of current.colorsFilledInRegions.get(hexCode) ?? []) {
-    if (current.regionsDrawingInfo.get(regionId).fillColor === TRANSPARENT_HEX) {
+    if (current.regionsDrawingInfo.get(regionId)?.fillColor === TRANSPARENT_HEX) {
       current.regionsCurrentFillInfo.set(regionId, TRANSPARENT_HEX);
     } else {
       current.regionsCurrentFillInfo.set(regionId, PAINTABLE_REGION_HEX);
@@ -370,3 +516,4 @@ export function handleUndo() {
   Object.assign(current, previousState);
   saveCurrentArtworkProgress(current);
 }
+

@@ -92,7 +92,7 @@ export function rgbToHex(r: number, g: number, b: number, a?: number): string {
   );
 }
 
-export function normalizeHex(hex) {
+export function normalizeHex(hex?: string | null): string {
   if (!hex) return "";
   let h = hex.trim().toUpperCase();
   if (!h.startsWith("#")) {
@@ -117,12 +117,13 @@ export function getColorProperties(hexCode: string) {
   return { isGray, h, s, v };
 }
 
-let canvas2dCtx = null;
+let canvas2dCtx: CanvasRenderingContext2D | null = null;
 export function getHexCode(anyColor: string) {
   if (!canvas2dCtx) {
     // Create an unrendered canvas environment
     canvas2dCtx = document.createElement("canvas").getContext("2d");
   }
+  if (!canvas2dCtx) return normalizeHex(anyColor);
   canvas2dCtx.fillStyle = anyColor; // Apply any rgb, rgba, hsl, or named color variable
 
   // Reading back the property forces the engine to serialize to hex

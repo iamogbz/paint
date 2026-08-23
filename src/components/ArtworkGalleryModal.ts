@@ -1,11 +1,20 @@
 import { html } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import { SignalElement } from "../utils/SignalElement";
-import { ProcessedArtwork } from "../types";
-import { isGalleryOpenSignal, artworksSignal, currentArtworkSignal, handleSelectArtwork, handleDeleteArtwork, handleRenameArtwork, artworkIdsSortedSignal } from "../state/store";
+import { ProcessedArtwork, ArtworkSummary } from "../types";
+import {
+  isGalleryOpenSignal,
+  artworkSummariesSignal,
+  currentArtworkSignal,
+  handleSelectArtwork,
+  handleSelectArtworkById,
+  handleDeleteArtwork,
+  handleRenameArtwork,
+  artworkIdsSortedSignal,
+  loadArtworkById,
+} from "../state/store";
 import { iconGalleryVertical, iconX, iconCheckCircle2, iconDownload, iconTrash2, iconImage, iconEdit2 } from "./icons";
-import { exportArtworkSvgDataUrl } from "../utils/download";
-import { TRANSPARENT_HEX, transparentImgCss } from "../utils/constants";
+import { transparentImgCss } from "../utils/constants";
 import "./DownloadPopup";
 
 @customElement("artwork-gallery-modal")
@@ -22,7 +31,7 @@ export class ArtworkGalleryModal extends SignalElement {
     const isOpen = isGalleryOpenSignal.get();
     if (!isOpen) return html``;
 
-    const artworks = artworksSignal.get();
+    const artworkSummaries = artworkSummariesSignal.get();
     const artworksSortedIds = artworkIdsSortedSignal.get();
     const activeArtworkId = currentArtworkSignal.get()?.id || null;
 
@@ -107,7 +116,8 @@ export class ArtworkGalleryModal extends SignalElement {
           <div style="flex: 1; overflow-y: auto; padding: 1rem 0; display: flex; flex-direction: column; gap: 0.75rem;">
             ${artworksSortedIds.length === 0 ? html` <div style="text-align: center; color: #4A2810; font-weight: 700; font-size: 0.875rem; font-style: italic;">An empty canvas is an invitation<br />to start your journey with a painting</div> ` : ""}
             ${artworksSortedIds.map((artId) => {
-              const art = artworks.get(artId)!;
+              const art: ArtworkSummary | undefined = artworkSummaries.get(artId);
+              if (!art) return "";
               const isActive = art.id === activeArtworkId;
               const dateStr = new Date(art.createdAt).toLocaleDateString(undefined, {
                 month: "short",
@@ -115,18 +125,8 @@ export class ArtworkGalleryModal extends SignalElement {
                 hour: "2-digit",
                 minute: "2-digit",
               });
-              const regionCount = art.regionsCurrentFillInfo.size;
-              const usedColorsByCount = art.colorsAssignedToRegions
-                .entries()
-                .map(([hexCode, regionIds]) => [regionIds.size, hexCode] as const)
-                .filter(([size, hexCode]) => hexCode !== TRANSPARENT_HEX && size !== 0);
-              const usedColorsSorted = Array.from(usedColorsByCount).sort();
-              const colorCountToDisplay = 6;
-              const stepSize = Math.max(1, Math.floor(usedColorsSorted.length / colorCountToDisplay));
-              const colorsToDisplay = new Array(colorCountToDisplay)
-                .fill(null)
-                .map((_, i) => usedColorsSorted[i * stepSize]?.[1])
-                .filter(Boolean);
+              const regionCount = art.regionCount;
+              const colorsToDisplay = art.colorsToDisplay;
 
               const itemCardStyle = {
                 padding: "0.75rem",
@@ -177,12 +177,12 @@ export class ArtworkGalleryModal extends SignalElement {
                   <!-- Thumbnail -->
                   <div
                     @click=${() => {
-                      handleSelectArtwork(art);
+                      handleSelectArtworkById(art.id);
                       isGalleryOpenSignal.set(false);
                     }}
                     style="width: 7rem; height: 7rem; border-radius: 18px; overflow: hidden; border: 2.5px solid rgba(0, 0, 0, 0.25); position: relative; cursor: pointer; flex-shrink: 0; background-color: rgba(0,0,0,0.05); background-size: 0.5rem 0.5rem; background-image: ${transparentImgCss};"
                   >
-                    <img src="${exportArtworkSvgDataUrl(art)}" alt="${art.name}" style="width: 100%; height: 100%; object-fit: cover;" />
+                    <img src="${art.thumbnailSvgDataUrl}" alt="${art.name}" style="width: 100%; height: 100%; object-fit: cover;" />
                     ${isActive ? html`<div style=${this.renderStyleObject(activeBadgeStyle)}>ACTIVE</div>` : ""}
                   </div>
 
@@ -245,7 +245,7 @@ export class ArtworkGalleryModal extends SignalElement {
 
                       <!-- Color Swatches -->
                       <div style="display: flex; align-items: center; gap: 0.25rem; margin-top: 0.5rem; flex-wrap: wrap;">
-                        <span style="font-size: 0.625rem; font-weight: 900; color: #000000; text-transform: uppercase; margin-right: 0.25rem;">${regionCount} cells & ${usedColorsSorted.length} colours: </span>
+                        <span style="font-size: 0.625rem; font-weight: 900; color: #000000; text-transform: uppercase; margin-right: 0.25rem;">${regionCount} cells & ${art.usedColorsCount} colours: </span>
                         ${colorsToDisplay.map((hexCode) => html` <div style="width: 1rem; height: 1rem; border-radius: 9999px; border: 1px solid #000000; background-color: ${hexCode};" title="${hexCode}"></div> `)}
                       </div>
                     </div>
@@ -254,7 +254,7 @@ export class ArtworkGalleryModal extends SignalElement {
                     <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid rgba(0,0,0,0.15);">
                       <button
                         @click=${() => {
-                          handleSelectArtwork(art);
+                          handleSelectArtworkById(art.id);
                           isGalleryOpenSignal.set(false);
                         }}
                         style=${this.renderStyleObject(selectBtnStyle)}
@@ -265,9 +265,12 @@ export class ArtworkGalleryModal extends SignalElement {
                       <div style="display: flex; align-items: center; gap: 0.375rem;">
                         <!-- Download -->
                         <button
-                          @click=${() => {
-                            this.downloadingArtwork = art;
-                            this.showDownloadPopup = true;
+                          @click=${async () => {
+                            const fullArt = await loadArtworkById(art.id);
+                            if (fullArt) {
+                              this.downloadingArtwork = fullArt;
+                              this.showDownloadPopup = true;
+                            }
                           }}
                           style="padding: 0.5rem; border-radius: 14px; background-color: #FFFFFF; border: 2px solid #000000; color: #000000; boxShadow: 2px 2px 0px 0px #000000; cursor: pointer;"
                           title="Download Artwork"
@@ -321,7 +324,14 @@ export class ArtworkGalleryModal extends SignalElement {
           </div>
         </div>
       </div>
-      <download-popup .artwork=${this.downloadingArtwork} ?isOpen=${this.showDownloadPopup} @close=${() => (this.showDownloadPopup = false)}></download-popup>
+      <download-popup
+        .artwork=${this.downloadingArtwork}
+        ?isOpen=${this.showDownloadPopup}
+        @close=${() => {
+          this.showDownloadPopup = false;
+          this.downloadingArtwork = null;
+        }}
+      ></download-popup>
     `;
   }
 
@@ -331,3 +341,4 @@ export class ArtworkGalleryModal extends SignalElement {
       .join(" ");
   }
 }
+

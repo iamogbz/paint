@@ -1,7 +1,7 @@
 import { html } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import { SignalElement } from "../utils/SignalElement";
-import { isColorPickerOpenSignal, currentArtworkSignal, activeHighlightColorSignal, handleSelectArtwork, pushUndoState, saveCurrentArtworkProgress } from "../state/store";
+import { isColorPickerOpenSignal, currentArtworkSignal, activeHighlightColorSignal, pushUndoState, saveCurrentArtworkProgress } from "../state/store";
 import { soundEffects } from "../utils/soundEffects";
 import { iconX, iconPalette, iconPlus } from "./icons";
 import { hsvToRgb, rgbToHex, hexToRgb, rgbToHsv } from "../utils/color";
@@ -217,7 +217,7 @@ export class RadialColorPickerModal extends SignalElement {
       return;
     }
 
-    const isCoreColor = currentArtwork.colorsAssignedToRegions.get(hex)?.size > 0;
+    const isCoreColor = (currentArtwork.colorsAssignedToRegions.get(hex)?.size ?? 0) > 0;
 
     // is not a core colour so is removable
     if (!isCoreColor && hex !== TRANSPARENT_HEX) {

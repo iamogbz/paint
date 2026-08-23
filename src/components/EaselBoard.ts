@@ -1,7 +1,7 @@
 import { html } from "lit";
 import { customElement } from "lit/decorators.js";
 import { SignalElement } from "../utils/SignalElement";
-import { currentArtworkSignal, isProcessingSignal, processingImageSrcSignal, processingImageWidthSignal, processingImageHeightSignal, activeHighlightColorSignal, dragToOpenFileSignal, zoomScaleSignal, handleImageSelected, handleSelectArtwork, draggedColorPositionSignal, pushUndoState, saveCurrentArtworkProgress, footerStyleSignal, isBrushModeSignal, artworksSignal, artworkIdsSortedSignal, panDragActiveSignal, isDailyChallengeModalOpenSignal } from "../state/store";
+import { currentArtworkSignal, isProcessingSignal, processingImageSrcSignal, processingImageWidthSignal, processingImageHeightSignal, activeHighlightColorSignal, dragToOpenFileSignal, zoomScaleSignal, handleImageSelected, handleSelectArtwork, handleSelectArtworkById, draggedColorPositionSignal, pushUndoState, saveCurrentArtworkProgress, footerStyleSignal, isBrushModeSignal, artworkIdsSortedSignal, panDragActiveSignal, isDailyChallengeModalOpenSignal } from "../state/store";
 import { soundEffects } from "../utils/soundEffects";
 import { iconImage, iconUpload, iconPaintBucket } from "./icons";
 import { BASE_BRUSH_RADIUS, FALLBACK_IMAGE_SIZE_PX, FILLABLE_SVG_ELEMENTS, TRANSPARENT_HEX, transparentImgCss } from "../utils/constants";
@@ -1212,9 +1212,8 @@ export class EaselBoard extends SignalElement {
                                     @click=${(e: Event) => {
                                       e.stopPropagation();
                                       const sorted = artworkIdsSortedSignal.get();
-                                      const artworks = artworksSignal.get();
-                                      if (sorted.length > 0 && artworks.has(sorted[0])) {
-                                        handleSelectArtwork(artworks.get(sorted[0]));
+                                      if (sorted.length > 0) {
+                                        handleSelectArtworkById(sorted[0]);
                                       }
                                     }}
                                     style="background-color: #2A9D8F; color: #FFFFFF; border: 0.16em solid #000000; padding: 0.625em 1.25em; border-radius: 1em; font-weight: 900; font-size: 1em; display: flex; align-items: center; gap: 0.5em; box-shadow: 0.125em 0.125em 0 0 #000000; cursor: pointer; text-transform: uppercase;"

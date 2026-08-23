@@ -16,6 +16,19 @@ export interface SvgPath {
   d: string;
 }
 
+export interface ArtworkSummary {
+  id: string;
+  name: string;
+  width: number;
+  height: number;
+  createdAt: number;
+  modifiedAt: number;
+  regionCount: number;
+  usedColorsCount: number;
+  colorsToDisplay: string[];
+  thumbnailSvgDataUrl: string;
+}
+
 export interface ProcessedArtwork {
   id: string;
   name: string;

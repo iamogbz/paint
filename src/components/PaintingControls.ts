@@ -1,7 +1,7 @@
 import { html, PropertyValues } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import { SignalElement } from "../utils/SignalElement";
-import { activeHighlightColorSignal, copiedHexSignal, artworksSignal, currentArtworkSignal, isProcessingSignal, isGalleryOpenSignal, isColorPickerOpenSignal, zoomScaleSignal, draggedColorPositionSignal, undoStackSignal, handleUndo, handleDeleteSwatchColor, isBrushModeSignal, panDragActiveSignal } from "../state/store";
+import { activeHighlightColorSignal, copiedHexSignal, currentArtworkSignal, isProcessingSignal, isGalleryOpenSignal, isColorPickerOpenSignal, zoomScaleSignal, draggedColorPositionSignal, undoStackSignal, handleUndo, handleDeleteSwatchColor, isBrushModeSignal, panDragActiveSignal, artworkIdsSortedSignal } from "../state/store";
 import { iconPaintBucket, iconPaintbrush, iconCheck, iconFolderOpen, iconDownload, iconZoomIn, iconZoomOut, iconRotateCcw, iconMove, iconTrash2 } from "./icons";
 import { DROPPER_BUFFER_PX, TRANSPARENT_HEX, transparentImgCss } from "../utils/constants";
 import { soundEffects } from "../utils/soundEffects";
@@ -205,7 +205,7 @@ export class PaintingControls extends SignalElement {
     const copiedHex = copiedHexSignal.get();
     const currentArtwork = currentArtworkSignal.get();
     const canUndo = undoStackSignal.get().length > 0;
-    const hasArtworks = artworksSignal.get().size > 0;
+    const hasArtworks = artworkIdsSortedSignal.get().length > 0;
     const isProcessing = isProcessingSignal.get();
     const currentZoom = zoomScaleSignal.get();
     const isBrushMode = isBrushModeSignal.get();
