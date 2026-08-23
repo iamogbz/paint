@@ -96,7 +96,7 @@ export class PaintApp extends SignalElement {
           !isFocused && currentArtwork
             ? html`
                 <div style="position: fixed; inset: 0; z-index: 10000; display: flex; flex-direction: column; align-items: center; justify-content: center; background-color: rgba(255, 255, 255, 0.6); backdrop-filter: blur(8px); -webkit-backdrop-filter: blur(8px); padding: 0.75rem; box-sizing: border-box; cursor: pointer;">
-                  <div style="background-color: rgba(255, 255, 255, 0.95); backdrop-filter: blur(1rem); padding: 2.5rem 3.5rem; border-radius: 32px; box-shadow: 10px 10px 0px 0px #000000; display: flex; flex-direction: column; align-items: center; gap: 1rem; border: 4px solid #000000; max-width: 400px; text-align: center;">
+                  <div style="background-color: rgba(255, 255, 255, 0.95); backdrop-filter: blur(0.5rem); padding: 2.5rem 3.5rem; border-radius: 32px; box-shadow: 10px 10px 0px 0px #000000; display: flex; flex-direction: column; align-items: center; gap: 1rem; border: 4px solid #000000; max-width: 400px; text-align: center;">
                     ${iconPaintbrush(48, "#000000")}
                     <h2 style="margin: 0; font-family: 'Playfair Display', serif; font-style: italic; font-size: 1.75rem; font-weight: 900; color: #000000; letter-spacing: -0.02em;">Resume painting</h2>
                     <p style="margin: 0; font-size: 0.875rem; font-weight: 800; text-transform: uppercase; color: #000000; font-family: 'Plus Jakarta Sans', sans-serif;">Click anywhere to continue</p>

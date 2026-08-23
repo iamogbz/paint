@@ -61,7 +61,7 @@ export const footerStyleSignal = computed(() => ({
   color: "#4A2810",
 }));
 
-export function createArtworkSummary(art: ProcessedArtwork): ArtworkSummary {
+export function createArtworkSummary(art: ProcessedArtwork, existingThumbnail?: string): ArtworkSummary {
   const regionCount = art.regionsCurrentFillInfo?.size ?? art.regionsDrawingInfo?.size ?? 0;
   const usedColorsByCount = art.colorsAssignedToRegions
     ? Array.from(art.colorsAssignedToRegions.entries())
@@ -76,7 +76,7 @@ export function createArtworkSummary(art: ProcessedArtwork): ArtworkSummary {
     .map((_, i) => usedColorsSorted[i * stepSize]?.[1])
     .filter(Boolean) as string[];
 
-  const thumbnailSvgDataUrl = exportArtworkSvgDataUrl(art);
+  const thumbnailSvgDataUrl = existingThumbnail || exportArtworkSvgDataUrl(art);
 
   return {
     id: art.id,
@@ -124,9 +124,7 @@ export async function loadSavedArtworks() {
 
     const summariesMap = migrateAndValidateSummaries(metaData);
     if (summariesMap.size > 0) {
-      const sorted = Array.from(summariesMap.keys()).sort(
-        (a, b) => (summariesMap.get(b)?.modifiedAt || 0) - (summariesMap.get(a)?.modifiedAt || 0)
-      );
+      const sorted = Array.from(summariesMap.keys()).sort((a, b) => (summariesMap.get(b)?.modifiedAt || 0) - (summariesMap.get(a)?.modifiedAt || 0));
       artworkIdsSortedSignal.set(sorted);
       artworkSummariesSignal.set(summariesMap);
     }
@@ -266,9 +264,7 @@ function migrateRegionsDrawingInfo(data: any): Map<string, any> {
     if (value && typeof value === "object") {
       map.set(key, {
         ...value,
-        neighbourRegionIds: value.neighbourRegionIds instanceof Set
-          ? value.neighbourRegionIds
-          : new Set(Array.isArray(value.neighbourRegionIds) ? value.neighbourRegionIds : [])
+        neighbourRegionIds: value.neighbourRegionIds instanceof Set ? value.neighbourRegionIds : new Set(Array.isArray(value.neighbourRegionIds) ? value.neighbourRegionIds : []),
       });
     }
   }
@@ -281,6 +277,9 @@ export function handleSelectArtwork(selectedArtwork?: ProcessedArtwork | null) {
     return;
   }
 
+  // Flush any pending save for the previous artwork before switching
+  flushPendingArtworkSave();
+
   undoStackSignal.set([]);
   isBrushModeSignal.set(false);
   zoomScaleSignal.set(1.0);
@@ -289,6 +288,8 @@ export function handleSelectArtwork(selectedArtwork?: ProcessedArtwork | null) {
 
   if (selectedArtwork) {
     saveCurrentArtworkProgress(selectedArtwork);
+    // Flush initial state so summary exists
+    flushPendingArtworkSave();
   } else {
     currentArtworkSignal.set(null);
   }
@@ -339,9 +340,7 @@ export async function handleRenameArtwork(id: string, newName: string): Promise<
   summary.name = trimmedName;
   summary.modifiedAt = Date.now();
 
-  const sorted = Array.from(summaries.keys()).sort(
-    (a, b) => (summaries.get(b)?.modifiedAt || 0) - (summaries.get(a)?.modifiedAt || 0)
-  );
+  const sorted = Array.from(summaries.keys()).sort((a, b) => (summaries.get(b)?.modifiedAt || 0) - (summaries.get(a)?.modifiedAt || 0));
   artworkIdsSortedSignal.set(sorted);
   artworkSummariesSignal.set(new Map(summaries));
 
@@ -367,9 +366,7 @@ export async function handleDeleteArtwork(id: string): Promise<void> {
   const summaries = artworkSummariesSignal.get();
   summaries.delete(id);
 
-  const sorted = Array.from(summaries.keys()).sort(
-    (a, b) => (summaries.get(b)?.modifiedAt || 0) - (summaries.get(a)?.modifiedAt || 0)
-  );
+  const sorted = Array.from(summaries.keys()).sort((a, b) => (summaries.get(b)?.modifiedAt || 0) - (summaries.get(a)?.modifiedAt || 0));
   artworkIdsSortedSignal.set(sorted);
   artworkSummariesSignal.set(new Map(summaries));
 
@@ -387,32 +384,70 @@ export function handleToggleSound() {
   soundEffects.enabled = next;
 }
 
-export function saveCurrentArtworkProgress(currentArtwork: ProcessedArtwork | null) {
-  if (currentArtwork) {
-    currentArtwork.modifiedAt = Date.now();
+let persistDebounceTimer: any = null;
+let pendingPersistArtwork: ProcessedArtwork | null = null;
+
+export function flushPendingArtworkSave() {
+  if (persistDebounceTimer) {
+    clearTimeout(persistDebounceTimer);
+    persistDebounceTimer = null;
+  }
+  if (!pendingPersistArtwork) return;
+
+  const artwork = pendingPersistArtwork;
+  pendingPersistArtwork = null;
+
+  try {
     const summaries = artworkSummariesSignal.get();
-    const existingSummary = summaries.get(currentArtwork.id);
-    const updatedSummary = createArtworkSummary(currentArtwork);
+    const existingSummary = summaries.get(artwork.id);
+    const updatedSummary = createArtworkSummary(artwork);
 
     if (existingSummary) {
       Object.assign(existingSummary, updatedSummary);
     } else {
-      summaries.set(currentArtwork.id, updatedSummary);
+      summaries.set(artwork.id, updatedSummary);
     }
 
-    const sorted = Array.from(summaries.keys()).sort(
-      (a, b) => (summaries.get(b)?.modifiedAt || 0) - (summaries.get(a)?.modifiedAt || 0)
-    );
+    const sorted = Array.from(summaries.keys()).sort((a, b) => (summaries.get(b)?.modifiedAt || 0) - (summaries.get(a)?.modifiedAt || 0));
     artworkIdsSortedSignal.set(sorted);
     artworkSummariesSignal.set(new Map(summaries));
 
-    set(getArtworkStorageKey(currentArtwork.id), currentArtwork).catch((e) => {
+    set(getArtworkStorageKey(artwork.id), artwork).catch((e) => {
       console.warn("Could not save to idb", e);
     });
     set(STORAGE_KEY_ARTWORKS_META, summaries).catch((e) => {
       console.warn("Could not save summaries to idb", e);
     });
+  } catch (err) {
+    console.warn("Error during artwork flush", err);
   }
+}
+
+export function saveCurrentArtworkProgress(currentArtwork: ProcessedArtwork | null) {
+  if (currentArtwork) {
+    currentArtwork.modifiedAt = Date.now();
+    pendingPersistArtwork = currentArtwork;
+
+    // Fast in-memory summary update without heavy SVG re-encoding on each paint
+    const summaries = artworkSummariesSignal.get();
+    const existingSummary = summaries.get(currentArtwork.id);
+    const fastSummary = createArtworkSummary(currentArtwork, existingSummary?.thumbnailSvgDataUrl);
+
+    if (existingSummary) {
+      Object.assign(existingSummary, fastSummary);
+    } else {
+      summaries.set(currentArtwork.id, fastSummary);
+    }
+
+    // Schedule debounced full IDB save and thumbnail re-generation
+    if (persistDebounceTimer) {
+      clearTimeout(persistDebounceTimer);
+    }
+    persistDebounceTimer = setTimeout(() => {
+      flushPendingArtworkSave();
+    }, 400);
+  }
+
   // Even though references are used we want to trigger a render of other components
   // calling set with the exact same object reference does not trigger a rerender
   // This should be the only place we do this update references of mutable properties
@@ -516,4 +551,3 @@ export function handleUndo() {
   Object.assign(current, previousState);
   saveCurrentArtworkProgress(current);
 }
-

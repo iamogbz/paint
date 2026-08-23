@@ -2,17 +2,7 @@ import { html } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import { SignalElement } from "../utils/SignalElement";
 import { ProcessedArtwork, ArtworkSummary } from "../types";
-import {
-  isGalleryOpenSignal,
-  artworkSummariesSignal,
-  currentArtworkSignal,
-  handleSelectArtwork,
-  handleSelectArtworkById,
-  handleDeleteArtwork,
-  handleRenameArtwork,
-  artworkIdsSortedSignal,
-  loadArtworkById,
-} from "../state/store";
+import { isGalleryOpenSignal, artworkSummariesSignal, currentArtworkSignal, handleSelectArtwork, handleSelectArtworkById, handleDeleteArtwork, handleRenameArtwork, artworkIdsSortedSignal, loadArtworkById, flushPendingArtworkSave } from "../state/store";
 import { iconGalleryVertical, iconX, iconCheckCircle2, iconDownload, iconTrash2, iconImage, iconEdit2 } from "./icons";
 import { transparentImgCss } from "../utils/constants";
 import "./DownloadPopup";
@@ -31,6 +21,9 @@ export class ArtworkGalleryModal extends SignalElement {
     const isOpen = isGalleryOpenSignal.get();
     if (!isOpen) return html``;
 
+    // Flush any pending save so the active artwork's summary/thumbnail is updated
+    flushPendingArtworkSave();
+
     const artworkSummaries = artworkSummariesSignal.get();
     const artworksSortedIds = artworkIdsSortedSignal.get();
     const activeArtworkId = currentArtworkSignal.get()?.id || null;
@@ -39,8 +32,8 @@ export class ArtworkGalleryModal extends SignalElement {
       position: "fixed" as const,
       inset: 0,
       zIndex: 15000,
-      backgroundColor: "rgba(255,255,255, 0.6)",
-      backdropFilter: "blur(1rem)",
+      backgroundColor: "rgba(0, 0, 0, 0.4)",
+      backdropFilter: "blur(0.5rem)",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
@@ -49,8 +42,7 @@ export class ArtworkGalleryModal extends SignalElement {
     };
 
     const modalContentStyle = {
-      backgroundColor: "rgba(255, 255, 255, 0.8)",
-      backdropFilter: "blur(1rem)",
+      backgroundColor: "#FFFFFF",
       border: "4px solid #000000",
       width: "100%",
       maxWidth: "95vmin",
@@ -70,7 +62,7 @@ export class ArtworkGalleryModal extends SignalElement {
       alignItems: "center",
       justifyContent: "space-between",
       paddingBottom: "1rem",
-      borderBottom: "2px solid rgba(0, 0, 0, 0.2)",
+      borderBottom: "2px solid rgba(0, 0, 0, 0.15)",
     };
 
     const closeBtnStyle = {
@@ -128,52 +120,8 @@ export class ArtworkGalleryModal extends SignalElement {
               const regionCount = art.regionCount;
               const colorsToDisplay = art.colorsToDisplay;
 
-              const itemCardStyle = {
-                padding: "0.75rem",
-                borderRadius: "24px",
-                border: isActive ? "3px solid #E63946" : "3px solid #000000",
-                boxShadow: isActive ? "0px 4px 0px 0px #E63946" : "0px 3px 0px 0px #000000",
-                display: "flex",
-                flexDirection: "row" as const,
-                alignItems: "center",
-                gap: "0.75rem",
-                backgroundColor: "rgba(255, 255, 255, 0.95)",
-                flexWrap: "wrap" as const,
-              };
-
-              const activeBadgeStyle = {
-                position: "absolute" as const,
-                top: "0.375rem",
-                left: "0.375rem",
-                backgroundColor: "#E63946",
-                color: "#FFFFFF",
-                fontSize: "0.625rem",
-                fontWeight: "900",
-                padding: "0.125rem 0.5rem",
-                borderRadius: "0.75rem",
-                border: "1px solid #FFFFFF",
-                textTransform: "uppercase" as const,
-              };
-
-              const selectBtnStyle = {
-                padding: "0.375rem 0.75rem",
-                borderRadius: "16px",
-                fontSize: "0.75rem",
-                fontWeight: "900",
-                border: "2.5px solid #000000",
-                display: "flex",
-                alignItems: "center",
-                gap: "0.25rem",
-                textTransform: "uppercase" as const,
-                transition: "all 0.15s ease",
-                boxShadow: "2px 2px 0px 0px #000000",
-                backgroundColor: isActive ? "#E63946" : "#FFD166",
-                color: isActive ? "#FFFFFF" : "#000000",
-                cursor: "pointer",
-              };
-
               return html`
-                <div style=${this.renderStyleObject(itemCardStyle)}>
+                <div style="padding: 0.75rem; border-radius: 24px; border: ${isActive ? "3px solid #E63946" : "3px solid #000000"}; box-shadow: ${isActive ? "0px 4px 0px 0px #E63946" : "0px 3px 0px 0px #000000"}; display: flex; flex-direction: row; align-items: center; gap: 0.75rem; background-color: #FAFAFA; flex-wrap: wrap; content-visibility: auto; contain-intrinsic-size: 140px;">
                   <!-- Thumbnail -->
                   <div
                     @click=${() => {
@@ -182,8 +130,8 @@ export class ArtworkGalleryModal extends SignalElement {
                     }}
                     style="width: 7rem; height: 7rem; border-radius: 18px; overflow: hidden; border: 2.5px solid rgba(0, 0, 0, 0.25); position: relative; cursor: pointer; flex-shrink: 0; background-color: rgba(0,0,0,0.05); background-size: 0.5rem 0.5rem; background-image: ${transparentImgCss};"
                   >
-                    <img src="${art.thumbnailSvgDataUrl}" alt="${art.name}" style="width: 100%; height: 100%; object-fit: cover;" />
-                    ${isActive ? html`<div style=${this.renderStyleObject(activeBadgeStyle)}>ACTIVE</div>` : ""}
+                    <img src="${art.thumbnailSvgDataUrl}" alt="${art.name}" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover;" />
+                    ${isActive ? html`<div style="position: absolute; top: 0.375rem; left: 0.375rem; background-color: #E63946; color: #FFFFFF; font-size: 0.625rem; font-weight: 900; padding: 0.125rem 0.5rem; border-radius: 0.75rem; border: 1px solid #FFFFFF; text-transform: uppercase;">ACTIVE</div>` : ""}
                   </div>
 
                   <!-- Details -->
@@ -257,7 +205,7 @@ export class ArtworkGalleryModal extends SignalElement {
                           handleSelectArtworkById(art.id);
                           isGalleryOpenSignal.set(false);
                         }}
-                        style=${this.renderStyleObject(selectBtnStyle)}
+                        style="padding: 0.375rem 0.75rem; border-radius: 16px; font-size: 0.75rem; font-weight: 900; border: 2.5px solid #000000; display: flex; align-items: center; gap: 0.25rem; text-transform: uppercase; transition: all 0.15s ease; box-shadow: 2px 2px 0px 0px #000000; background-color: ${isActive ? "#E63946" : "#FFD166"}; color: ${isActive ? "#FFFFFF" : "#000000"}; cursor: pointer;"
                       >
                         ${iconCheckCircle2(14, isActive ? "#FFFFFF" : "#000000")} ${isActive ? "Resume" : "Display"}
                       </button>
@@ -272,7 +220,7 @@ export class ArtworkGalleryModal extends SignalElement {
                               this.showDownloadPopup = true;
                             }
                           }}
-                          style="padding: 0.5rem; border-radius: 14px; background-color: #FFFFFF; border: 2px solid #000000; color: #000000; boxShadow: 2px 2px 0px 0px #000000; cursor: pointer;"
+                          style="padding: 0.5rem; border-radius: 14px; background-color: #FFFFFF; border: 2px solid #000000; color: #000000; box-shadow: 2px 2px 0px 0px #000000; cursor: pointer;"
                           title="Download Artwork"
                         >
                           ${iconDownload(16, "#000000")}
@@ -283,7 +231,7 @@ export class ArtworkGalleryModal extends SignalElement {
                           @click=${() => {
                             handleDeleteArtwork(art.id);
                           }}
-                          style="padding: 0.5rem; border-radius: 14px; background-color: #FFFFFF; border: 2px solid #000000; color: #000000; boxShadow: 2px 2px 0px 0px #000000; cursor: pointer;"
+                          style="padding: 0.5rem; border-radius: 14px; background-color: #FFFFFF; border: 2px solid #000000; color: #000000; box-shadow: 2px 2px 0px 0px #000000; cursor: pointer;"
                           title="Delete Artwork"
                         >
                           ${iconTrash2(16, "#000000")}
@@ -341,4 +289,3 @@ export class ArtworkGalleryModal extends SignalElement {
       .join(" ");
   }
 }
-

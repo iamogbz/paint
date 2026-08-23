@@ -274,7 +274,7 @@ export class PaintingControls extends SignalElement {
       right: "0",
       width: "100%",
       backgroundColor: "rgba(255, 255, 255, 0.8)",
-      backdropFilter: "blur(1rem)",
+      backdropFilter: "blur(0.5rem)",
       borderTop: "4px solid #000000",
       borderTopLeftRadius: "24px",
       borderTopRightRadius: "24px",

@@ -253,8 +253,8 @@ export class RadialColorPickerModal extends SignalElement {
       position: "fixed" as const,
       inset: 0,
       zIndex: 16000,
-      backgroundColor: "rgba(255, 255, 255, 0.6)",
-      backdropFilter: "blur(1rem)",
+      backgroundColor: "rgba(0, 0, 0, 0.4)",
+      backdropFilter: "blur(0.5rem)",
       display: "flex",
       alignItems: "center",
       justifyContent: "center",
@@ -263,8 +263,7 @@ export class RadialColorPickerModal extends SignalElement {
     };
 
     const modalContentStyle = {
-      backgroundColor: "rgba(255, 255, 255, 0.95)",
-      backdropFilter: "blur(1rem)",
+      backgroundColor: "#FFFFFF",
       border: "4px solid #000000",
       width: "100%",
       maxWidth: "380px",

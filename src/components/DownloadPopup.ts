@@ -69,11 +69,11 @@ export class DownloadPopup extends SignalElement {
 
     return html`
       <div
-        style="position: fixed; inset: 0; z-index: 15000; background-color: rgba(255, 255, 255, 0.6); backdrop-filter: blur(1rem); display: flex; align-items: center; justify-content: center; padding: 0.75rem; box-sizing: border-box;"
+        style="position: fixed; inset: 0; z-index: 15000; background-color: rgba(255, 255, 255, 0.6); backdrop-filter: blur(0.5rem); display: flex; align-items: center; justify-content: center; padding: 0.75rem; box-sizing: border-box;"
         @click=${this.close}
       >
         <div
-          style="background-color: rgba(255, 255, 255, 0.95); backdrop-filter: blur(1rem); border: 4px solid #000000; width: 100%; max-width: 340px; border-radius: 32px; padding: 1.5rem 1.25rem; box-shadow: 10px 10px 0px 0px #000000; display: flex; flex-direction: column; gap: 1rem; position: relative;"
+          style="background-color: rgba(255, 255, 255, 0.95); backdrop-filter: blur(0.5rem); border: 4px solid #000000; width: 100%; max-width: 340px; border-radius: 32px; padding: 1.5rem 1.25rem; box-shadow: 10px 10px 0px 0px #000000; display: flex; flex-direction: column; gap: 1rem; position: relative;"
           @click=${(e: Event) => e.stopPropagation()}
         >
           <div style="display: flex; align-items: center; gap: 0.625rem; margin-bottom: 0.5rem;">
