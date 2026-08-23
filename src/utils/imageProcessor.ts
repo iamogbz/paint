@@ -1,8 +1,8 @@
 import { FALLBACK_IMAGE_SIZE_PX, FILLABLE_SVG_ELEMENTS_SELECTOR, PAINTABLE_REGION_HEX, TRANSPARENT_HEX } from "./constants.js";
 import { processingImageHeightSignal, processingImageWidthSignal } from "../state/store.js";
 import { MutableMap, ProcessedArtwork } from "../types";
-import { getHexCode, normalizeHex } from "./color.js";
-import { getSvgDimensions, parseSVG, XML_NS } from "./html.js";
+import { getHexCode, normalizeHex, rgbToHex } from "./color.js";
+import { getSvgDimensions, parseSVG, SVGFillableElement, XML_NS } from "./html.js";
 import { Options } from "@visioncortex/vtracer";
 
 let _worker: Worker | null = null;
@@ -183,10 +183,251 @@ async function transformSVGForPainting(svg: SVGSVGElement) {
   return svg;
 }
 
+/**
+ * Samples pixel colors from the original bitmap for each SVG region using an offscreen ID-map pass,
+ * detects direct topological adjacency (touching boundaries), and clusters perceptually similar colors
+ * while strictly ensuring that directly adjacent regions receive distinct palette colors.
+ */
+function sampleAndClusterRegionColors(
+  origImgData: ImageData,
+  width: number,
+  height: number,
+  fillableElements: SVGFillableElement[]
+): {
+  regionColors: Map<string, string>;
+  adjacencyGraph: Map<string, Set<string>>;
+} {
+  const regionCount = fillableElements.length;
+  const regionColors = new Map<string, string>();
+  const adjacencyGraph = new Map<string, Set<string>>();
+
+  fillableElements.forEach((_, idx) => {
+    adjacencyGraph.set(`region-${idx}`, new Set<string>());
+  });
+
+  if (regionCount === 0) {
+    return { regionColors, adjacencyGraph };
+  }
+
+  // 1. Offscreen ID-map rendering canvas
+  const idCanvas = document.createElement("canvas");
+  idCanvas.width = width;
+  idCanvas.height = height;
+  const idCtx = idCanvas.getContext("2d", { willReadFrequently: true });
+  if (!idCtx) throw new Error("Failed to create offscreen ID canvas context");
+
+  idCtx.imageSmoothingEnabled = false;
+
+  // Render each fillable path into the ID canvas with its 1-based index encoded as RGB
+  fillableElements.forEach((elem, idx) => {
+    const regionNum = idx + 1; // 1-based ID
+    const r = regionNum & 0xff;
+    const g = (regionNum >> 8) & 0xff;
+    const b = (regionNum >> 16) & 0xff;
+    const colorStr = `rgb(${r},${g},${b})`;
+
+    if (elem instanceof SVGPathElement) {
+      const d = elem.getAttribute("d");
+      if (d) {
+        const path2d = new Path2D(d);
+        idCtx.fillStyle = colorStr;
+        idCtx.fill(path2d);
+      }
+    }
+  });
+
+  const idImgData = idCtx.getImageData(0, 0, width, height);
+  const idData = idImgData.data;
+  const origData = origImgData.data;
+
+  // Pixel color accumulators for each 1-based region ID
+  const sumR = new Float64Array(regionCount + 1);
+  const sumG = new Float64Array(regionCount + 1);
+  const sumB = new Float64Array(regionCount + 1);
+  const pixelCounts = new Uint32Array(regionCount + 1);
+
+  // 2. Scan pixels: accumulate colors and discover topological 4-connected adjacencies
+  for (let y = 0; y < height; y++) {
+    const rowOffset = y * width;
+    for (let x = 0; x < width; x++) {
+      const idx = (rowOffset + x) * 4;
+      const r = idData[idx];
+      const g = idData[idx + 1];
+      const b = idData[idx + 2];
+      const a = idData[idx + 3];
+
+      if (a === 0) continue;
+
+      const regionNum = r | (g << 8) | (b << 16);
+      if (regionNum > 0 && regionNum <= regionCount) {
+        sumR[regionNum] += origData[idx];
+        sumG[regionNum] += origData[idx + 1];
+        sumB[regionNum] += origData[idx + 2];
+        pixelCounts[regionNum]++;
+
+        // Adjacency check to the right
+        if (x + 1 < width) {
+          const rightIdx = (rowOffset + x + 1) * 4;
+          if (idData[rightIdx + 3] > 0) {
+            const rightNum = idData[rightIdx] | (idData[rightIdx + 1] << 8) | (idData[rightIdx + 2] << 16);
+            if (rightNum > 0 && rightNum <= regionCount && rightNum !== regionNum) {
+              const idA = `region-${regionNum - 1}`;
+              const idB = `region-${rightNum - 1}`;
+              adjacencyGraph.get(idA)?.add(idB);
+              adjacencyGraph.get(idB)?.add(idA);
+            }
+          }
+        }
+
+        // Adjacency check downwards
+        if (y + 1 < height) {
+          const downIdx = ((y + 1) * width + x) * 4;
+          if (idData[downIdx + 3] > 0) {
+            const downNum = idData[downIdx] | (idData[downIdx + 1] << 8) | (idData[downIdx + 2] << 16);
+            if (downNum > 0 && downNum <= regionCount && downNum !== regionNum) {
+              const idA = `region-${regionNum - 1}`;
+              const idB = `region-${downNum - 1}`;
+              adjacencyGraph.get(idA)?.add(idB);
+              adjacencyGraph.get(idB)?.add(idA);
+            }
+          }
+        }
+      }
+    }
+  }
+
+  // 3. Compute base sampled representative color for each region
+  const rawRgbList: Array<{ id: string; r: number; g: number; b: number; count: number }> = [];
+
+  for (let i = 1; i <= regionCount; i++) {
+    const count = pixelCounts[i];
+    const regionId = `region-${i - 1}`;
+    let r: number, g: number, b: number;
+
+    if (count > 0) {
+      r = Math.round(sumR[i] / count);
+      g = Math.round(sumG[i] / count);
+      b = Math.round(sumB[i] / count);
+    } else {
+      // Fallback for sub-pixel / thin vector paths: sample centroid from bounding box
+      const elem = fillableElements[i - 1];
+      let cx = Math.floor(width / 2);
+      let cy = Math.floor(height / 2);
+      try {
+        const bbox = elem.getBBox();
+        cx = Math.max(0, Math.min(width - 1, Math.floor(bbox.x + bbox.width / 2)));
+        cy = Math.max(0, Math.min(height - 1, Math.floor(bbox.y + bbox.height / 2)));
+      } catch (_) {}
+      const fallbackIdx = (cy * width + cx) * 4;
+      r = origData[fallbackIdx];
+      g = origData[fallbackIdx + 1];
+      b = origData[fallbackIdx + 2];
+    }
+    rawRgbList.push({ id: regionId, r, g, b, count });
+  }
+
+  // 4. Color Clumping / Palette Clustering with strict Adjacency Graph Constraints
+  // Convert RGB to Lab for accurate perceptual distance
+  function rgbToLab(r: number, g: number, b: number): [number, number, number] {
+    let rN = r / 255;
+    let gN = g / 255;
+    let bN = b / 255;
+    rN = rN > 0.04045 ? Math.pow((rN + 0.055) / 1.055, 2.4) : rN / 12.92;
+    gN = gN > 0.04045 ? Math.pow((gN + 0.055) / 1.055, 2.4) : gN / 12.92;
+    bN = bN > 0.04045 ? Math.pow((bN + 0.055) / 1.055, 2.4) : bN / 12.92;
+
+    const x = (rN * 0.4124 + gN * 0.3576 + bN * 0.1805) / 0.95047;
+    const y = (rN * 0.2126 + gN * 0.7152 + bN * 0.0722) / 1.0;
+    const z = (rN * 0.0193 + gN * 0.1192 + bN * 0.9505) / 1.08883;
+
+    const f = (t: number) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
+    const fx = f(x);
+    const fy = f(y);
+    const fz = f(z);
+
+    return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)];
+  }
+
+  function deltaE(lab1: [number, number, number], lab2: [number, number, number]): number {
+    return Math.hypot(lab1[0] - lab2[0], lab1[1] - lab2[1], lab1[2] - lab2[2]);
+  }
+
+  const regionLabs = rawRgbList.map((item) => rgbToLab(item.r, item.g, item.b));
+
+  // Build cluster representatives (palette swatches)
+  interface Cluster {
+    r: number;
+    g: number;
+    b: number;
+    lab: [number, number, number];
+    hex: string;
+    totalPixels: number;
+    assignedRegionIds: Set<string>;
+  }
+
+  const clusters: Cluster[] = [];
+  const CLUSTER_DELTA_E_THRESHOLD = 9.0; // Perceptually similar colors cluster together
+
+  // Sort regions by pixel count descending so larger key regions establish initial palette anchors
+  const sortedIndices = rawRgbList.map((_, idx) => idx).sort((a, b) => rawRgbList[b].count - rawRgbList[a].count);
+
+  for (const idx of sortedIndices) {
+    const item = rawRgbList[idx];
+    const lab = regionLabs[idx];
+    const neighbors = adjacencyGraph.get(item.id) || new Set<string>();
+
+    // Find best cluster candidate where no adjacent neighbor is already assigned this cluster's color
+    let bestCluster: Cluster | null = null;
+    let minDiff = Infinity;
+
+    for (const cluster of clusters) {
+      // Check for direct topological adjacency conflict
+      let hasAdjacencyConflict = false;
+      for (const assignedId of cluster.assignedRegionIds) {
+        if (neighbors.has(assignedId)) {
+          hasAdjacencyConflict = true;
+          break;
+        }
+      }
+
+      if (hasAdjacencyConflict) continue;
+
+      const diff = deltaE(lab, cluster.lab);
+      if (diff < CLUSTER_DELTA_E_THRESHOLD && diff < minDiff) {
+        minDiff = diff;
+        bestCluster = cluster;
+      }
+    }
+
+    if (bestCluster) {
+      // Assign to existing non-conflicting cluster
+      bestCluster.assignedRegionIds.add(item.id);
+      regionColors.set(item.id, bestCluster.hex);
+    } else {
+      // Create new distinct palette cluster
+      const hex = rgbToHex(item.r, item.g, item.b);
+      const newCluster: Cluster = {
+        r: item.r,
+        g: item.g,
+        b: item.b,
+        lab,
+        hex,
+        totalPixels: item.count,
+        assignedRegionIds: new Set([item.id]),
+      };
+      clusters.push(newCluster);
+      regionColors.set(item.id, hex);
+    }
+  }
+
+  return { regionColors, adjacencyGraph };
+}
+
 export async function processImageToCartoonPalette(imageSrc: string, artworkName: string): Promise<ProcessedArtwork> {
   const maybeImage = await loadImage(imageSrc);
 
   let svgDoc: SVGSVGElement | null = null;
+  let origImgDataForSampling: ImageData | null = null;
 
   if (maybeImage.type === "svg") {
     svgDoc = maybeImage.data;
@@ -200,10 +441,12 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     const origCtx = origCanvas.getContext("2d", { willReadFrequently: true });
     if (!origCtx) throw new Error("Failed to initialize canvas 2D context");
 
-    const origImgData = origCtx.getImageData(0, 0, imgWidth, imgHeight);
-    const rawPixels = origImgData.data;
+    // Retain pristine downscaled image for true pixel color sampling
+    origImgDataForSampling = origCtx.getImageData(0, 0, imgWidth, imgHeight);
 
-    // Run vtracer in worker with optimized parameters
+    const rawPixels = origImgDataForSampling.data;
+
+    // Run vtracer in worker solely for line/boundary extraction
     const options: Options = {
       /** default: color-cluster */
       clustering: "watershed",
@@ -222,7 +465,7 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
       /** Color difference between gradient layers (0..=255) */
       // layerDifference: 16,
       /** Method for converting in to shapes. Values below only valid in spline */
-      mode: "spline",
+      mode: "pixel",
       /** default: 60, Minimum Momentary Angle (in degrees) to be considered a corner (to be kept after smoothing) - Higher = smoother */
       cornerThreshold: 60,
       /** default: 4, Perform Iterative Subdivide Smooth until all segments are shorter than this length <3.5..=10> */
@@ -234,7 +477,9 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
       maxIterations: 10,
     };
     const svgStr = await runInWorker("VECTORIZE", { rawPixels, imgWidth, imgHeight, options });
-    svgDoc = parseSVG<SVGSVGElement>(svgStr.includes("xmlns=") ? svgStr : svgStr.replace("<svg", `<svg xmlns="${XML_NS}"`));
+    let cleanSvgStr = svgStr.includes("xmlns=") ? svgStr : svgStr.replace("<svg", `<svg xmlns="${XML_NS}"`);
+    cleanSvgStr = cleanSvgStr.replaceAll(` d="L`, ` d="M`);
+    svgDoc = parseSVG<SVGSVGElement>(cleanSvgStr);
   } else if (maybeImage.type === "err") {
     console.error(maybeImage);
     throw new Error(maybeImage.format?.toString());
@@ -269,7 +514,11 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
   const isFillableElemSelector = `:is(${FILLABLE_SVG_ELEMENTS_SELECTOR})` as typeof FILLABLE_SVG_ELEMENTS_SELECTOR;
 
   const preservedTreeElements = new Set<SVGElement>();
-  const allFillableElements = renderNode.querySelectorAll(isFillableElemSelector);
+  const allFillableElements = Array.from(renderNode.querySelectorAll(isFillableElemSelector));
+
+  // Determine fill colors: if bitmap, sample directly from pristine pixels with graph adjacency-constrained palette clumping
+  const sampledData = origImgDataForSampling !== null ? sampleAndClusterRegionColors(origImgDataForSampling, processingImageWidthSignal.get(), processingImageHeightSignal.get(), allFillableElements) : null;
+
   allFillableElements.forEach((fillElement, key) => {
     const fillRegionId = `region-${key}`;
     fillElement.setAttribute("data-region-id", fillRegionId);
@@ -298,7 +547,7 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     const { width, height, x, y } = fillElement.getBBox();
     const drawingInfo = {
       id: fillRegionId,
-      neighbourRegionIds: new Set<string>(),
+      neighbourRegionIds: sampledData?.adjacencyGraph.get(fillRegionId) || new Set<string>(),
       boundingBox: { width, height, x, y },
     };
     if (elementFill === "none") {
@@ -312,9 +561,13 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
       colorsAssignedToRegions.get(TRANSPARENT_HEX)!.add(fillRegionId);
       colorsFilledInRegions.get(TRANSPARENT_HEX)!.add(fillRegionId);
     } else {
-      // if a fill was set, normalise the hex value and add it
-      // or black if not, but all start as white to be filled in
-      const fillColor = elementFill ? getHexCode(elementFill) : "#00000000";
+      let fillColor: string;
+      if (sampledData && sampledData.regionColors.has(fillRegionId)) {
+        fillColor = sampledData.regionColors.get(fillRegionId)!;
+      } else {
+        fillColor = elementFill ? getHexCode(elementFill) : "#00000000";
+      }
+
       regionsDrawingInfo.set(fillRegionId, {
         ...drawingInfo,
         fillColor,

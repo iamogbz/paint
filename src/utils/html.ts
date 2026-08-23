@@ -11,6 +11,7 @@ export function parseSVG<T extends SVGElement>(svgStr: string): T {
   return container.firstElementChild as T;
 }
 
+/** TODO: look into using `SVGGraphicsElement` instead */
 export type SVGFillableElement = SVGElementTagNameMap[typeof FILLABLE_SVG_ELEMENTS_SELECTOR];
 
 export function getSvgDimensions(svg: SVGSVGElement, fallbackValue = FALLBACK_IMAGE_SIZE_PX) {
