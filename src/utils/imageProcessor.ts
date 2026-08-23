@@ -4,7 +4,6 @@ import { MutableMap, ProcessedArtwork } from "../types";
 import { getHexCode, normalizeHex } from "./color.js";
 import { getSvgDimensions, parseSVG, XML_NS } from "./html.js";
 import { Options } from "@visioncortex/vtracer";
-import { Options } from "@visioncortex/vtracer";
 
 let _worker: Worker | null = null;
 let _msgId = 0;
@@ -206,12 +205,13 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
 
     // Run vtracer in worker with optimized parameters
     const options: Options = {
-      /** default: color-cluster for true color image */
-      clustering: "color-cluster",
+      /** default: color-cluster */
+      clustering: "watershed",
       /** shapes disjoint with others */
       hierarchical: "cutout",
       /** Auto-quantize target color count */
       maxColors: 24,
+      watershedDetail: 255,
       /** If a pallete is defined maps colors to this */
       // palette: palette,
       /** Discard patches smaller than X px in size (0..=128) */
