@@ -3,6 +3,8 @@ import { processingImageHeightSignal, processingImageWidthSignal } from "../stat
 import { MutableMap, ProcessedArtwork } from "../types";
 import { getHexCode, normalizeHex } from "./color.js";
 import { getSvgDimensions, parseSVG, XML_NS } from "./html.js";
+import { Options } from "@visioncortex/vtracer";
+import { Options } from "@visioncortex/vtracer";
 
 let _worker: Worker | null = null;
 let _msgId = 0;
@@ -203,7 +205,7 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     const rawPixels = origImgData.data;
 
     // Run vtracer in worker with optimized parameters
-    const options = {
+    const options: Options = {
       /** default: color-cluster for true color image */
       clustering: "color-cluster",
       /** shapes disjoint with others */
