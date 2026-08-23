@@ -801,7 +801,7 @@ export class EaselBoard extends SignalElement {
   private clampPanY(y: number): number {
     const h = this.containerElement?.clientHeight || 350;
     const basePan = h / 2;
-    const maxPanUp = basePan;
+    const maxPanUp = basePan + window.innerHeight * 0.3;
     const maxPanDown = basePan;
     return clamp(y, -maxPanUp, maxPanDown);
   }
