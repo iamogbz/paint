@@ -1,4 +1,5 @@
 import { FALLBACK_IMAGE_SIZE_PX, FILLABLE_SVG_ELEMENTS_SELECTOR, PAINTABLE_REGION_HEX, TRANSPARENT_HEX } from "./constants.js";
+import { smoothPlanarSvgPaths } from "./svgSmoothing.js";
 import { processingImageHeightSignal, processingImageWidthSignal } from "../state/store.js";
 import { MutableMap, ProcessedArtwork } from "../types";
 import { getHexCode, normalizeHex, rgbToHex } from "./color.js";
@@ -480,6 +481,8 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     let cleanSvgStr = svgStr.includes("xmlns=") ? svgStr : svgStr.replace("<svg", `<svg xmlns="${XML_NS}"`);
     cleanSvgStr = cleanSvgStr.replaceAll(` d="L`, ` d="M`);
     svgDoc = parseSVG<SVGSVGElement>(cleanSvgStr);
+    // Smooth stair-stepped pixel paths using shared-edge planar graph smoothing (gap-free)
+    smoothPlanarSvgPaths(svgDoc);
   } else if (maybeImage.type === "err") {
     console.error(maybeImage);
     throw new Error(maybeImage.format?.toString());
