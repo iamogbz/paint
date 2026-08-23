@@ -210,7 +210,7 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
       /** shapes disjoint with others */
       hierarchical: "cutout",
       /** Auto-quantize target color count */
-      maxColors: 24,
+      // maxColors: 24,
       watershedDetail: 255,
       /** If a pallete is defined maps colors to this */
       // palette: palette,
@@ -220,7 +220,7 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
       colorPrecision: 8,
       pathPrecision: 8,
       /** Color difference between gradient layers (0..=255) */
-      layerDifference: 16,
+      // layerDifference: 16,
       /** Method for converting in to shapes. Values below only valid in spline */
       mode: "spline",
       /** default: 60, Minimum Momentary Angle (in degrees) to be considered a corner (to be kept after smoothing) - Higher = smoother */
