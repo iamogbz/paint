@@ -179,15 +179,6 @@ export class EaselBoard extends SignalElement {
   // faster buffering of painted paths without waiting for save logic
   private brushPositionBuffer = [] as Array<{ x: number; y: number }>;
 
-  public triggerFilePicker = () => {
-    if (this.isDragCanvasAction) return;
-    const input = document.getElementById("easel-file-input") as HTMLInputElement;
-    if (input) {
-      input.value = "";
-      input.click();
-    }
-  };
-
   private setupContainerListeners() {
     const container = this.querySelector<HTMLElement>("#easel-zoom-container");
     if (container && container !== this.containerElement) {
@@ -203,6 +194,40 @@ export class EaselBoard extends SignalElement {
       this.containerElement.addEventListener("pointerleave", this.handlePointerLeave);
     }
   }
+
+  public triggerFilePicker = () => {
+    if (this.isDragCanvasAction) return;
+    const input = document.getElementById("easel-file-input") as HTMLInputElement;
+    if (input) {
+      input.value = "";
+      input.click();
+    }
+  };
+
+  private handleFileInput = (file: File) => {
+    if (file && file.type.startsWith("image/")) {
+      const reader = new FileReader();
+      reader.onload = (event) => {
+        if (event.target?.result) {
+          handleImageSelected(event.target.result as string, file.name.replace(/\.[^/.]+$/, ""));
+        }
+      };
+      reader.readAsDataURL(file);
+    }
+  };
+
+  private handleFileChange = (e: Event) => {
+    const target = e.target as HTMLInputElement;
+    const file = target.files?.[0];
+    if (file) this.handleFileInput(file);
+  };
+
+  private handleFileDrop = (e: DragEvent) => {
+    e.preventDefault();
+    dragToOpenFileSignal.set(false);
+    const file = e.dataTransfer?.files?.[0];
+    if (file) this.handleFileInput(file);
+  };
 
   private handleWheel = (e: WheelEvent) => {
     window.clearTimeout(this.wheelSpinningTimeoutId);
@@ -241,6 +266,15 @@ export class EaselBoard extends SignalElement {
     this.updateTransformDirectly();
   };
 
+  private handleFocusOut = () => {
+    for (const pointerId of this.activePointers.keys()) {
+      try {
+        this.activePointers.delete(pointerId);
+        this.containerElement?.releasePointerCapture(pointerId);
+      } catch (err) {}
+    }
+  };
+
   private handlePointerLeave = (e: PointerEvent) => {
     if (e.pointerType === "mouse") {
       this.updateHoverRegion(e);
@@ -248,6 +282,10 @@ export class EaselBoard extends SignalElement {
       this.hoveredRegionId = null;
       this.updateArtwork();
     }
+    try {
+      this.activePointers.delete(e.pointerId);
+      this.containerElement?.releasePointerCapture(e.pointerId);
+    } catch (err) {}
   };
 
   private handleGlobalPointerDown = (e: PointerEvent) => {
@@ -435,6 +473,9 @@ export class EaselBoard extends SignalElement {
     if (e && e.pointerId !== undefined) {
       this.activePointers.delete(e.pointerId);
     }
+    try {
+      this.containerElement?.releasePointerCapture(e.pointerId);
+    } catch (err) {}
     if (this.activePointers.size < 2) {
       this.isPinchAction = false;
       this.initialPinchDistance = null;
@@ -529,9 +570,6 @@ export class EaselBoard extends SignalElement {
         activeHighlightColorSignal.set(currentArtwork?.regionsCurrentFillInfo.get(this.hoveredRegionId) || TRANSPARENT_HEX);
       }
     }
-    try {
-      this.containerElement?.releasePointerCapture(e.pointerId);
-    } catch (err) {}
 
     // on mobile/touch screens, there is no persistent hover after the pointer is lifted
     // this handled by global pointer up to ensure it happens no matter where up occurs
@@ -544,6 +582,7 @@ export class EaselBoard extends SignalElement {
     this.handleResetCanvasState();
     this.updateArtwork();
     try {
+      this.activePointers.delete(e.pointerId);
       this.containerElement?.releasePointerCapture(e.pointerId);
     } catch (err) {}
   };
@@ -614,31 +653,6 @@ export class EaselBoard extends SignalElement {
     this.brushPositionBuffer.push({ x: e.clientX, y: e.clientY });
 
     this.updateArtwork();
-  };
-
-  private handleFileInput = (file: File) => {
-    if (file && file.type.startsWith("image/")) {
-      const reader = new FileReader();
-      reader.onload = (event) => {
-        if (event.target?.result) {
-          handleImageSelected(event.target.result as string, file.name.replace(/\.[^/.]+$/, ""));
-        }
-      };
-      reader.readAsDataURL(file);
-    }
-  };
-
-  private handleFileChange = (e: Event) => {
-    const target = e.target as HTMLInputElement;
-    const file = target.files?.[0];
-    if (file) this.handleFileInput(file);
-  };
-
-  private handleFileDrop = (e: DragEvent) => {
-    e.preventDefault();
-    dragToOpenFileSignal.set(false);
-    const file = e.dataTransfer?.files?.[0];
-    if (file) this.handleFileInput(file);
   };
 
   private fillRegion(regionId: string, colorHex: string) {
@@ -900,6 +914,7 @@ export class EaselBoard extends SignalElement {
       this.updateRectCache();
     });
     this.setupContainerListeners();
+    window.addEventListener("blur", this.handleFocusOut);
     window.addEventListener("easel-pan-delta", this.handlePanDelta as EventListener);
     window.addEventListener("easel-reset-pan", this.handlePanReset);
     window.addEventListener("pointerdown", this.handleGlobalPointerDown);
@@ -914,6 +929,7 @@ export class EaselBoard extends SignalElement {
       this.rectCacheObserver.disconnect();
       this.rectCacheObserver = null;
     }
+    window.removeEventListener("blur", this.handleFocusOut);
     window.removeEventListener("easel-pan-delta", this.handlePanDelta as EventListener);
     window.removeEventListener("easel-reset-pan", this.handlePanReset);
     window.removeEventListener("pointerdown", this.handleGlobalPointerDown);
