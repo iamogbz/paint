@@ -78,7 +78,7 @@ export class AppTour extends SignalElement {
     {
       title: "Gallery & Saving",
       description:
-        "Use the yellow Gallery icon to view existing paintings, track their completion progress, change their names, or start a new one. Use the green Save icon to download your painting.",
+        "Use the yellow Gallery icon to view existing paintings, track completion, rename or refresh vectors, or start a new one. Use the green Save icon to download your painting.",
       icon: html`
         ${iconFolderOpen(48, "#F4A261")} ${iconDownload(24, "#2A9D8F")}
       `,

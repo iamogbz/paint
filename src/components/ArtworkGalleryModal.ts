@@ -10,11 +10,12 @@ import {
   handleSelectArtworkById,
   handleDeleteArtwork,
   handleRenameArtwork,
+  handleRefreshArtwork,
   artworkIdsSortedSignal,
   loadArtworkById,
   flushPendingArtworkSave,
 } from "../state/store";
-import { iconGalleryVertical, iconX, iconCheckCircle2, iconDownload, iconTrash2, iconImage, iconEdit2 } from "./icons";
+import { iconGalleryVertical, iconX, iconCheckCircle2, iconDownload, iconTrash2, iconImage, iconEdit2, iconRotateCcw, iconLoader2 } from "./icons";
 import { transparentImgCss } from "../utils/constants";
 import "./DownloadPopup";
 
@@ -27,6 +28,7 @@ export class ArtworkGalleryModal extends SignalElement {
 
   @state() private showDownloadPopup = false;
   @state() private downloadingArtwork: ProcessedArtwork | null = null;
+  @state() private refreshingId: string | null = null;
 
   render() {
     const isOpen = isGalleryOpenSignal.get();
@@ -234,7 +236,7 @@ export class ArtworkGalleryModal extends SignalElement {
                       </button>
 
                       <!-- Progress Bar -->
-                      <div style="flex: 1; min-width: 80px; max-width: 180px; display: flex; flex-direction: column; gap: 0.25rem;">
+                      <div style="flex: 1; max-width: 180px; display: flex; flex-direction: column; gap: 0.25rem;">
                         <div style="display: flex; justify-content: end; align-items: center; font-size: 0.625rem; font-weight: 900; color: #4A2810;">
                           <span>${percent}%</span>
                         </div>
@@ -246,6 +248,26 @@ export class ArtworkGalleryModal extends SignalElement {
                       </div>
 
                       <div style="display: flex; align-items: center; gap: 0.375rem; flex-shrink: 0;">
+                        <!-- Refresh -->
+                        <button
+                          id="gallery-refresh-btn-${art.id}"
+                          @click=${async (e: Event) => {
+                            e.stopPropagation();
+                            if (this.refreshingId === art.id) return;
+                            this.refreshingId = art.id;
+                            try {
+                              await handleRefreshArtwork(art.id);
+                            } finally {
+                              this.refreshingId = null;
+                            }
+                          }}
+                          ?disabled=${this.refreshingId === art.id}
+                          style="padding: 0.5rem; border-radius: 14px; background-color: #FFFFFF; border: 2px solid #000000; color: #000000; box-shadow: 2px 2px 0px 0px #000000; cursor: ${this.refreshingId === art.id ? "not-allowed" : "pointer"}; display: flex; align-items: center; justify-content: center;"
+                          title="Regenerate Artwork"
+                        >
+                          ${this.refreshingId === art.id ? iconLoader2(16, "#000000") : iconRotateCcw(16, "#000000")}
+                        </button>
+
                         <!-- Download -->
                         <button
                           @click=${async () => {
@@ -255,7 +277,7 @@ export class ArtworkGalleryModal extends SignalElement {
                               this.showDownloadPopup = true;
                             }
                           }}
-                          style="padding: 0.5rem; border-radius: 14px; background-color: #FFFFFF; border: 2px solid #000000; color: #000000; box-shadow: 2px 2px 0px 0px #000000; cursor: pointer;"
+                          style="padding: 0.5rem; border-radius: 14px; background-color: #FFFFFF; border: 2px solid #000000; color: #000000; box-shadow: 2px 2px 0px 0px #000000; cursor: pointer; display: flex; align-items: center; justify-content: center;"
                           title="Download Artwork"
                         >
                           ${iconDownload(16, "#000000")}
@@ -266,7 +288,7 @@ export class ArtworkGalleryModal extends SignalElement {
                           @click=${() => {
                             handleDeleteArtwork(art.id);
                           }}
-                          style="padding: 0.5rem; border-radius: 14px; background-color: #FFFFFF; border: 2px solid #000000; color: #000000; box-shadow: 2px 2px 0px 0px #000000; cursor: pointer;"
+                          style="padding: 0.5rem; border-radius: 14px; background-color: #FFFFFF; border: 2px solid #000000; color: #000000; box-shadow: 2px 2px 0px 0px #000000; cursor: pointer; display: flex; align-items: center; justify-content: center;"
                           title="Delete Artwork"
                         >
                           ${iconTrash2(16, "#000000")}

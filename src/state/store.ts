@@ -422,6 +422,47 @@ export async function handleRenameArtwork(id: string, newName: string): Promise<
   }
 }
 
+export async function handleRefreshArtwork(id: string): Promise<void> {
+  const current = currentArtworkSignal.get();
+  const artwork = current?.id === id ? current : await loadArtworkById(id);
+  if (!artwork || !artwork.originalDataUrl) return;
+
+  const originalSrc = artwork.originalDataUrl;
+  processingImageSrcSignal.set(originalSrc);
+  isProcessingSignal.set(true);
+
+  try {
+    const refreshed = await processImageToCartoonPalette(originalSrc, artwork.name);
+    refreshed.id = artwork.id;
+    refreshed.name = artwork.name;
+    refreshed.createdAt = artwork.createdAt;
+    refreshed.modifiedAt = Date.now();
+    refreshed.cartoonSVG = serializeArtworkToSvg(refreshed);
+
+    const summaries = artworkSummariesSignal.get();
+    const updatedSummary = createArtworkSummary(refreshed);
+    summaries.set(refreshed.id, updatedSummary);
+
+    const sorted = Array.from(summaries.keys()).sort((a, b) => (summaries.get(b)?.modifiedAt || 0) - (summaries.get(a)?.modifiedAt || 0));
+    artworkIdsSortedSignal.set(sorted);
+    artworkSummariesSignal.set(new Map(summaries));
+
+    await set(getArtworkStorageKey(refreshed.id), createPersistedArtworkRecord(refreshed));
+    await set(STORAGE_KEY_ARTWORKS_META, summaries);
+
+    if (current?.id === id) {
+      currentArtworkSignal.set(null);
+      handleSelectArtwork(refreshed);
+    }
+  } catch (err) {
+    console.error("Failed to refresh artwork:", err);
+    alert("Failed to refresh artwork.");
+  } finally {
+    isProcessingSignal.set(false);
+    processingImageSrcSignal.set(null);
+  }
+}
+
 export async function handleDeleteArtwork(id: string): Promise<void> {
   const summaries = artworkSummariesSignal.get();
   summaries.delete(id);
