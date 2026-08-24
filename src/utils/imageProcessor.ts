@@ -253,7 +253,7 @@ function sampleAndClusterRegionColors(
       const idx = rowOffset + x;
       const idPixel = id32[idx];
 
-      if ((idPixel >>> 24) === 0) continue;
+      if (idPixel >>> 24 === 0) continue;
 
       const regionNum = idPixel & 0x00ffffff;
       if (regionNum > 0 && regionNum <= regionCount) {
@@ -436,9 +436,7 @@ function sampleAndClusterRegionColors(
           const avgB = Math.round(sumB / count);
           const avgLab = rgbToLab(avgR, avgG, avgB);
 
-          const allWithinThreshold = combinedOriginals.every(
-            (col) => deltaE(col.lab, avgLab) < COLOR_COLLAPSE_DELTA_E_THRESHOLD
-          );
+          const allWithinThreshold = combinedOriginals.every((col) => deltaE(col.lab, avgLab) < COLOR_COLLAPSE_DELTA_E_THRESHOLD);
 
           if (allWithinThreshold) {
             minDistance = dist;
@@ -643,6 +641,7 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     fillElement.setAttribute("fill", regionsCurrentFillInfo.get(fillRegionId)!);
     fillElement.setAttribute("stroke", "none");
     fillElement.setAttribute("stroke-linejoin", "round");
+    fillElement.removeAttribute("style");
   });
   document.body.removeChild(hiddenContainer);
 

@@ -1048,7 +1048,7 @@ export class EaselBoard extends SignalElement {
                 stroke = "none";
                 strokeWidth = 0;
               } else {
-                stroke = "hsl(var(--hue), 100%, 50%)";
+                stroke = "hsl(var(--hue), 80%, 50%)";
                 elemClass = hueLoopCls;
               }
             } else if (!activeHexUpper || !activeColorIsCore) {

@@ -117,17 +117,38 @@ export function getColorProperties(hexCode: string) {
   return { isGray, h, s, v };
 }
 
-let canvas2dCtx: CanvasRenderingContext2D | null = null;
+let canvas2dCtx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null = null;
 export function getHexCode(anyColor: string) {
   if (!canvas2dCtx) {
-    // Create an unrendered canvas environment
-    canvas2dCtx = document.createElement("canvas").getContext("2d");
-  }
-  if (!canvas2dCtx) return normalizeHex(anyColor);
-  canvas2dCtx.fillStyle = anyColor; // Apply any rgb, rgba, hsl, or named color variable
+    // 1. Create a tiny off-screen canvas
+    const canvas = typeof OffscreenCanvas !== "undefined" ? new OffscreenCanvas(1, 1) : document.createElement("canvas");
 
-  // Reading back the property forces the engine to serialize to hex
-  return normalizeHex(canvas2dCtx.fillStyle);
+    // Set dimensions to 1x1
+    canvas.width = 1;
+    canvas.height = 1;
+
+    // update frequently used canvas
+    canvas2dCtx = canvas.getContext("2d", { willReadFrequently: true });
+  }
+  if (!canvas2dCtx) return "#000000ff";
+
+  // 2. Clear canvas to absolute transparency
+  canvas2dCtx.clearRect(0, 0, 1, 1);
+
+  // 3. Apply the input color and paint a single pixel
+  canvas2dCtx.fillStyle = anyColor;
+  canvas2dCtx.fillRect(0, 0, 1, 1);
+
+  // 4. Extract the exact raw RGBA memory buffer
+  const [r, g, b, a] = canvas2dCtx.getImageData(0, 0, 1, 1).data;
+
+  // 5. Format each channel to a 2-character hex block
+  const hexR = r.toString(16).padStart(2, "0");
+  const hexG = g.toString(16).padStart(2, "0");
+  const hexB = b.toString(16).padStart(2, "0");
+  const hexA = a.toString(16).padStart(2, "0");
+
+  return normalizeHex(`#${hexR}${hexG}${hexB}${hexA}`);
 }
 
 export function rgbToLab(r: number, g: number, b: number): [number, number, number] {
@@ -218,12 +239,7 @@ export function ciede2000(lab1: [number, number, number], lab2: [number, number,
   }
 
   // 5. Calculate T
-  const T =
-    1 -
-    0.17 * Math.cos((h_bar_prime - 30) * DEG_TO_RAD) +
-    0.24 * Math.cos(2 * h_bar_prime * DEG_TO_RAD) +
-    0.32 * Math.cos((3 * h_bar_prime + 6) * DEG_TO_RAD) -
-    0.2 * Math.cos((4 * h_bar_prime - 63) * DEG_TO_RAD);
+  const T = 1 - 0.17 * Math.cos((h_bar_prime - 30) * DEG_TO_RAD) + 0.24 * Math.cos(2 * h_bar_prime * DEG_TO_RAD) + 0.32 * Math.cos((3 * h_bar_prime + 6) * DEG_TO_RAD) - 0.2 * Math.cos((4 * h_bar_prime - 63) * DEG_TO_RAD);
 
   // 6. Calculate SL, SC, SH
   const L_bar_minus_50_sq = Math.pow(L_bar_prime - 50, 2);
@@ -242,11 +258,7 @@ export function ciede2000(lab1: [number, number, number], lab2: [number, number,
   const term_C = delta_C_prime / S_C;
   const term_H = delta_H_prime / S_H;
 
-  const delta_E00_sq =
-    term_L * term_L +
-    term_C * term_C +
-    term_H * term_H +
-    R_T * term_C * term_H;
+  const delta_E00_sq = term_L * term_L + term_C * term_C + term_H * term_H + R_T * term_C * term_H;
 
   return Math.sqrt(Math.max(0, delta_E00_sq));
 }
