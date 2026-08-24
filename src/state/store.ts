@@ -36,7 +36,12 @@ export const isWindowFocusedSignal = signal<boolean>(true);
 
 // Color selection and dropping
 export const activeHighlightColorSignal = signal<string | null>(null);
-export const draggedColorPositionSignal = signal<{ targetX: number; targetY: number } | null>(null);
+export const draggedColorPositionSignal = signal<{
+  targetX: number;
+  targetY: number;
+  mode?: "fill" | "select";
+  color?: string;
+} | null>(null);
 export const isColorPickerOpenSignal = signal<boolean>(false);
 export const copiedHexSignal = signal<string | null>(null);
 

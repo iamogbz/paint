@@ -117,7 +117,13 @@ export class PaintingControls extends SignalElement {
     }
   };
 
-  private handleSwatchPointerDown = (e: PointerEvent, hexCode: string) => {
+  private handleDragPointerDown = (
+    e: PointerEvent,
+    mode: "fill" | "select",
+    onClick: () => void,
+    canDrag = true,
+    color?: string
+  ) => {
     if (e.pointerType === "mouse" && e.button !== 0) return;
 
     try {
@@ -125,9 +131,6 @@ export class PaintingControls extends SignalElement {
         e.target.releasePointerCapture(e.pointerId);
       }
     } catch (err) {}
-
-    const activeColor = activeHighlightColorSignal.get();
-    const isActive = activeColor === hexCode;
 
     const startX = e.clientX;
     const startY = e.clientY;
@@ -142,8 +145,7 @@ export class PaintingControls extends SignalElement {
     };
 
     const onPointerMove = (moveEvent: PointerEvent) => {
-      // Only allow drag initiation if it's the active color
-      if (!isActive) return;
+      if (!canDrag) return;
 
       const dx = moveEvent.clientX - startX;
       const dy = moveEvent.clientY - startY;
@@ -153,17 +155,20 @@ export class PaintingControls extends SignalElement {
       }
 
       if (isDragging) {
-        // offset by certain amount on the Y axis for better visibility
+        const current = draggedColorPositionSignal.get();
         draggedColorPositionSignal.set({
+          ...current,
           targetX: moveEvent.clientX,
           targetY: moveEvent.clientY - DROPPER_BUFFER_PX,
+          mode,
+          ...(color ? { color } : {}),
         });
       }
     };
 
-    const onPointerUp = (upEvent: PointerEvent) => {
+    const onPointerUp = () => {
       if (!isDragging) {
-        this.handleColorClick(hexCode);
+        onClick();
       }
       setTimeout(cleanup, 150);
     };
@@ -497,9 +502,11 @@ export class PaintingControls extends SignalElement {
                   <!-- Fill (Paint Bucket) Mode Button -->
                   <button
                     id="fill-mode-btn"
-                    @click=${() => {
-                      isBrushModeSignal.set(false);
-                    }}
+                    @pointerdown=${(e: PointerEvent) =>
+                      this.handleDragPointerDown(e, "select", () => {
+                        soundEffects.playPop();
+                        isBrushModeSignal.set(false);
+                      })}
                     style=${this.renderStyleObject({
                       width: "36px",
                       height: "36px",
@@ -512,6 +519,7 @@ export class PaintingControls extends SignalElement {
                       justifyContent: "center",
                       cursor: "pointer",
                       padding: "0",
+                      touchAction: "none",
                       transition: "transform 0.15s ease, box-shadow 0.15s ease",
                     })}
                     title="Fill Mode"
@@ -521,9 +529,11 @@ export class PaintingControls extends SignalElement {
                   <!-- Brush Mode Button -->
                   <button
                     id="brush-mode-btn"
-                    @click=${() => {
-                      isBrushModeSignal.set(true);
-                    }}
+                    @pointerdown=${(e: PointerEvent) =>
+                      this.handleDragPointerDown(e, "select", () => {
+                        soundEffects.playPop();
+                        isBrushModeSignal.set(true);
+                      })}
                     style=${this.renderStyleObject({
                       width: "36px",
                       height: "36px",
@@ -536,6 +546,7 @@ export class PaintingControls extends SignalElement {
                       justifyContent: "center",
                       cursor: "pointer",
                       padding: "0",
+                      touchAction: "none",
                       transition: "transform 0.15s ease, box-shadow 0.15s ease",
                     })}
                     title="Brush Mode"
@@ -597,7 +608,18 @@ export class PaintingControls extends SignalElement {
                   };
 
                   return html`
-                    <button id="swatch-btn-${hexCode.replace("#", "")}" @pointerdown=${(e: PointerEvent) => this.handleSwatchPointerDown(e, hexCode)} style=${this.renderStyleObject(colorCardStyle)}>
+                    <button
+                      id="swatch-btn-${hexCode.replace("#", "")}"
+                      @pointerdown=${(e: PointerEvent) =>
+                        this.handleDragPointerDown(
+                          e,
+                          "fill",
+                          () => this.handleColorClick(hexCode),
+                          activeColor === hexCode,
+                          hexCode
+                        )}
+                      style=${this.renderStyleObject(colorCardStyle)}
+                    >
                       <!-- Color Circle -->
                       <div style=${this.renderStyleObject(circleStyle)}>
                         ${isFullyPainted ? html` <div style="position: absolute; top: -4px; right: -4px; width: 20px; height: 20px; background-color: #000000; border-radius: 9999px; border: 2px solid #FFFFFF; display: flex; align-items: center; justify-content: center; color: #FFFFFF;">${iconCheck(12, "#FFFFFF")}</div> ` : ""}

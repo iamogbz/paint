@@ -1,7 +1,7 @@
 import { html } from "lit";
 import { customElement } from "lit/decorators.js";
 import { SignalElement } from "../utils/SignalElement";
-import { currentArtworkSignal, isProcessingSignal, processingImageSrcSignal, processingImageWidthSignal, processingImageHeightSignal, activeHighlightColorSignal, dragToOpenFileSignal, zoomScaleSignal, handleImageSelected, handleSelectArtwork, handleSelectArtworkById, draggedColorPositionSignal, pushUndoState, saveCurrentArtworkProgress, footerStyleSignal, isBrushModeSignal, artworkIdsSortedSignal, panDragActiveSignal, isDailyChallengeModalOpenSignal } from "../state/store";
+import { currentArtworkSignal, isProcessingSignal, processingImageSrcSignal, processingImageWidthSignal, processingImageHeightSignal, activeHighlightColorSignal, dragToOpenFileSignal, zoomScaleSignal, handleImageSelected, handleSelectArtworkById, draggedColorPositionSignal, pushUndoState, saveCurrentArtworkProgress, footerStyleSignal, isBrushModeSignal, artworkIdsSortedSignal, panDragActiveSignal, isDailyChallengeModalOpenSignal } from "../state/store";
 import { soundEffects } from "../utils/soundEffects";
 import { iconImage, iconUpload, iconPaintBucket } from "./icons";
 import { BASE_BRUSH_RADIUS, FALLBACK_IMAGE_SIZE_PX, FILLABLE_SVG_ELEMENTS, TRANSPARENT_HEX, transparentImgCss } from "../utils/constants";
@@ -452,11 +452,21 @@ export class EaselBoard extends SignalElement {
 
   private handleGlobalPointerUp = (e: PointerEvent) => {
     const previousHoveredRegionId = this.hoveredRegionId;
-    if (draggedColorPositionSignal.get() !== null) {
+    const dragPos = draggedColorPositionSignal.get();
+    if (dragPos !== null) {
       if (this.hoveredRegionId) {
-        const activeColor = activeHighlightColorSignal.get();
-        if (activeColor) {
-          this.fillRegion(this.hoveredRegionId, activeColor);
+        if (dragPos.mode === "select") {
+          const currentArtwork = currentArtworkSignal.get();
+          const currentColor = currentArtwork?.regionsCurrentFillInfo.get(this.hoveredRegionId) || TRANSPARENT_HEX;
+          if (currentColor) {
+            soundEffects.playPop();
+            activeHighlightColorSignal.set(currentColor);
+          }
+        } else {
+          const activeColor = activeHighlightColorSignal.get();
+          if (activeColor) {
+            this.fillRegion(this.hoveredRegionId, activeColor);
+          }
         }
       }
     }
@@ -832,7 +842,21 @@ export class EaselBoard extends SignalElement {
 
   private updateHoverRegion = (e: Pick<PointerEvent, "clientX" | "clientY">) => {
     const dragDropColorPosition = draggedColorPositionSignal.get();
-    const regionId = this.getRegionIdAtPoint(dragDropColorPosition?.targetX ?? e.clientX, dragDropColorPosition?.targetY ?? e.clientY);
+    const targetX = dragDropColorPosition?.targetX ?? e.clientX;
+    const targetY = dragDropColorPosition?.targetY ?? e.clientY;
+    const regionId = this.getRegionIdAtPoint(targetX, targetY);
+
+    if (dragDropColorPosition && dragDropColorPosition.mode === "select") {
+      const currentArtwork = currentArtworkSignal.get();
+      const hoveredColor = regionId ? currentArtwork?.regionsCurrentFillInfo.get(regionId) || TRANSPARENT_HEX : undefined;
+      if (dragDropColorPosition.color !== hoveredColor) {
+        draggedColorPositionSignal.set({
+          ...dragDropColorPosition,
+          color: hoveredColor,
+        });
+      }
+    }
+
     if (regionId !== null) {
       if (this.hoveredRegionId !== regionId) {
         this.hoveredRegionId = regionId;
@@ -1046,7 +1070,6 @@ export class EaselBoard extends SignalElement {
               livePath = document.createElementNS(XML_NS, "path") as SVGPathElement;
               livePath.setAttribute("id", livePathId);
               livePath.setAttribute("fill", "none");
-              livePath.setAttribute("stroke-linecap", "round");
               livePath.setAttribute("stroke-linejoin", "round");
               livePath.setAttribute("pointer-events", "none");
               guideSvg.appendChild(livePath);

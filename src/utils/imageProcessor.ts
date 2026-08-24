@@ -937,7 +937,7 @@ export function updateArtworkSvgWithUserPaints(svgElem: SVGSVGElement, artwork: 
       if (!strokePathElem) {
         strokePathElem = document.createElementNS(XML_NS, "path");
         strokePathElem.setAttribute("fill", "none");
-        strokePathElem.setAttribute("stroke-linecap", "round");
+        strokePathElem.setAttribute("stroke-linecap", "butt");
         strokePathElem.setAttribute("stroke-linejoin", "round");
         strokePathElem.setAttribute("pointer-events", "none");
         strokePathElem.setAttribute("touch-action", "none");

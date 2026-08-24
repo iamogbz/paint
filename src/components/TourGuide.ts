@@ -52,7 +52,7 @@ export class AppTour extends SignalElement {
     {
       title: "Painting the Canvas",
       description:
-        "Use Paint Bucket mode to fill entire color islands at once by tapping or dragging the color to the canvas. Switch to Brush Mode to paint inside lines, zooming in for precision!",
+        "Use Paint Bucket mode to fill entire color islands at once by tapping or dragging the color to the canvas. Switch to Brush Mode to paint inside lines, or drag from the Bucket or Brush button to pick colors directly from any region!",
       icon: html`
         ${iconPaintBucket(32, "#000000")} ${iconPaintbrush(32, "#E63946")}
       `,

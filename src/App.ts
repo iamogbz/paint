@@ -89,7 +89,7 @@ export class PaintApp extends SignalElement {
         <app-tour></app-tour>
 
         <!-- Drag Indicator -->
-        ${draggedColor && draggedPos ? html` <div style="position: fixed; left: ${draggedPos.targetX}px; top: ${draggedPos.targetY}px; transform: translate(-50%, -50%); width: 8px; height: 8px; border-radius: 50%; background-color: ${draggedColor}; background-size: 0.5rem 0.5rem; background-repeat: repeat; background-image: ${draggedColor === TRANSPARENT_HEX ? transparentImgCss : "none"}; border: 2px solid #FFFFFF; box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; z-index: 9999; animation: bounce-drop 2s ease infinite;"></div> ` : ""}
+        ${draggedPos ? html` <div style="position: fixed; left: ${draggedPos.targetX}px; top: ${draggedPos.targetY}px; transform: translate(-50%, -50%); width: 8px; height: 8px; border-radius: 50%; background-color: ${draggedPos.color || draggedColor || "#000000"}; background-size: 0.5rem 0.5rem; background-repeat: repeat; background-image: ${(draggedPos.color || draggedColor) === TRANSPARENT_HEX ? transparentImgCss : "none"}; border: 2px solid #FFFFFF; box-shadow: 0 4px 10px rgba(0,0,0,0.4); pointer-events: none; z-index: 9999; animation: bounce-drop 2s ease infinite;"></div> ` : ""}
 
         <!-- Blur Overlay -->
         ${
