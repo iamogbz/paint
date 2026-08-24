@@ -1,6 +1,6 @@
 import { COLOR_COLLAPSE_DELTA_E_THRESHOLD, FALLBACK_IMAGE_SIZE_PX, FILLABLE_SVG_ELEMENTS_SELECTOR, PAINTABLE_REGION_HEX, TRANSPARENT_HEX } from "./constants.js";
 import { processingImageHeightSignal, processingImageWidthSignal } from "../state/store.js";
-import { MutableMap, ProcessedArtwork } from "../types";
+import { ProcessedArtwork } from "../types";
 import { deltaE, getHexCode, normalizeHex, rgbToHex, rgbToLab } from "./color.js";
 import { getSvgDimensions, parseSVG, SVGFillableElement, XML_NS } from "./html.js";
 import { Options } from "@visioncortex/vtracer";
@@ -545,19 +545,9 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
   // Parse output SVG
   svgDoc = await transformSVGForPainting(svgDoc!);
 
-  // all the path/region
-  const regionsDrawingInfo: MutableMap<ProcessedArtwork["regionsDrawingInfo"]> = new Map();
-  const colorsAssignedToRegions: ProcessedArtwork["colorsAssignedToRegions"] = new Map();
-  const regionsCurrentFillInfo: ProcessedArtwork["regionsCurrentFillInfo"] = new Map();
-  const colorsFilledInRegions: ProcessedArtwork["colorsFilledInRegions"] = new Map();
   /** Region ID to the elements for creating brush stroke clipping paths */
   const regionSVGElements: Map<string, SVGElement> = new Map();
-
-  // Add transparent color default mapping
-  colorsAssignedToRegions.set(TRANSPARENT_HEX, new Set());
-  colorsFilledInRegions.set(TRANSPARENT_HEX, new Set());
-  // Add paintable color default mapping
-  colorsFilledInRegions.set(PAINTABLE_REGION_HEX, new Set());
+  const regionBounds: Array<{ id: string; boundingBox: { width: number; height: number; x: number; y: number } }> = [];
 
   const renderNode = svgDoc.cloneNode(true) as typeof svgDoc;
   const hiddenContainer = document.createElement("div");
@@ -602,47 +592,21 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     }
 
     const { width, height, x, y } = fillElement.getBBox();
-    const drawingInfo = {
-      id: fillRegionId,
-      neighbourRegionIds: sampledData?.adjacencyGraph.get(fillRegionId) || new Set<string>(),
-      boundingBox: { width, height, x, y },
-    };
+    regionBounds.push({ id: fillRegionId, boundingBox: { width, height, x, y } });
     fillElement.setAttribute("data-bbox", `${width.toFixed(2)},${height.toFixed(2)},${x.toFixed(2)},${y.toFixed(2)}`);
 
     if (elementFill === "none") {
-      // element was specifically instructed to not have a fill
-      // still we add the region and assign it a transparent target fill
-      regionsDrawingInfo.set(fillRegionId, {
-        ...drawingInfo,
-        fillColor: TRANSPARENT_HEX,
-      });
-      regionsCurrentFillInfo.set(fillRegionId, TRANSPARENT_HEX);
-      colorsAssignedToRegions.get(TRANSPARENT_HEX)!.add(fillRegionId);
-      colorsFilledInRegions.get(TRANSPARENT_HEX)!.add(fillRegionId);
       fillElement.setAttribute("assigned-fill", TRANSPARENT_HEX);
+      fillElement.setAttribute("fill", TRANSPARENT_HEX);
     } else {
-      let fillColor: string;
-      if (sampledData && sampledData.regionColors.has(fillRegionId)) {
-        fillColor = sampledData.regionColors.get(fillRegionId)!;
-      } else {
-        fillColor = elementFill ? getHexCode(elementFill) : "#00000000";
-      }
+      const fillColor = sampledData && sampledData.regionColors.has(fillRegionId)
+        ? sampledData.regionColors.get(fillRegionId)!
+        : (elementFill ? getHexCode(elementFill) : "#00000000");
 
-      regionsDrawingInfo.set(fillRegionId, {
-        ...drawingInfo,
-        fillColor,
-      });
-      if (!colorsAssignedToRegions.has(fillColor)) {
-        colorsAssignedToRegions.set(fillColor, new Set());
-      }
-      regionsCurrentFillInfo.set(fillRegionId, PAINTABLE_REGION_HEX);
-      colorsAssignedToRegions.get(fillColor)!.add(fillRegionId);
-      colorsFilledInRegions.get(PAINTABLE_REGION_HEX)!.add(fillRegionId);
       fillElement.setAttribute("assigned-fill", fillColor);
+      fillElement.setAttribute("fill", PAINTABLE_REGION_HEX);
     }
 
-    // prepare for blank rendering colors will be applied afterwards
-    fillElement.setAttribute("fill", regionsCurrentFillInfo.get(fillRegionId)!);
     fillElement.setAttribute("stroke", "none");
     fillElement.setAttribute("stroke-linejoin", "round");
     fillElement.removeAttribute("style");
@@ -692,17 +656,12 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
   try {
     const maxDim = Math.max(width, height);
     const expandPx = Math.max(8, maxDim * 0.015);
-    const regions = Array.from(regionsDrawingInfo.values()).map((r) => ({ id: r.id, boundingBox: r.boundingBox }));
-    const computedNeighbours = await runInWorker("COMPUTE_NEIGHBORS", { regions, expandPx });
+    const computedNeighbours = await runInWorker("COMPUTE_NEIGHBORS", { regions: regionBounds, expandPx });
 
     for (const [id, neighbours] of computedNeighbours) {
-      const region = regionsDrawingInfo.get(id);
-      if (region) {
-        neighbours.forEach((nId: string) => region.neighbourRegionIds.add(nId));
-        const el = regionSVGElements.get(id);
-        if (el) {
-          el.setAttribute("data-neighbors", Array.from(region.neighbourRegionIds).join(","));
-        }
+      const el = regionSVGElements.get(id);
+      if (el && neighbours && neighbours.length > 0) {
+        el.setAttribute("data-neighbors", neighbours.join(","));
       }
     }
   } catch (e) {
@@ -717,26 +676,11 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
   renderNode.setAttribute("data-created-at", now.toString());
   renderNode.setAttribute("data-modified-at", now.toString());
 
-  const artwork: ProcessedArtwork = {
-    id: artworkId,
-    name: artworkName,
+  const cartoonDataUrl = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgDoc.outerHTML)));
+  return hydrateArtworkFromSvg(renderNode.outerHTML, {
     originalDataUrl: imageSrc,
-    cartoonDataUrl: "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgDoc.outerHTML))),
-    cartoonSVG: renderNode.outerHTML,
-    width,
-    height,
-    createdAt: now,
-    modifiedAt: now,
-    /** A color can existing in here without a any region e.g. custom added colors */
-    colorsAssignedToRegions,
-    regionsDrawingInfo,
-    // TODO: write helper functions for modifying these values
-    colorsFilledInRegions,
-    regionsCurrentFillInfo,
-    brushStrokePaths: {},
-  };
-
-  return artwork;
+    cartoonDataUrl,
+  });
 }
 
 export function renderArtworkToSVG(artwork: ProcessedArtwork) {
@@ -784,10 +728,15 @@ export function hydrateArtworkFromSvg(svgString: string, fallback?: Partial<Proc
     if (el.closest("defs")) return;
 
     const regionId = el.getAttribute("data-region-id") || el.getAttribute("id") || `region-${index}`;
-    const assignedFill = el.getAttribute("assigned-fill") || el.getAttribute("data-assigned-fill") || fallback?.regionsDrawingInfo?.get(regionId)?.fillColor || TRANSPARENT_HEX;
+    const fallbackDrawingInfo = fallback?.regionsDrawingInfo;
+    const fallbackRegion = fallbackDrawingInfo instanceof Map ? fallbackDrawingInfo.get(regionId) : (fallbackDrawingInfo as any)?.[regionId];
+    const fallbackAssigned = fallbackRegion?.fillColor;
+    const assignedFill = el.getAttribute("assigned-fill") || el.getAttribute("data-assigned-fill") || fallbackAssigned || TRANSPARENT_HEX;
     const normalizedAssigned = normalizeHex(assignedFill) || TRANSPARENT_HEX;
 
-    const currentFill = el.getAttribute("fill") || fallback?.regionsCurrentFillInfo?.get(regionId) || (normalizedAssigned === TRANSPARENT_HEX ? TRANSPARENT_HEX : PAINTABLE_REGION_HEX);
+    const fallbackCurrentFillInfo = fallback?.regionsCurrentFillInfo;
+    const fallbackCurrent = fallbackCurrentFillInfo instanceof Map ? fallbackCurrentFillInfo.get(regionId) : (fallbackCurrentFillInfo as any)?.[regionId];
+    const currentFill = el.getAttribute("fill") || fallbackCurrent || (normalizedAssigned === TRANSPARENT_HEX ? TRANSPARENT_HEX : PAINTABLE_REGION_HEX);
     const normalizedCurrent = normalizeHex(currentFill) || PAINTABLE_REGION_HEX;
 
     let boundingBox: any = null;
@@ -798,16 +747,21 @@ export function hydrateArtworkFromSvg(svgString: string, fallback?: Partial<Proc
         boundingBox = { width: w, height: h, x, y };
       }
     }
-    if (!boundingBox && fallback?.regionsDrawingInfo?.has(regionId)) {
-      boundingBox = fallback.regionsDrawingInfo.get(regionId)?.boundingBox ?? null;
+    if (!boundingBox && fallbackRegion?.boundingBox) {
+      boundingBox = fallbackRegion.boundingBox;
     }
 
     let neighbourRegionIds = new Set<string>();
     const neighborsAttr = el.getAttribute("data-neighbors");
     if (neighborsAttr) {
       neighborsAttr.split(",").map((s) => s.trim()).filter(Boolean).forEach((nId) => neighbourRegionIds.add(nId));
-    } else if (fallback?.regionsDrawingInfo?.has(regionId)) {
-      neighbourRegionIds = fallback.regionsDrawingInfo.get(regionId)?.neighbourRegionIds ?? new Set();
+    } else if (fallbackRegion?.neighbourRegionIds) {
+      const nIds = fallbackRegion.neighbourRegionIds;
+      if (nIds instanceof Set) {
+        nIds.forEach((nId: string) => neighbourRegionIds.add(nId));
+      } else if (Array.isArray(nIds)) {
+        nIds.forEach((nId: string) => neighbourRegionIds.add(nId));
+      }
     }
 
     regionsDrawingInfo.set(regionId, {
