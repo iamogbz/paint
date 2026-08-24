@@ -613,7 +613,14 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
   });
   document.body.removeChild(hiddenContainer);
 
-  // Merge small regions (width < 2 || height < 2 || area < 8)
+  const imgW = processingImageWidthSignal.get();
+  const imgH = processingImageHeightSignal.get();
+  const totalArea = imgW * imgH;
+  const maxEdge = Math.max(imgW, imgH);
+  const minDim = Math.max(2, maxEdge * 0.002);
+  const minArea = Math.max(8, totalArea * 0.0001);
+
+  // Merge small regions based on dynamic thresholds
   let mergedAny = true;
   while (mergedAny) {
     mergedAny = false;
@@ -628,7 +635,7 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
 
       const w = region.boundingBox.width;
       const h = region.boundingBox.height;
-      if (w < 2 || h < 2 || w * h < 8) {
+      if (w < minDim || h < minDim || w * h < minArea) {
         // Find a neighbor
         let targetId: string | null = null;
 
