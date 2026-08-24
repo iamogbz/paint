@@ -322,7 +322,7 @@ export class EaselBoard extends SignalElement {
 
       if (this.isBrushPainting && this.artworkId) {
         this.activeStrokeId = crypto.randomUUID();
-        this.brushPositionBuffer = [];
+        this.brushPositionBuffer = [{ x: e.clientX, y: e.clientY }];
         const targetRegionId = this.getRegionIdAtPoint(e.clientX, e.clientY);
         const currentArtwork = currentArtworkSignal.get();
         if (targetRegionId && currentArtwork) {
@@ -493,69 +493,109 @@ export class EaselBoard extends SignalElement {
       }
     }
 
+    const activeColor = activeHighlightColorSignal.get();
+    const isEraser = activeColor === TRANSPARENT_HEX;
+
     // down action did not necessarily start in this component
-    if (this.isBrushPainting && this.activeStrokeId && this.brushStartExpectedColor) {
+    if (this.isBrushPainting && this.activeStrokeId && (isEraser || this.brushStartExpectedColor)) {
       const currentArtwork = currentArtworkSignal.get();
-      const activeColor = activeHighlightColorSignal.get();
 
       if (currentArtwork && activeColor && this.brushPositionBuffer.length > 0) {
-        // Find all regions that share the same expected color as the starting region
-        const matchingRegionIds = Array.from(currentArtwork.regionsDrawingInfo.entries())
-          .filter(([_, info]) => info.fillColor === this.brushStartExpectedColor)
-          .map(([id, _]) => id);
-
         const svgPoints = this.brushPositionBuffer.map((p) => this.getSvgCoordinates(p.x, p.y)).filter((p) => p !== null);
 
         if (svgPoints.length > 0) {
           const strokeWidth = this.getBrushStrokeWidth();
 
-          // Determine which regions will actually receive points before pushing undo state or mutating
-          const pendingUpdates: Array<{
-            regionId: string;
-            points: Array<{ x: number; y: number }>;
-          }> = [];
+          if (isEraser) {
+            const regionsWithStrokes = Object.keys(currentArtwork.brushStrokePaths ?? {});
+            const pendingErasures: Array<{ regionId: string; updatedStrokes: Record<string, any> }> = [];
 
-          for (const regionId of matchingRegionIds) {
-            const boundingBox = currentArtwork.regionsDrawingInfo.get(regionId)?.boundingBox;
-            if (!boundingBox) continue;
+            for (const regionId of regionsWithStrokes) {
+              const boundingBox = currentArtwork.regionsDrawingInfo.get(regionId)?.boundingBox;
+              const toleranceX = 4 * svgPoints[0].scaleX + strokeWidth;
+              const toleranceY = 4 * svgPoints[0].scaleY + strokeWidth;
 
-            // Filter points using bounding box with 5px padding
-            const toleranceX = 4 * svgPoints[0].scaleX + 5;
-            const toleranceY = 4 * svgPoints[0].scaleY + 5;
+              const regionPoints = boundingBox
+                ? svgPoints.filter((pos) => pos.x >= boundingBox.x - toleranceX && pos.x <= boundingBox.x + boundingBox.width + toleranceX && pos.y >= boundingBox.y - toleranceY && pos.y <= boundingBox.y + boundingBox.height + toleranceY)
+                : svgPoints;
 
-            const regionPoints = svgPoints.filter((pos) => {
-              return pos.x >= boundingBox.x - toleranceX && pos.x <= boundingBox.x + boundingBox.width + toleranceX && pos.y >= boundingBox.y - toleranceY && pos.y <= boundingBox.y + boundingBox.height + toleranceY;
-            });
-
-            if (regionPoints.length > 0) {
-              pendingUpdates.push({ regionId, points: regionPoints });
+              if (regionPoints.length > 0) {
+                const originalStrokes = currentArtwork.brushStrokePaths[regionId];
+                if (originalStrokes && Object.keys(originalStrokes).length > 0) {
+                  const updatedStrokes = eraseFromStrokesRecord(originalStrokes, regionPoints, strokeWidth / 2);
+                  if (JSON.stringify(originalStrokes) !== JSON.stringify(updatedStrokes)) {
+                    pendingErasures.push({ regionId, updatedStrokes });
+                  }
+                }
+              }
             }
-          }
 
-          // Only push undo state and mutate if at least one region receives stroke points
-          if (pendingUpdates.length > 0) {
-            pushUndoState(currentArtwork);
+            if (pendingErasures.length > 0) {
+              pushUndoState(currentArtwork);
 
-            for (const { regionId, points } of pendingUpdates) {
-              if (!currentArtwork.brushStrokePaths[regionId]) {
-                currentArtwork.brushStrokePaths[regionId] = {};
+              for (const { regionId, updatedStrokes } of pendingErasures) {
+                if (Object.keys(updatedStrokes).length === 0) {
+                  delete currentArtwork.brushStrokePaths[regionId];
+                } else {
+                  currentArtwork.brushStrokePaths[regionId] = updatedStrokes;
+                }
               }
 
-              if (activeColor === TRANSPARENT_HEX) {
-                currentArtwork.brushStrokePaths[regionId] = eraseFromStrokesRecord(currentArtwork.brushStrokePaths[regionId], points, strokeWidth / 2);
-                if (Object.keys(currentArtwork.brushStrokePaths[regionId]).length === 0) {
-                  delete currentArtwork.brushStrokePaths[regionId];
+              saveCurrentArtworkProgress(currentArtwork);
+              soundEffects.playPop();
+            }
+          } else {
+            // Find all regions that share the same expected color as the starting region
+            const matchingRegionIds = Array.from(currentArtwork.regionsDrawingInfo.entries())
+              .filter(([_, info]) => info.fillColor === this.brushStartExpectedColor)
+              .map(([id, _]) => id);
+
+            // Determine which regions will actually receive points before pushing undo state or mutating
+            const pendingUpdates: Array<{
+              regionId: string;
+              points: Array<{ x: number; y: number }>;
+            }> = [];
+
+            for (const regionId of matchingRegionIds) {
+              const currentFillColor = currentArtwork.regionsCurrentFillInfo.get(regionId);
+              const regionHasStrokes = Object.keys(currentArtwork.brushStrokePaths[regionId] ?? {}).length > 0;
+              // If the region is already filled with this exact active color and has no brush strokes, skip adding strokes to it
+              if (currentFillColor === activeColor && !regionHasStrokes) continue;
+
+              const boundingBox = currentArtwork.regionsDrawingInfo.get(regionId)?.boundingBox;
+              if (!boundingBox) continue;
+
+              // Filter points using bounding box with 5px padding
+              const toleranceX = 4 * svgPoints[0].scaleX + 5;
+              const toleranceY = 4 * svgPoints[0].scaleY + 5;
+
+              const regionPoints = svgPoints.filter((pos) => {
+                return pos.x >= boundingBox.x - toleranceX && pos.x <= boundingBox.x + boundingBox.width + toleranceX && pos.y >= boundingBox.y - toleranceY && pos.y <= boundingBox.y + boundingBox.height + toleranceY;
+              });
+
+              if (regionPoints.length > 0) {
+                pendingUpdates.push({ regionId, points: regionPoints });
+              }
+            }
+
+            // Only push undo state and mutate if at least one region receives stroke points
+            if (pendingUpdates.length > 0) {
+              pushUndoState(currentArtwork);
+
+              for (const { regionId, points } of pendingUpdates) {
+                if (!currentArtwork.brushStrokePaths[regionId]) {
+                  currentArtwork.brushStrokePaths[regionId] = {};
                 }
-              } else {
+
                 currentArtwork.brushStrokePaths[regionId][this.activeStrokeId] = {
                   points,
                   stroke: activeColor,
                   strokeWidth,
                 };
               }
-            }
 
-            saveCurrentArtworkProgress(currentArtwork);
+              saveCurrentArtworkProgress(currentArtwork);
+            }
           }
         }
       }

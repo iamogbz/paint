@@ -838,8 +838,9 @@ export function hydrateArtworkFromSvg(svgString: string, fallback?: Partial<Proc
     if (strokePaths.length === 0) return;
 
     brushStrokePaths[regionId] = {};
+    const prefix = `stroke-${regionId}_`;
     strokePaths.forEach((pathElem, idx) => {
-      const strokeId = pathElem.id ? pathElem.id.split("_").pop() || `stroke-${idx}` : `stroke-${idx}`;
+      const strokeId = pathElem.id && pathElem.id.startsWith(prefix) ? pathElem.id.substring(prefix.length) : pathElem.id || `stroke-${idx}`;
       const stroke = pathElem.getAttribute("stroke") || "#000000";
       const strokeWidth = parseFloat(pathElem.getAttribute("stroke-width") || "4") || 4;
       const d = pathElem.getAttribute("d") || "";
@@ -913,23 +914,26 @@ export function updateArtworkSvgWithUserPaints(svgElem: SVGSVGElement, artwork: 
     }
 
     const strokeIds = Object.keys(strokesRecord);
+    const prefix = `stroke-${regionId}_`;
 
     // Remove any children that are no longer in the strokesRecord
     Array.from(strokesContainer.children).forEach((child) => {
       const id = child.getAttribute("id");
-      if (id && id.startsWith(`stroke-${regionId}_`)) {
-        const strokeId = id.split("_").pop();
+      if (id && id.startsWith(prefix)) {
+        const strokeId = id.substring(prefix.length);
         if (!strokeId || !strokesRecord[strokeId]) {
           child.remove();
         }
+      } else {
+        child.remove();
       }
     });
 
     strokeIds.forEach((strokeId) => {
       const stroke = strokesRecord[strokeId];
-      if (stroke.points.length <= 0) return; // this should not happen but in case
-      const strokePathElemId = `stroke-${regionId}_${strokeId}`;
-      let strokePathElem = strokesContainer.querySelector(`#${strokePathElemId}`) as SVGPathElement;
+      if (!stroke || stroke.points.length <= 0) return; // this should not happen but in case
+      const strokePathElemId = `${prefix}${strokeId}`;
+      let strokePathElem = Array.from(strokesContainer.children).find((c) => c.getAttribute("id") === strokePathElemId) as SVGPathElement | undefined;
       if (!strokePathElem) {
         strokePathElem = document.createElementNS(XML_NS, "path");
         strokePathElem.setAttribute("fill", "none");
