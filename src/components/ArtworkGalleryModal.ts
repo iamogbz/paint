@@ -235,8 +235,7 @@ export class ArtworkGalleryModal extends SignalElement {
 
                       <!-- Progress Bar -->
                       <div style="flex: 1; min-width: 80px; max-width: 180px; display: flex; flex-direction: column; gap: 0.25rem;">
-                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.625rem; font-weight: 900; color: #4A2810;">
-                          <span>${correctlyFilled}/${regionCount}</span>
+                        <div style="display: flex; justify-content: end; align-items: center; font-size: 0.625rem; font-weight: 900; color: #4A2810;">
                           <span>${percent}%</span>
                         </div>
                         <div style="width: 100%; height: 8px; background-color: #E5E5E5; border: 1.5px solid #000000; border-radius: 9999px; overflow: hidden; position: relative;">

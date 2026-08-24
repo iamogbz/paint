@@ -607,6 +607,8 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
       neighbourRegionIds: sampledData?.adjacencyGraph.get(fillRegionId) || new Set<string>(),
       boundingBox: { width, height, x, y },
     };
+    fillElement.setAttribute("data-bbox", `${width.toFixed(2)},${height.toFixed(2)},${x.toFixed(2)},${y.toFixed(2)}`);
+
     if (elementFill === "none") {
       // element was specifically instructed to not have a fill
       // still we add the region and assign it a transparent target fill
@@ -617,6 +619,7 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
       regionsCurrentFillInfo.set(fillRegionId, TRANSPARENT_HEX);
       colorsAssignedToRegions.get(TRANSPARENT_HEX)!.add(fillRegionId);
       colorsFilledInRegions.get(TRANSPARENT_HEX)!.add(fillRegionId);
+      fillElement.setAttribute("assigned-fill", TRANSPARENT_HEX);
     } else {
       let fillColor: string;
       if (sampledData && sampledData.regionColors.has(fillRegionId)) {
@@ -635,6 +638,7 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
       regionsCurrentFillInfo.set(fillRegionId, PAINTABLE_REGION_HEX);
       colorsAssignedToRegions.get(fillColor)!.add(fillRegionId);
       colorsFilledInRegions.get(PAINTABLE_REGION_HEX)!.add(fillRegionId);
+      fillElement.setAttribute("assigned-fill", fillColor);
     }
 
     // prepare for blank rendering colors will be applied afterwards
@@ -695,22 +699,34 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
       const region = regionsDrawingInfo.get(id);
       if (region) {
         neighbours.forEach((nId: string) => region.neighbourRegionIds.add(nId));
+        const el = regionSVGElements.get(id);
+        if (el) {
+          el.setAttribute("data-neighbors", Array.from(region.neighbourRegionIds).join(","));
+        }
       }
     }
   } catch (e) {
     console.error("Failed to compute region neighbors", e);
   }
 
+  const artworkId = `art-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`;
+  const now = Date.now();
+
+  renderNode.setAttribute("data-id", artworkId);
+  renderNode.setAttribute("data-name", artworkName);
+  renderNode.setAttribute("data-created-at", now.toString());
+  renderNode.setAttribute("data-modified-at", now.toString());
+
   const artwork: ProcessedArtwork = {
-    id: `art-${Date.now()}-${Math.random().toString(36).substring(2, 6)}`,
+    id: artworkId,
     name: artworkName,
     originalDataUrl: imageSrc,
     cartoonDataUrl: "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgDoc.outerHTML))),
     cartoonSVG: renderNode.outerHTML,
     width,
     height,
-    createdAt: Date.now(),
-    modifiedAt: Date.now(),
+    createdAt: now,
+    modifiedAt: now,
     /** A color can existing in here without a any region e.g. custom added colors */
     colorsAssignedToRegions,
     regionsDrawingInfo,
@@ -729,12 +745,160 @@ export function renderArtworkToSVG(artwork: ProcessedArtwork) {
   return svgElem;
 }
 
+export function serializeArtworkToSvg(artwork: ProcessedArtwork): string {
+  const svgElem = renderArtworkToSVG(artwork);
+  return svgElem.outerHTML;
+}
+
+export function hydrateArtworkFromSvg(svgString: string, fallback?: Partial<ProcessedArtwork>): ProcessedArtwork {
+  const svgElem = parseSVG(svgString) as SVGSVGElement;
+  const viewBox = svgElem.viewBox?.baseVal;
+  const widthAttr = parseFloat(svgElem.getAttribute("width") || "");
+  const heightAttr = parseFloat(svgElem.getAttribute("height") || "");
+
+  const width = (!isNaN(widthAttr) && widthAttr > 0 ? widthAttr : viewBox?.width) || fallback?.width || FALLBACK_IMAGE_SIZE_PX;
+  const height = (!isNaN(heightAttr) && heightAttr > 0 ? heightAttr : viewBox?.height) || fallback?.height || FALLBACK_IMAGE_SIZE_PX;
+
+  const id = fallback?.id || svgElem.getAttribute("data-id") || `art-${Date.now()}`;
+  const name = fallback?.name || svgElem.getAttribute("data-name") || "Untitled";
+  const createdAt = fallback?.createdAt || Number(svgElem.getAttribute("data-created-at")) || Date.now();
+  const modifiedAt = fallback?.modifiedAt || Number(svgElem.getAttribute("data-modified-at")) || Date.now();
+  const originalDataUrl = fallback?.originalDataUrl || "";
+  const cartoonDataUrl = fallback?.cartoonDataUrl || "";
+
+  const colorsAssignedToRegions = new Map<string, Set<string>>();
+  const colorsFilledInRegions = new Map<string, Set<string>>();
+  const regionsCurrentFillInfo = new Map<string, string>();
+  const regionsDrawingInfo = new Map<string, any>();
+  const brushStrokePaths: ProcessedArtwork["brushStrokePaths"] = {};
+
+  colorsAssignedToRegions.set(TRANSPARENT_HEX, new Set());
+  colorsFilledInRegions.set(TRANSPARENT_HEX, new Set());
+  colorsFilledInRegions.set(PAINTABLE_REGION_HEX, new Set());
+
+  const fillableElements = Array.from(svgElem.querySelectorAll(`[data-region-id], :is(${FILLABLE_SVG_ELEMENTS_SELECTOR})`));
+
+  fillableElements.forEach((el, index) => {
+    if (el.closest("defs")) return;
+
+    const regionId = el.getAttribute("data-region-id") || el.getAttribute("id") || `region-${index}`;
+    const assignedFill = el.getAttribute("assigned-fill") || el.getAttribute("data-assigned-fill") || fallback?.regionsDrawingInfo?.get(regionId)?.fillColor || TRANSPARENT_HEX;
+    const normalizedAssigned = normalizeHex(assignedFill) || TRANSPARENT_HEX;
+
+    const currentFill = el.getAttribute("fill") || fallback?.regionsCurrentFillInfo?.get(regionId) || (normalizedAssigned === TRANSPARENT_HEX ? TRANSPARENT_HEX : PAINTABLE_REGION_HEX);
+    const normalizedCurrent = normalizeHex(currentFill) || PAINTABLE_REGION_HEX;
+
+    let boundingBox: any = null;
+    const bboxAttr = el.getAttribute("data-bbox");
+    if (bboxAttr) {
+      const [w, h, x, y] = bboxAttr.split(",").map(Number);
+      if (!isNaN(w) && !isNaN(h) && !isNaN(x) && !isNaN(y)) {
+        boundingBox = { width: w, height: h, x, y };
+      }
+    }
+    if (!boundingBox && fallback?.regionsDrawingInfo?.has(regionId)) {
+      boundingBox = fallback.regionsDrawingInfo.get(regionId)?.boundingBox ?? null;
+    }
+
+    let neighbourRegionIds = new Set<string>();
+    const neighborsAttr = el.getAttribute("data-neighbors");
+    if (neighborsAttr) {
+      neighborsAttr.split(",").map((s) => s.trim()).filter(Boolean).forEach((nId) => neighbourRegionIds.add(nId));
+    } else if (fallback?.regionsDrawingInfo?.has(regionId)) {
+      neighbourRegionIds = fallback.regionsDrawingInfo.get(regionId)?.neighbourRegionIds ?? new Set();
+    }
+
+    regionsDrawingInfo.set(regionId, {
+      id: regionId,
+      fillColor: normalizedAssigned,
+      neighbourRegionIds,
+      boundingBox,
+    });
+
+    regionsCurrentFillInfo.set(regionId, normalizedCurrent);
+
+    if (!colorsAssignedToRegions.has(normalizedAssigned)) {
+      colorsAssignedToRegions.set(normalizedAssigned, new Set());
+    }
+    colorsAssignedToRegions.get(normalizedAssigned)!.add(regionId);
+
+    if (!colorsFilledInRegions.has(normalizedCurrent)) {
+      colorsFilledInRegions.set(normalizedCurrent, new Set());
+    }
+    colorsFilledInRegions.get(normalizedCurrent)!.add(regionId);
+  });
+
+  // Reconstruct brush strokes from <g id="brush-strokes-${regionId}">
+  const brushContainers = Array.from(svgElem.querySelectorAll('g[id^="brush-strokes-"]'));
+  brushContainers.forEach((container) => {
+    const regionId = container.id.replace("brush-strokes-", "");
+    const strokePaths = Array.from(container.querySelectorAll("path"));
+    if (strokePaths.length === 0) return;
+
+    brushStrokePaths[regionId] = {};
+    strokePaths.forEach((pathElem, idx) => {
+      const strokeId = pathElem.id ? pathElem.id.split("_").pop() || `stroke-${idx}` : `stroke-${idx}`;
+      const stroke = pathElem.getAttribute("stroke") || "#000000";
+      const strokeWidth = parseFloat(pathElem.getAttribute("stroke-width") || "4") || 4;
+      const d = pathElem.getAttribute("d") || "";
+
+      const points: Array<{ x: number; y: number }> = [];
+      const commands = d.match(/[ML]\s*[-+]?[0-9]*\.?[0-9]+\s+[-+]?[0-9]*\.?[0-9]+/gi);
+      if (commands) {
+        commands.forEach((cmd) => {
+          const parts = cmd.substring(1).trim().split(/\s+/).map(Number);
+          if (parts.length >= 2 && !isNaN(parts[0]) && !isNaN(parts[1])) {
+            points.push({ x: parts[0], y: parts[1] });
+          }
+        });
+      }
+
+      if (points.length > 0) {
+        brushStrokePaths[regionId][strokeId] = {
+          points,
+          stroke,
+          strokeWidth,
+        };
+      }
+    });
+  });
+
+  return {
+    id,
+    name,
+    originalDataUrl,
+    cartoonDataUrl,
+    cartoonSVG: svgString,
+    width,
+    height,
+    createdAt,
+    modifiedAt,
+    colorsAssignedToRegions,
+    colorsFilledInRegions,
+    regionsCurrentFillInfo,
+    regionsDrawingInfo,
+    brushStrokePaths,
+  };
+}
+
 export function updateArtworkSvgWithUserPaints(svgElem: SVGSVGElement, artwork: ProcessedArtwork) {
+  if (artwork.id) svgElem.setAttribute("data-id", artwork.id);
+  if (artwork.name) svgElem.setAttribute("data-name", artwork.name);
+  if (artwork.createdAt) svgElem.setAttribute("data-created-at", artwork.createdAt.toString());
+  if (artwork.modifiedAt) svgElem.setAttribute("data-modified-at", artwork.modifiedAt.toString());
+  if (artwork.width) svgElem.setAttribute("width", artwork.width.toString());
+  if (artwork.height) svgElem.setAttribute("height", artwork.height.toString());
+
   artwork.regionsCurrentFillInfo.forEach((currentFill, regionId) => {
     const fillElem = svgElem.querySelector(`[data-region-id="${regionId}"]`) as SVGElement;
     if (!fillElem) return;
     const fill = normalizeHex(currentFill) || TRANSPARENT_HEX;
     fillElem.setAttribute("fill", fill);
+
+    const assigned = artwork.regionsDrawingInfo?.get(regionId)?.fillColor;
+    if (assigned && !fillElem.hasAttribute("assigned-fill")) {
+      fillElem.setAttribute("assigned-fill", assigned);
+    }
 
     const strokesContainer = svgElem.querySelector(`#brush-strokes-${regionId}`) as SVGGElement;
     if (!strokesContainer) return;

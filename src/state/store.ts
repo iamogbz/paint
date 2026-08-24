@@ -1,7 +1,7 @@
 import { signal, computed } from "@lit-labs/signals";
 import { get, set, del } from "idb-keyval";
 import { ProcessedArtwork, ArtworkSummary, UndoHistoryItem } from "../types";
-import { processImageToCartoonPalette } from "../utils/imageProcessor";
+import { processImageToCartoonPalette, serializeArtworkToSvg, hydrateArtworkFromSvg } from "../utils/imageProcessor";
 import { soundEffects } from "../utils/soundEffects";
 import confetti from "canvas-confetti";
 import { copyMapSet, deepCopy } from "../utils/object";
@@ -151,7 +151,8 @@ export async function loadSavedArtworks() {
         const migratedArtworks = migrateAndValidateArtworks(legacyData);
         const summariesMap = new Map<string, ArtworkSummary>();
         for (const [id, artwork] of migratedArtworks.entries()) {
-          await set(getArtworkStorageKey(id), artwork);
+          artwork.cartoonSVG = serializeArtworkToSvg(artwork);
+          await set(getArtworkStorageKey(id), createPersistedArtworkRecord(artwork));
           summariesMap.set(id, createArtworkSummary(artwork));
         }
         metaData = summariesMap;
@@ -220,7 +221,20 @@ function migrateAndValidateSummaries(rawData: any): Map<string, ArtworkSummary> 
   return result;
 }
 
+export function createPersistedArtworkRecord(artwork: ProcessedArtwork) {
+  return {
+    id: artwork.id,
+    cartoonSVG: artwork.cartoonSVG,
+    originalDataUrl: artwork.originalDataUrl,
+    cartoonDataUrl: artwork.cartoonDataUrl,
+  };
+}
+
 function hydrateArtwork(item: any): ProcessedArtwork {
+  if (item.cartoonSVG) {
+    return hydrateArtworkFromSvg(item.cartoonSVG, item);
+  }
+
   return {
     id: item.id,
     name: item.name || "Untitled",
@@ -389,14 +403,16 @@ export async function handleRenameArtwork(id: string, newName: string): Promise<
   if (current?.id === id) {
     current.name = trimmedName;
     current.modifiedAt = summary.modifiedAt;
-    set(getArtworkStorageKey(id), current).catch(() => {});
+    current.cartoonSVG = serializeArtworkToSvg(current);
+    set(getArtworkStorageKey(id), createPersistedArtworkRecord(current)).catch(() => {});
     currentArtworkSignal.set({ ...current });
   } else {
     const artwork = await loadArtworkById(id);
     if (artwork) {
       artwork.name = trimmedName;
       artwork.modifiedAt = summary.modifiedAt;
-      set(getArtworkStorageKey(id), artwork).catch(() => {});
+      artwork.cartoonSVG = serializeArtworkToSvg(artwork);
+      set(getArtworkStorageKey(id), createPersistedArtworkRecord(artwork)).catch(() => {});
     }
   }
 }
@@ -437,6 +453,8 @@ export function flushPendingArtworkSave() {
   pendingPersistArtwork = null;
 
   try {
+    artwork.cartoonSVG = serializeArtworkToSvg(artwork);
+
     const summaries = artworkSummariesSignal.get();
     const existingSummary = summaries.get(artwork.id);
     const updatedSummary = createArtworkSummary(artwork);
@@ -451,7 +469,7 @@ export function flushPendingArtworkSave() {
     artworkIdsSortedSignal.set(sorted);
     artworkSummariesSignal.set(new Map(summaries));
 
-    set(getArtworkStorageKey(artwork.id), artwork).catch((e) => {
+    set(getArtworkStorageKey(artwork.id), createPersistedArtworkRecord(artwork)).catch((e) => {
       console.warn("Could not save to idb", e);
     });
     set(STORAGE_KEY_ARTWORKS_META, summaries).catch((e) => {
