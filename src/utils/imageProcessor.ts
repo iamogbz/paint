@@ -613,6 +613,117 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
   });
   document.body.removeChild(hiddenContainer);
 
+  // Merge small regions (width < 2 || height < 2 || area < 8)
+  let mergedAny = true;
+  while (mergedAny) {
+    mergedAny = false;
+    const regionsToRemove = new Set<string>();
+
+    for (let i = 0; i < regionBounds.length; i++) {
+      const region = regionBounds[i];
+      if (regionsToRemove.has(region.id)) continue;
+
+      const el = regionSVGElements.get(region.id);
+      if (!el || el.tagName.toLowerCase() !== "path") continue;
+
+      const w = region.boundingBox.width;
+      const h = region.boundingBox.height;
+      if (w < 2 || h < 2 || w * h < 8) {
+        // Find a neighbor
+        let targetId: string | null = null;
+
+        // Prefer topological adjacency graph if available
+        if (sampledData && sampledData.adjacencyGraph.has(region.id)) {
+          const neighbors = sampledData.adjacencyGraph.get(region.id)!;
+          for (const n of neighbors) {
+            const nEl = regionSVGElements.get(n);
+            if (!regionsToRemove.has(n) && nEl && nEl.tagName.toLowerCase() === "path") {
+              targetId = n;
+              break;
+            }
+          }
+        }
+
+        // Fallback to bounding box overlap/proximity
+        if (!targetId) {
+          for (let j = 0; j < regionBounds.length; j++) {
+            if (i === j || regionsToRemove.has(regionBounds[j].id)) continue;
+            const r2 = regionBounds[j];
+            const nEl = regionSVGElements.get(r2.id);
+            if (!nEl || nEl.tagName.toLowerCase() !== "path") continue;
+
+            // check if boxes overlap or touch (with 1px tolerance)
+            const b1 = region.boundingBox;
+            const b2 = r2.boundingBox;
+            if (!(b1.x > b2.x + b2.width + 1 ||
+                  b1.x + b1.width + 1 < b2.x ||
+                  b1.y > b2.y + b2.height + 1 ||
+                  b1.y + b1.height + 1 < b2.y)) {
+              targetId = r2.id;
+              break;
+            }
+          }
+        }
+
+        if (targetId) {
+          const targetEl = regionSVGElements.get(targetId)!;
+          const dA = el.getAttribute("d") || "";
+          const dB = targetEl.getAttribute("d") || "";
+          targetEl.setAttribute("d", `${dB} ${dA}`);
+
+          // Update target bounding box
+          const b1 = region.boundingBox;
+          const b2 = regionBounds.find(r => r.id === targetId)!.boundingBox;
+          const minX = Math.min(b1.x, b2.x);
+          const minY = Math.min(b1.y, b2.y);
+          const maxX = Math.max(b1.x + b1.width, b2.x + b2.width);
+          const maxY = Math.max(b1.y + b1.height, b2.y + b2.height);
+          b2.x = minX;
+          b2.y = minY;
+          b2.width = maxX - minX;
+          b2.height = maxY - minY;
+          targetEl.setAttribute("data-bbox", `${b2.width.toFixed(2)},${b2.height.toFixed(2)},${b2.x.toFixed(2)},${b2.y.toFixed(2)}`);
+
+          // Remove small region
+          el.remove();
+          regionSVGElements.delete(region.id);
+          regionsToRemove.add(region.id);
+          mergedAny = true;
+
+          // Update adjacency graph
+          if (sampledData && sampledData.adjacencyGraph.has(region.id)) {
+            const neighbors = sampledData.adjacencyGraph.get(region.id)!;
+            const targetNeighbors = sampledData.adjacencyGraph.get(targetId);
+            if (targetNeighbors) {
+              neighbors.forEach(n => {
+                if (n !== targetId) targetNeighbors.add(n);
+              });
+            }
+            // Remove from other neighbors and redirect to target
+            sampledData.adjacencyGraph.forEach((ns, nid) => {
+              if (ns.has(region.id)) {
+                ns.delete(region.id);
+                if (nid !== targetId && !regionsToRemove.has(nid)) {
+                  ns.add(targetId!);
+                }
+              }
+            });
+            sampledData.adjacencyGraph.delete(region.id);
+          }
+        }
+      }
+    }
+
+    if (mergedAny) {
+      // Filter out removed regions from regionBounds
+      for (let i = regionBounds.length - 1; i >= 0; i--) {
+        if (regionsToRemove.has(regionBounds[i].id)) {
+          regionBounds.splice(i, 1);
+        }
+      }
+    }
+  }
+
   // remove all style elements after processing of layout and colors is done.
   renderNode.querySelectorAll("style").forEach((elem) => elem.remove());
   // remove all other elements from the perserved SVG
