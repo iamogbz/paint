@@ -993,6 +993,10 @@ export class EaselBoard extends SignalElement {
 
       if (guideLayer) {
         const guideSvg = guideLayer.querySelector("svg");
+        if (guideSvg) {
+          guideSvg.setAttribute("width", "100%");
+          guideSvg.setAttribute("height", "100%");
+        }
         if (guideSvg && currentArtwork) {
           const livePathId = "live-brush-stroke";
           let livePath = guideSvg.querySelector(`#${livePathId}`) as SVGPathElement;

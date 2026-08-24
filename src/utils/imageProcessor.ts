@@ -661,9 +661,9 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     renderNode.setAttribute("viewBox", `0 0 ${width} ${height}`);
   }
 
-  // ensure final svg scales to container;
-  renderNode.setAttribute("height", "100%");
-  renderNode.setAttribute("width", "100%");
+  // set full width and height on cartoonSVG
+  renderNode.setAttribute("width", width.toString());
+  renderNode.setAttribute("height", height.toString());
 
   // add clip paths and containers for brush strokes
   const brushStrokeDefElem = document.createElement("defs");
@@ -742,6 +742,8 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
 export function renderArtworkToSVG(artwork: ProcessedArtwork) {
   const svgElem = parseSVG(artwork.cartoonSVG) as SVGSVGElement;
   updateArtworkSvgWithUserPaints(svgElem, artwork);
+  if (artwork.width) svgElem.setAttribute("width", artwork.width.toString());
+  if (artwork.height) svgElem.setAttribute("height", artwork.height.toString());
   return svgElem;
 }
 
@@ -886,8 +888,8 @@ export function updateArtworkSvgWithUserPaints(svgElem: SVGSVGElement, artwork: 
   if (artwork.name) svgElem.setAttribute("data-name", artwork.name);
   if (artwork.createdAt) svgElem.setAttribute("data-created-at", artwork.createdAt.toString());
   if (artwork.modifiedAt) svgElem.setAttribute("data-modified-at", artwork.modifiedAt.toString());
-  if (artwork.width) svgElem.setAttribute("width", artwork.width.toString());
-  if (artwork.height) svgElem.setAttribute("height", artwork.height.toString());
+  svgElem.setAttribute("width", "100%");
+  svgElem.setAttribute("height", "100%");
 
   artwork.regionsCurrentFillInfo.forEach((currentFill, regionId) => {
     const fillElem = svgElem.querySelector(`[data-region-id="${regionId}"]`) as SVGElement;
