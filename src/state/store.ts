@@ -61,8 +61,45 @@ export const footerStyleSignal = computed(() => ({
   color: "#4A2810",
 }));
 
+export function countCorrectlyFilledRegions(art: ProcessedArtwork): { correct: number; total: number } {
+  if (!art) return { correct: 0, total: 0 };
+  let correct = 0;
+  let total = 0;
+
+  if (art.regionsDrawingInfo && art.regionsDrawingInfo.size > 0) {
+    for (const [regionId, info] of art.regionsDrawingInfo.entries()) {
+      if (!info.fillColor || info.fillColor === TRANSPARENT_HEX) continue;
+      total++;
+      const currentFill = art.regionsCurrentFillInfo?.get(regionId);
+      const hasBrush = Object.keys(art.brushStrokePaths?.[regionId] ?? {}).length > 0;
+      if (currentFill === info.fillColor && !hasBrush) {
+        correct++;
+      }
+    }
+    return { correct, total };
+  }
+
+  if (art.colorsAssignedToRegions) {
+    const dirtyRegions = new Set(
+      Array.from(art.regionsCurrentFillInfo?.keys() ?? []).filter(
+        (regionId) => Object.keys(art.brushStrokePaths?.[regionId] ?? {}).length > 0
+      )
+    );
+    for (const [hexCode, assignedSet] of art.colorsAssignedToRegions.entries()) {
+      if (hexCode === TRANSPARENT_HEX) continue;
+      total += assignedSet.size;
+      const filledSet = art.colorsFilledInRegions?.get(hexCode) ?? new Set();
+      correct += assignedSet.difference(dirtyRegions).intersection(filledSet).size;
+    }
+    return { correct, total };
+  }
+
+  return { correct: 0, total: 0 };
+}
+
 export function createArtworkSummary(art: ProcessedArtwork, existingThumbnail?: string): ArtworkSummary {
-  const regionCount = art.regionsCurrentFillInfo?.size ?? art.regionsDrawingInfo?.size ?? 0;
+  const { correct: correctlyFilledRegionCount, total: paintableRegionCount } = countCorrectlyFilledRegions(art);
+  const regionCount = paintableRegionCount || (art.regionsCurrentFillInfo?.size ?? art.regionsDrawingInfo?.size ?? 0);
   const usedColorsByCount = art.colorsAssignedToRegions
     ? Array.from(art.colorsAssignedToRegions.entries())
         .map(([hexCode, regionIds]) => [regionIds.size, hexCode] as const)
@@ -86,6 +123,7 @@ export function createArtworkSummary(art: ProcessedArtwork, existingThumbnail?: 
     createdAt: art.createdAt,
     modifiedAt: art.modifiedAt,
     regionCount,
+    correctlyFilledRegionCount,
     usedColorsCount: usedColorsSorted.length,
     colorsToDisplay,
     thumbnailSvgDataUrl,
@@ -172,6 +210,7 @@ function migrateAndValidateSummaries(rawData: any): Map<string, ArtworkSummary> 
       createdAt: item.createdAt || Date.now(),
       modifiedAt: item.modifiedAt || Date.now(),
       regionCount: item.regionCount || 0,
+      correctlyFilledRegionCount: item.correctlyFilledRegionCount || 0,
       usedColorsCount: item.usedColorsCount || 0,
       colorsToDisplay: Array.isArray(item.colorsToDisplay) ? item.colorsToDisplay : [],
       thumbnailSvgDataUrl: item.thumbnailSvgDataUrl || "",

@@ -129,6 +129,10 @@ export class ArtworkGalleryModal extends SignalElement {
                 minute: "2-digit",
               });
               const regionCount = art.regionCount;
+              const correctlyFilled = Math.min(regionCount, art.correctlyFilledRegionCount ?? 0);
+              const isCompleted = regionCount > 0 && correctlyFilled >= regionCount;
+              const progressRatio = regionCount > 0 ? correctlyFilled / regionCount : 0;
+              const percent = Math.round(progressRatio * 100);
               const colorsToDisplay = art.colorsToDisplay;
 
               return html`
@@ -224,12 +228,25 @@ export class ArtworkGalleryModal extends SignalElement {
                           handleSelectArtworkById(art.id);
                           isGalleryOpenSignal.set(false);
                         }}
-                        style="padding: 0.375rem 0.75rem; border-radius: 16px; font-size: 0.75rem; font-weight: 900; border: 2.5px solid #000000; display: flex; align-items: center; gap: 0.25rem; text-transform: uppercase; transition: all 0.15s ease; box-shadow: 2px 2px 0px 0px #000000; background-color: ${isActive ? "#E63946" : "#FFD166"}; color: ${isActive ? "#FFFFFF" : "#000000"}; cursor: pointer;"
+                        style="padding: 0.375rem 0.75rem; border-radius: 16px; font-size: 0.75rem; font-weight: 900; border: 2.5px solid #000000; display: flex; align-items: center; gap: 0.25rem; text-transform: uppercase; transition: all 0.15s ease; box-shadow: 2px 2px 0px 0px #000000; background-color: ${isActive ? "#E63946" : "#FFD166"}; color: ${isActive ? "#FFFFFF" : "#000000"}; cursor: pointer; flex-shrink: 0;"
                       >
-                        ${iconCheckCircle2(14, isActive ? "#FFFFFF" : "#000000")} ${isActive ? "Resume" : "Display"}
+                        ${iconCheckCircle2(14, isActive ? "#FFFFFF" : "#000000")} ${isCompleted ? "Display" : "Resume"}
                       </button>
 
-                      <div style="display: flex; align-items: center; gap: 0.375rem;">
+                      <!-- Progress Bar -->
+                      <div style="flex: 1; min-width: 80px; max-width: 180px; display: flex; flex-direction: column; gap: 0.25rem;">
+                        <div style="display: flex; justify-content: space-between; align-items: center; font-size: 0.625rem; font-weight: 900; color: #4A2810;">
+                          <span>${correctlyFilled}/${regionCount}</span>
+                          <span>${percent}%</span>
+                        </div>
+                        <div style="width: 100%; height: 8px; background-color: #E5E5E5; border: 1.5px solid #000000; border-radius: 9999px; overflow: hidden; position: relative;">
+                          <div
+                            style="width: ${percent}%; height: 100%; background-color: ${isCompleted ? "#06D6A0" : "#E63946"}; border-radius: 9999px; transition: width 0.3s ease;"
+                          ></div>
+                        </div>
+                      </div>
+
+                      <div style="display: flex; align-items: center; gap: 0.375rem; flex-shrink: 0;">
                         <!-- Download -->
                         <button
                           @click=${async () => {

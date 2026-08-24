@@ -24,6 +24,7 @@ export interface ArtworkSummary {
   createdAt: number;
   modifiedAt: number;
   regionCount: number;
+  correctlyFilledRegionCount: number;
   usedColorsCount: number;
   colorsToDisplay: string[];
   thumbnailSvgDataUrl: string;
