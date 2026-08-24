@@ -480,6 +480,23 @@ function sampleAndClusterRegionColors(
   return { regionColors, adjacencyGraph };
 }
 
+function absolutizePathStart(d: string): string {
+  d = d.trim();
+  if (!d.startsWith('m')) return d;
+  
+  // match 'm' followed by two floats.
+  const match = d.match(/^m\s*([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)\s*(?:,|\s+)?\s*([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)([\s\S]*)$/);
+  if (match) {
+    let rest = match[3];
+    // if rest doesn't start with a letter, insert relative lineto command
+    if (rest.trim().length > 0 && !/^[a-zA-Z]/.test(rest.trim())) {
+      rest = ' l ' + rest;
+    }
+    return `M ${match[1]} ${match[2]}${rest}`;
+  }
+  return d;
+}
+
 export async function processImageToCartoonPalette(imageSrc: string, artworkName: string): Promise<ProcessedArtwork> {
   const maybeImage = await loadImage(imageSrc);
 
@@ -674,8 +691,8 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
 
         if (targetId) {
           const targetEl = regionSVGElements.get(targetId)!;
-          const dA = el.getAttribute("d") || "";
-          const dB = targetEl.getAttribute("d") || "";
+          const dA = absolutizePathStart(el.getAttribute("d") || "");
+          const dB = absolutizePathStart(targetEl.getAttribute("d") || "");
           targetEl.setAttribute("d", `${dB} ${dA}`);
 
           // Update target bounding box
@@ -766,8 +783,8 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
 
       if (targetId) {
         const targetEl = regionSVGElements.get(targetId)!;
-        const dA = el.getAttribute("d") || "";
-        const dB = targetEl.getAttribute("d") || "";
+        const dA = absolutizePathStart(el.getAttribute("d") || "");
+        const dB = absolutizePathStart(targetEl.getAttribute("d") || "");
         targetEl.setAttribute("d", `${dB} ${dA}`);
 
         // Update target bounding box
