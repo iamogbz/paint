@@ -50,23 +50,6 @@ export class RadialColorPickerModal extends SignalElement {
   };
 
   private drawWheelCanvas() {
-    const isOpen = isColorPickerOpenSignal.get();
-    if (isOpen && !this.isOpen) {
-      this.isOpen = true;
-      // set the wheel to the current highlighted color by default
-      const activeColor = activeHighlightColorSignal.get();
-      if (activeColor) {
-        const rgba = hexToRgb(activeColor);
-        if (rgba) {
-          const [r, g, b] = rgba;
-          const [h, s, v] = rgbToHsv(r, g, b);
-          this.hue = h;
-          this.sat = s;
-          this.val = v;
-        }
-      }
-    }
-
     const canvas = this.renderRoot?.querySelector("#radial-color-canvas") as HTMLCanvasElement;
     if (!canvas) return;
     const ctx = canvas.getContext("2d");
@@ -235,6 +218,23 @@ export class RadialColorPickerModal extends SignalElement {
   render() {
     const isOpen = isColorPickerOpenSignal.get();
     if (!isOpen) return html``;
+
+    if (isOpen && !this.isOpen) {
+      this.isOpen = true;
+      // set the wheel to the current highlighted color by default
+      const activeColor = activeHighlightColorSignal.get();
+      if (activeColor) {
+        const rgba = hexToRgb(activeColor);
+        if (rgba) {
+          const [r, g, b] = rgba;
+          const [h, s, v] = rgbToHsv(r, g, b);
+          this.hue = h;
+          this.sat = s;
+          this.val = v;
+          this.hexInput = activeColor.substring(0, 7);
+        }
+      }
+    }
 
     const [r, g, b] = hsvToRgb(this.hue, this.sat, this.val);
     const currentHex = rgbToHex(r, g, b);
