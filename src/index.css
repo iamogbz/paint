@@ -54,7 +54,7 @@ button {
 
 .animated-hue {
   /* eg: fill: hsl(var(--hue), 80%, 50%); */
-  animation: hue-loop 5s linear infinite;
+  animation: hue-loop 2s linear infinite;
 }
 
 /* 3. Smoothly cycle the number from 0 to 360 */
