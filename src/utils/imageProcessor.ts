@@ -1,4 +1,4 @@
-import { FALLBACK_IMAGE_SIZE_PX, FILLABLE_SVG_ELEMENTS_SELECTOR, PAINTABLE_REGION_HEX, TRANSPARENT_HEX } from "./constants.js";
+import { COLOR_COLLAPSE_DELTA_E_THRESHOLD, FALLBACK_IMAGE_SIZE_PX, FILLABLE_SVG_ELEMENTS_SELECTOR, PAINTABLE_REGION_HEX, TRANSPARENT_HEX } from "./constants.js";
 import { processingImageHeightSignal, processingImageWidthSignal } from "../state/store.js";
 import { MutableMap, ProcessedArtwork } from "../types";
 import { getHexCode, normalizeHex, rgbToHex } from "./color.js";
@@ -416,6 +416,91 @@ function sampleAndClusterRegionColors(
       };
       clusters.push(newCluster);
       regionColors.set(item.id, hex);
+    }
+  }
+
+  // 5. Collapse colors within perceptual distance threshold (< 1.0) into their average
+  interface MergeGroup {
+    originalColors: Array<{ r: number; g: number; b: number; lab: [number, number, number] }>;
+    avgR: number;
+    avgG: number;
+    avgB: number;
+    avgLab: [number, number, number];
+    assignedRegionIds: Set<string>;
+  }
+
+  const mergeGroups: MergeGroup[] = clusters.map((c) => ({
+    originalColors: [{ r: c.r, g: c.g, b: c.b, lab: c.lab }],
+    avgR: c.r,
+    avgG: c.g,
+    avgB: c.b,
+    avgLab: c.lab,
+    assignedRegionIds: new Set(c.assignedRegionIds),
+  }));
+
+  let merged = true;
+  while (merged) {
+    merged = false;
+    let bestPair: [number, number] | null = null;
+    let minDistance = Infinity;
+
+    for (let i = 0; i < mergeGroups.length; i++) {
+      for (let j = i + 1; j < mergeGroups.length; j++) {
+        const groupA = mergeGroups[i];
+        const groupB = mergeGroups[j];
+        const dist = deltaE(groupA.avgLab, groupB.avgLab);
+
+        if (dist < minDistance) {
+          const combinedOriginals = [...groupA.originalColors, ...groupB.originalColors];
+          const count = combinedOriginals.length;
+          const sumR = combinedOriginals.reduce((acc, col) => acc + col.r, 0);
+          const sumG = combinedOriginals.reduce((acc, col) => acc + col.g, 0);
+          const sumB = combinedOriginals.reduce((acc, col) => acc + col.b, 0);
+          const avgR = Math.round(sumR / count);
+          const avgG = Math.round(sumG / count);
+          const avgB = Math.round(sumB / count);
+          const avgLab = rgbToLab(avgR, avgG, avgB);
+
+          const allWithinThreshold = combinedOriginals.every(
+            (col) => deltaE(col.lab, avgLab) < COLOR_COLLAPSE_DELTA_E_THRESHOLD
+          );
+
+          if (allWithinThreshold) {
+            minDistance = dist;
+            bestPair = [i, j];
+          }
+        }
+      }
+    }
+
+    if (bestPair !== null) {
+      const [i, j] = bestPair;
+      const groupA = mergeGroups[i];
+      const groupB = mergeGroups[j];
+      const combinedOriginals = [...groupA.originalColors, ...groupB.originalColors];
+      const count = combinedOriginals.length;
+      const avgR = Math.round(combinedOriginals.reduce((acc, col) => acc + col.r, 0) / count);
+      const avgG = Math.round(combinedOriginals.reduce((acc, col) => acc + col.g, 0) / count);
+      const avgB = Math.round(combinedOriginals.reduce((acc, col) => acc + col.b, 0) / count);
+      const avgLab = rgbToLab(avgR, avgG, avgB);
+
+      groupA.originalColors = combinedOriginals;
+      groupA.avgR = avgR;
+      groupA.avgG = avgG;
+      groupA.avgB = avgB;
+      groupA.avgLab = avgLab;
+      groupB.assignedRegionIds.forEach((id) => groupA.assignedRegionIds.add(id));
+
+      mergeGroups.splice(j, 1);
+      merged = true;
+    }
+  }
+
+  // Update regionColors with collapsed average hex values
+  for (const group of mergeGroups) {
+    const hex = rgbToHex(group.avgR, group.avgG, group.avgB);
+    for (const regionId of group.assignedRegionIds) {
+      regionColors.set(regionId, hex);
     }
   }
 

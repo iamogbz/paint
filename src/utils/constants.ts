@@ -13,6 +13,7 @@ export const UNSHARP_MASK_AMOUNT = 0.6;
 export const BILATERAL_SPATIAL_SIGMA = 1.5;
 export const BILATERAL_RANGE_SIGMA = 25.0;
 export const SHARPEN_AMOUNT = 0.5;
+export const COLOR_COLLAPSE_DELTA_E_THRESHOLD = 1.0;
 
 const fillableSvgElements = ["circle", "ellipse", "path", "polyline", "polygon", "rect", "text", "textPath", "tspan"] as const;
 export const FILLABLE_SVG_ELEMENTS = new Set(fillableSvgElements);

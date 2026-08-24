@@ -1,7 +1,7 @@
 import path from "path";
 import fs from "fs";
 import { execSync } from "child_process";
-import { defineConfig } from "vite";
+import { defineConfig, loadEnv, Plugin } from "vite";
 import { ManifestOptions, VitePWA } from "vite-plugin-pwa";
 import basicSsl from "@vitejs/plugin-basic-ssl";
 import manifestJson from "./public/manifest.json";
@@ -15,25 +15,25 @@ const getCommitHash = () => {
   }
 };
 
-const fileToLink = (f) => `<li><a href="/daily-challenge/${f}" style="color: blue; text-decoration: underline;">${f}</a></li>`;
+const fileToLink = (f: string) => `<li><a href="/daily-challenge/${f}" style="color: blue; text-decoration: underline;">${f}</a></li>`;
 const getHtml = () => {
   const dirPath = path.resolve(__dirname, "public/daily-challenge");
   if (fs.existsSync(dirPath)) {
     const files = fs.readdirSync(dirPath);
     const fileLinks = files
-      .filter((f) => f !== "index.html")
+      .filter((f: string) => f !== "index.html")
       .map(fileToLink)
       .join("");
     return `<!DOCTYPE html><html><head><title>Daily Challenge Index</title><style>body { font-family: system-ui, sans-serif; padding: 2rem; background: #fff; color: #000; }</style></head><body><h1>Daily Challenges</h1><ul>${fileLinks}</ul></body></html>`;
   }
 };
 
-function directoryListingPlugin() {
+function directoryListingPlugin(): Plugin {
   const targetPath = "/daily-challenge";
   return {
     name: "directory-listing",
-    configureServer(server) {
-      server.middlewares.use((req, res, next) => {
+    configureServer(server: any) {
+      server.middlewares.use((req: any, res: any, next: any) => {
         if (!req.url) return next();
 
         // match exact or with trailing slash
@@ -44,12 +44,12 @@ function directoryListingPlugin() {
             res.setHeader("Content-Type", "text/html");
             res.end(html);
             return;
-          }
+            }
         }
         next();
       });
     },
-    generateBundle() {
+    generateBundle(this: any) {
       const html = getHtml();
       if (html) {
         this.emitFile({
@@ -62,13 +62,20 @@ function directoryListingPlugin() {
   };
 }
 
-export default defineConfig(() => {
+export default defineConfig(({ mode }) => {
+  // Load environment variables based on the current mode
+  const env = loadEnv(mode, process.cwd(), "");
+
+  // Check your flag (e.g., VITE_USE_SSL=true inside your .env file)
+  const useSsl = env.VITE_USE_SSL === "true";
+
   return {
     define: {
       __COMMIT_HASH__: JSON.stringify(getCommitHash()),
     },
     plugins: [
-      basicSsl(),
+      // Conditionally inject the plugin into the array
+      ...(useSsl ? [basicSsl()] : []),
       directoryListingPlugin(),
       VitePWA({
         registerType: "autoUpdate",

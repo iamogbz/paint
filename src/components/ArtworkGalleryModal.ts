@@ -2,7 +2,18 @@ import { html } from "lit";
 import { customElement, state } from "lit/decorators.js";
 import { SignalElement } from "../utils/SignalElement";
 import { ProcessedArtwork, ArtworkSummary } from "../types";
-import { isGalleryOpenSignal, artworkSummariesSignal, currentArtworkSignal, handleSelectArtwork, handleSelectArtworkById, handleDeleteArtwork, handleRenameArtwork, artworkIdsSortedSignal, loadArtworkById, flushPendingArtworkSave } from "../state/store";
+import {
+  isGalleryOpenSignal,
+  artworkSummariesSignal,
+  currentArtworkSignal,
+  handleSelectArtwork,
+  handleSelectArtworkById,
+  handleDeleteArtwork,
+  handleRenameArtwork,
+  artworkIdsSortedSignal,
+  loadArtworkById,
+  flushPendingArtworkSave,
+} from "../state/store";
 import { iconGalleryVertical, iconX, iconCheckCircle2, iconDownload, iconTrash2, iconImage, iconEdit2 } from "./icons";
 import { transparentImgCss } from "../utils/constants";
 import "./DownloadPopup";
@@ -121,7 +132,9 @@ export class ArtworkGalleryModal extends SignalElement {
               const colorsToDisplay = art.colorsToDisplay;
 
               return html`
-                <div style="padding: 0.75rem; border-radius: 24px; border: ${isActive ? "3px solid #E63946" : "3px solid #000000"}; box-shadow: ${isActive ? "0px 4px 0px 0px #E63946" : "0px 3px 0px 0px #000000"}; display: flex; flex-direction: row; align-items: center; gap: 0.75rem; background-color: #FAFAFA; flex-wrap: wrap; content-visibility: auto; contain-intrinsic-size: 140px;">
+                <div
+                  style="padding: 0.75rem; border-radius: 24px; border: ${isActive ? "3px solid #E63946" : "3px solid #000000"}; box-shadow: ${isActive ? "0px 4px 0px 0px #E63946" : "0px 3px 0px 0px #000000"}; display: flex; flex-direction: row; align-items: center; gap: 0.75rem; background-color: #FAFAFA; flex-wrap: wrap; content-visibility: auto; contain-intrinsic-size: 140px;"
+                >
                   <!-- Thumbnail -->
                   <div
                     @click=${() => {
@@ -130,7 +143,13 @@ export class ArtworkGalleryModal extends SignalElement {
                     }}
                     style="width: 7rem; height: 7rem; border-radius: 18px; overflow: hidden; border: 2.5px solid rgba(0, 0, 0, 0.25); position: relative; cursor: pointer; flex-shrink: 0; background-color: rgba(0,0,0,0.05); background-size: 0.5rem 0.5rem; background-image: ${transparentImgCss};"
                   >
-                    <img src="${art.thumbnailSvgDataUrl}" alt="${art.name}" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover;" />
+                    <img
+                      src="${art.thumbnailSvgDataUrl}"
+                      alt="${art.name}"
+                      loading="lazy"
+                      decoding="async"
+                      style="width: 100%; height: 100%; object-fit: cover;"
+                    />
                     ${isActive ? html`<div style="position: absolute; top: 0.375rem; left: 0.375rem; background-color: #E63946; color: #FFFFFF; font-size: 0.625rem; font-weight: 900; padding: 0.125rem 0.5rem; border-radius: 0.75rem; border: 1px solid #FFFFFF; text-transform: uppercase;">ACTIVE</div>` : ""}
                   </div>
 
