@@ -16,6 +16,9 @@
 
 | Daily Challenges | [Art Link](https://pixabay.com/vectors/search/?order=ec)                  |
 | ---------------  | ------------------------------------------------------------------------- |
+| 2026-08-24       | <https://pixabay.com/vectors/rio-de-janeiro-cristo-redentore-10152663/>   |
+| 2026-08-23       | <https://pixabay.com/vectors/music-sound-audio-entry-brick-9249800/>      |
+| 2026-08-22       | <https://pixabay.com/vectors/brazil-brazilian-favela-favelas-10104348/>   |
 | 2026-08-21       | <https://pixabay.com/vectors/river-forest-mountain-landscape-8286407/>    |
 | 2026-08-20       | <https://pixabay.com/vectors/anime-girl-stars-falling-fantasy-9063542/>   |
 | 2026-08-19       | <https://pixabay.com/vectors/mountain-snow-cold-blue-north-9979198/>      |
