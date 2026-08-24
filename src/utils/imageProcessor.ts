@@ -724,6 +724,100 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     }
   }
 
+  // Merge adjacent regions that have the same assigned color
+  let mergedSameColor = true;
+  while (mergedSameColor) {
+    mergedSameColor = false;
+    const regionsToRemove = new Set<string>();
+
+    for (let i = 0; i < regionBounds.length; i++) {
+      const region = regionBounds[i];
+      if (regionsToRemove.has(region.id)) continue;
+
+      const el = regionSVGElements.get(region.id);
+      if (!el || el.tagName.toLowerCase() !== "path") continue;
+
+      const assignedColor = el.getAttribute("assigned-fill");
+      if (!assignedColor) continue;
+
+      let targetId: string | null = null;
+
+      // Find an adjacent region with the same assigned color using the adjacency graph
+      if (sampledData && sampledData.adjacencyGraph.has(region.id)) {
+        const neighbors = sampledData.adjacencyGraph.get(region.id)!;
+        for (const n of neighbors) {
+          const nEl = regionSVGElements.get(n);
+          if (!regionsToRemove.has(n) && nEl && nEl.tagName.toLowerCase() === "path") {
+            const nAssignedColor = nEl.getAttribute("assigned-fill");
+            if (nAssignedColor === assignedColor) {
+              targetId = n;
+              break;
+            }
+          }
+        }
+      }
+
+      if (targetId) {
+        const targetEl = regionSVGElements.get(targetId)!;
+        const dA = el.getAttribute("d") || "";
+        const dB = targetEl.getAttribute("d") || "";
+        targetEl.setAttribute("d", `${dB} ${dA}`);
+
+        // Update target bounding box
+        const b1 = region.boundingBox;
+        const b2 = regionBounds.find((r) => r.id === targetId)!.boundingBox;
+        const minX = Math.min(b1.x, b2.x);
+        const minY = Math.min(b1.y, b2.y);
+        const maxX = Math.max(b1.x + b1.width, b2.x + b2.width);
+        const maxY = Math.max(b1.y + b1.height, b2.y + b2.height);
+        b2.x = minX;
+        b2.y = minY;
+        b2.width = maxX - minX;
+        b2.height = maxY - minY;
+        targetEl.setAttribute(
+          "data-bbox",
+          `${b2.width.toFixed(2)},${b2.height.toFixed(2)},${b2.x.toFixed(2)},${b2.y.toFixed(2)}`
+        );
+
+        // Remove the swallowed region
+        el.remove();
+        regionSVGElements.delete(region.id);
+        regionsToRemove.add(region.id);
+        mergedSameColor = true;
+
+        // Update adjacency graph
+        if (sampledData && sampledData.adjacencyGraph.has(region.id)) {
+          const neighbors = sampledData.adjacencyGraph.get(region.id)!;
+          const targetNeighbors = sampledData.adjacencyGraph.get(targetId);
+          if (targetNeighbors) {
+            neighbors.forEach((n) => {
+              if (n !== targetId) targetNeighbors.add(n);
+            });
+          }
+          // Remove from other neighbors and redirect to target
+          sampledData.adjacencyGraph.forEach((ns, nid) => {
+            if (ns.has(region.id)) {
+              ns.delete(region.id);
+              if (nid !== targetId && !regionsToRemove.has(nid)) {
+                ns.add(targetId!);
+              }
+            }
+          });
+          sampledData.adjacencyGraph.delete(region.id);
+        }
+      }
+    }
+
+    if (mergedSameColor) {
+      // Filter out removed regions from regionBounds
+      for (let i = regionBounds.length - 1; i >= 0; i--) {
+        if (regionsToRemove.has(regionBounds[i].id)) {
+          regionBounds.splice(i, 1);
+        }
+      }
+    }
+  }
+
   // remove all style elements after processing of layout and colors is done.
   renderNode.querySelectorAll("style").forEach((elem) => elem.remove());
   // remove all other elements from the perserved SVG
