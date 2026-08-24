@@ -1,7 +1,7 @@
 import { COLOR_COLLAPSE_DELTA_E_THRESHOLD, FALLBACK_IMAGE_SIZE_PX, FILLABLE_SVG_ELEMENTS_SELECTOR, PAINTABLE_REGION_HEX, TRANSPARENT_HEX } from "./constants.js";
 import { processingImageHeightSignal, processingImageWidthSignal } from "../state/store.js";
 import { MutableMap, ProcessedArtwork } from "../types";
-import { getHexCode, normalizeHex, rgbToHex } from "./color.js";
+import { deltaE, getHexCode, normalizeHex, rgbToHex, rgbToLab } from "./color.js";
 import { getSvgDimensions, parseSVG, SVGFillableElement, XML_NS } from "./html.js";
 import { Options } from "@visioncortex/vtracer";
 
@@ -326,31 +326,6 @@ function sampleAndClusterRegionColors(
   }
 
   // 4. Color Clumping / Palette Clustering with strict Adjacency Graph Constraints
-  // Convert RGB to Lab for accurate perceptual distance
-  function rgbToLab(r: number, g: number, b: number): [number, number, number] {
-    let rN = r / 255;
-    let gN = g / 255;
-    let bN = b / 255;
-    rN = rN > 0.04045 ? Math.pow((rN + 0.055) / 1.055, 2.4) : rN / 12.92;
-    gN = gN > 0.04045 ? Math.pow((gN + 0.055) / 1.055, 2.4) : gN / 12.92;
-    bN = bN > 0.04045 ? Math.pow((bN + 0.055) / 1.055, 2.4) : bN / 12.92;
-
-    const x = (rN * 0.4124 + gN * 0.3576 + bN * 0.1805) / 0.95047;
-    const y = (rN * 0.2126 + gN * 0.7152 + bN * 0.0722) / 1.0;
-    const z = (rN * 0.0193 + gN * 0.1192 + bN * 0.9505) / 1.08883;
-
-    const f = (t: number) => (t > 0.008856 ? Math.cbrt(t) : 7.787 * t + 16 / 116);
-    const fx = f(x);
-    const fy = f(y);
-    const fz = f(z);
-
-    return [116 * fy - 16, 500 * (fx - fy), 200 * (fy - fz)];
-  }
-
-  function deltaE(lab1: [number, number, number], lab2: [number, number, number]): number {
-    return Math.hypot(lab1[0] - lab2[0], lab1[1] - lab2[1], lab1[2] - lab2[2]);
-  }
-
   const regionLabs = rawRgbList.map((item) => rgbToLab(item.r, item.g, item.b));
 
   // Build cluster representatives (palette swatches)
