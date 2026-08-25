@@ -643,7 +643,7 @@ export class EaselBoard extends SignalElement {
     if (!svgMaxSize) {
       console.warn("Attempt to retrieve artwork size failed.");
     }
-    const imageScaleFactor = 4 * (svgMaxSize || 0) / FALLBACK_IMAGE_SIZE_PX;
+    const imageScaleFactor = (svgMaxSize || 0) / 960;
     return Math.max(1, (mult * imageScaleFactor) / this.zoomScale);
   }
 

@@ -138,30 +138,21 @@ export class ArtworkGalleryModal extends SignalElement {
               const colorsToDisplay = art.colorsToDisplay;
 
               return html`
-                <div
-                  style="padding: 0.75rem; border-radius: 24px; border: ${isActive ? "3px solid #E63946" : "3px solid #000000"}; box-shadow: ${isActive ? "0px 4px 0px 0px #E63946" : "0px 3px 0px 0px #000000"}; display: flex; flex-direction: row; align-items: center; gap: 0.75rem; background-color: #FAFAFA; flex-wrap: wrap; content-visibility: auto; contain-intrinsic-size: 140px;"
-                >
+                <div style="padding: 0.75rem; border-radius: 24px; border: ${isActive ? "3px solid #E63946" : "3px solid #000000"}; box-shadow: ${isActive ? "0px 4px 0px 0px #E63946" : "0px 3px 0px 0px #000000"}; display: flex; flex-direction: column; align-items: center; gap: 0.75rem; background-color: #FAFAFA; flex-wrap: wrap; content-visibility: auto; contain-intrinsic-size: 140px;">
                   <!-- Thumbnail -->
-                  <div
-                    @click=${() => {
-                      handleSelectArtworkById(art.id);
-                      isGalleryOpenSignal.set(false);
-                    }}
-                    style="width: 7rem; height: 7rem; border-radius: 18px; overflow: hidden; border: 2.5px solid rgba(0, 0, 0, 0.25); position: relative; cursor: pointer; flex-shrink: 0; background-color: rgba(0,0,0,0.05); background-size: 0.5rem 0.5rem; background-image: ${transparentImgCss};"
-                  >
-                    <img
-                      src="${art.thumbnailSvgDataUrl}"
-                      alt="${art.name}"
-                      loading="lazy"
-                      decoding="async"
-                      style="width: 100%; height: 100%; object-fit: cover;"
-                    />
-                    ${isActive ? html`<div style="position: absolute; top: 0.375rem; left: 0.375rem; background-color: #E63946; color: #FFFFFF; font-size: 0.625rem; font-weight: 900; padding: 0.125rem 0.5rem; border-radius: 0.75rem; border: 1px solid #FFFFFF; text-transform: uppercase;">ACTIVE</div>` : ""}
-                  </div>
-
-                  <!-- Details -->
-                  <div style="flex: 1; min-width: 200px; display: flex; flex-direction: column; justify-content: space-between;">
-                    <div>
+                  <div style="display: flex; flex-direction: row; gap: 0.75rem; align-items: center; width: 100%;">
+                    <div
+                      @click=${() => {
+                        handleSelectArtworkById(art.id);
+                        isGalleryOpenSignal.set(false);
+                      }}
+                      style="width: 7rem; height: 7rem; border-radius: 18px; overflow: hidden; border: 2.5px solid rgba(0, 0, 0, 0.25); position: relative; cursor: pointer; flex-shrink: 0; background-color: rgba(0,0,0,0.05); background-size: 0.5rem 0.5rem; background-image: ${transparentImgCss};"
+                    >
+                        <img src="${art.thumbnailSvgDataUrl}" alt="${art.name}" loading="lazy" decoding="async" style="width: 100%; height: 100%; object-fit: cover;" />
+                      ${isActive ? html`<div style="position: absolute; top: 0.375rem; left: 0.375rem; background-color: #E63946; color: #FFFFFF; font-size: 0.625rem; font-weight: 900; padding: 0.125rem 0.5rem; border-radius: 0.75rem; border: 1px solid #FFFFFF; text-transform: uppercase;">ACTIVE</div>` : ""}
+                    </div>
+                    <!-- Details -->
+                    <div style="flex: 1; min-width: 200px; display: flex; flex-direction: column; justify-content: space-between;">
                       ${this.editingId === art.id
                         ? html`
                             <input
@@ -188,7 +179,7 @@ export class ArtworkGalleryModal extends SignalElement {
                           `
                         : html`
                             <h3
-                              style="display: flex; align-items: center; font-weight: 900; color: #000000; font-size: 1rem; margin: 0; cursor: pointer; width: 100%;"
+                              style="display: flex; align-items: center; font-weight: 900; color: #000000; font-size: 1rem; margin: 0; cursor: pointer; width: 90%;"
                               @click="${() => {
                                 if (!art.name.startsWith("Daily Challenge")) {
                                   this.editingId = art.id;
@@ -218,78 +209,76 @@ export class ArtworkGalleryModal extends SignalElement {
                         ${colorsToDisplay.map((hexCode) => html` <div style="width: 1rem; height: 1rem; border-radius: 9999px; border: 1px solid #000000; background-color: ${hexCode};" title="${hexCode}"></div> `)}
                       </div>
                     </div>
+                  </div>
 
-                    <!-- Actions -->
-                    <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid rgba(0,0,0,0.15);">
-                      <button
-                        @click=${() => {
-                          handleSelectArtworkById(art.id);
-                          isGalleryOpenSignal.set(false);
-                        }}
-                        style="padding: 0.375rem 0.75rem; border-radius: 16px; font-size: 0.75rem; font-weight: 900; border: 2.5px solid #000000; display: flex; align-items: center; gap: 0.25rem; text-transform: uppercase; transition: all 0.15s ease; box-shadow: 2px 2px 0px 0px #000000; background-color: ${isActive ? "#E63946" : "#FFD166"}; color: ${isActive ? "#FFFFFF" : "#000000"}; cursor: pointer; flex-shrink: 0;"
-                      >
-                        ${iconCheckCircle2(14, isActive ? "#FFFFFF" : "#000000")} ${isCompleted ? "Display" : "Resume"}
-                      </button>
+                  <!-- Actions -->
+                  <div style="display: flex; align-items: center; justify-content: space-between; gap: 0.5rem; margin-top: 0.75rem; padding-top: 0.5rem; border-top: 1px solid rgba(0,0,0,0.15); width: 100%;">
+                    <button
+                      @click=${() => {
+                        handleSelectArtworkById(art.id);
+                        isGalleryOpenSignal.set(false);
+                      }}
+                      style="padding: 0.375rem 0.75rem; border-radius: 16px; font-size: 0.75rem; font-weight: 900; border: 2.5px solid #000000; display: flex; align-items: center; gap: 0.25rem; text-transform: uppercase; transition: all 0.15s ease; box-shadow: 2px 2px 0px 0px #000000; background-color: ${isActive ? "#E63946" : "#FFD166"}; color: ${isActive ? "#FFFFFF" : "#000000"}; cursor: pointer; flex-shrink: 0;"
+                    >
+                      ${iconCheckCircle2(14, isActive ? "#FFFFFF" : "#000000")} ${isCompleted ? "Display" : "Resume"}
+                    </button>
 
                       <!-- Progress Bar -->
-                      <div style="flex: 1; max-width: 180px; display: flex; flex-direction: column; gap: 0.25rem;">
-                        <div style="display: flex; justify-content: end; align-items: center; font-size: 0.625rem; font-weight: 900; color: #4A2810;">
-                          <span>${percent}%</span>
-                        </div>
-                        <div style="width: 100%; height: 8px; background-color: #E5E5E5; border: 1.5px solid #000000; border-radius: 9999px; overflow: hidden; position: relative;">
-                          <div
-                            style="width: ${percent}%; height: 100%; background-color: ${isCompleted ? "#06D6A0" : "#E63946"}; border-radius: 9999px; transition: width 0.3s ease;"
-                          ></div>
-                        </div>
+                    <div style="flex: 1; display: flex; flex-direction: column; gap: 0.25rem;">
+                      <div style="display: flex; justify-content: start; align-items: center; font-size: 0.625rem; font-weight: 900; color: #4A2810;">
+                        <span>${percent}%</span>
                       </div>
-
-                      <div style="display: flex; align-items: center; gap: 0.375rem; flex-shrink: 0;">
-                        <!-- Refresh -->
-                        <button
-                          id="gallery-refresh-btn-${art.id}"
-                          @click=${async (e: Event) => {
-                            e.stopPropagation();
-                            if (this.refreshingId === art.id) return;
-                            this.refreshingId = art.id;
-                            try {
-                              await handleRefreshArtwork(art.id);
-                            } finally {
-                              this.refreshingId = null;
-                            }
-                          }}
-                          ?disabled=${this.refreshingId === art.id}
-                          style="padding: 0.5rem; border-radius: 14px; background-color: #FFFFFF; border: 2px solid #000000; color: #000000; box-shadow: 2px 2px 0px 0px #000000; cursor: ${this.refreshingId === art.id ? "not-allowed" : "pointer"}; display: flex; align-items: center; justify-content: center;"
-                          title="Regenerate Artwork"
-                        >
-                          ${this.refreshingId === art.id ? iconLoader2(16, "#000000") : iconRotateCcw(16, "#000000")}
-                        </button>
-
-                        <!-- Download -->
-                        <button
-                          @click=${async () => {
-                            const fullArt = await loadArtworkById(art.id);
-                            if (fullArt) {
-                              this.downloadingArtwork = fullArt;
-                              this.showDownloadPopup = true;
-                            }
-                          }}
-                          style="padding: 0.5rem; border-radius: 14px; background-color: #FFFFFF; border: 2px solid #000000; color: #000000; box-shadow: 2px 2px 0px 0px #000000; cursor: pointer; display: flex; align-items: center; justify-content: center;"
-                          title="Download Artwork"
-                        >
-                          ${iconDownload(16, "#000000")}
-                        </button>
-
-                        <!-- Delete -->
-                        <button
-                          @click=${() => {
-                            handleDeleteArtwork(art.id);
-                          }}
-                          style="padding: 0.5rem; border-radius: 14px; background-color: #FFFFFF; border: 2px solid #000000; color: #000000; box-shadow: 2px 2px 0px 0px #000000; cursor: pointer; display: flex; align-items: center; justify-content: center;"
-                          title="Delete Artwork"
-                        >
-                          ${iconTrash2(16, "#000000")}
-                        </button>
+                      <div style="width: 100%; height: 8px; background-color: #E5E5E5; border: 1.5px solid #000000; border-radius: 9999px; overflow: hidden; position: relative;">
+                        <div style="width: ${percent}%; height: 100%; background-color: ${isCompleted ? "#06D6A0" : "#E63946"}; border-radius: 9999px; transition: width 0.3s ease;"></div>
                       </div>
+                    </div>
+
+                    <div style="display: flex; align-items: center; gap: 0.375rem; flex-shrink: 0;">
+                      <!-- Refresh -->
+                      <button
+                        id="gallery-refresh-btn-${art.id}"
+                        @click=${async (e: Event) => {
+                          e.stopPropagation();
+                          if (this.refreshingId === art.id) return;
+                          this.refreshingId = art.id;
+                          try {
+                            await handleRefreshArtwork(art.id);
+                          } finally {
+                            this.refreshingId = null;
+                          }
+                        }}
+                        ?disabled=${this.refreshingId === art.id}
+                        style="padding: 0.5rem; border-radius: 14px; background-color: #FFFFFF; border: 2px solid #000000; color: #000000; box-shadow: 2px 2px 0px 0px #000000; cursor: ${this.refreshingId === art.id ? "not-allowed" : "pointer"}; display: flex; align-items: center; justify-content: center;"
+                        title="Regenerate Artwork"
+                      >
+                        ${this.refreshingId === art.id ? iconLoader2(16, "#000000") : iconRotateCcw(16, "#000000")}
+                      </button>
+
+                      <!-- Download -->
+                      <button
+                        @click=${async () => {
+                          const fullArt = await loadArtworkById(art.id);
+                          if (fullArt) {
+                            this.downloadingArtwork = fullArt;
+                            this.showDownloadPopup = true;
+                          }
+                        }}
+                        style="padding: 0.5rem; border-radius: 14px; background-color: #FFFFFF; border: 2px solid #000000; color: #000000; box-shadow: 2px 2px 0px 0px #000000; cursor: pointer; display: flex; align-items: center; justify-content: center;"
+                        title="Download Artwork"
+                      >
+                        ${iconDownload(16, "#000000")}
+                      </button>
+
+                      <!-- Delete -->
+                      <button
+                        @click=${() => {
+                          handleDeleteArtwork(art.id);
+                        }}
+                        style="padding: 0.5rem; border-radius: 14px; background-color: #FFFFFF; border: 2px solid #000000; color: #000000; box-shadow: 2px 2px 0px 0px #000000; cursor: pointer; display: flex; align-items: center; justify-content: center;"
+                        title="Delete Artwork"
+                      >
+                        ${iconTrash2(16, "#000000")}
+                      </button>
                     </div>
                   </div>
                 </div>
