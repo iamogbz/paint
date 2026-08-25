@@ -5,6 +5,7 @@ import { activeHighlightColorSignal, copiedHexSignal, currentArtworkSignal, isPr
 import { iconPaintBucket, iconPaintbrush, iconCheck, iconFolderOpen, iconDownload, iconZoomIn, iconZoomOut, iconRotateCcw, iconMove, iconTrash2 } from "./icons";
 import { DROPPER_BUFFER_PX, TRANSPARENT_HEX, transparentImgCss } from "../utils/constants";
 import { soundEffects } from "../utils/soundEffects";
+import { hexToRgb, rgbToHsv } from "../utils/color";
 import { zoom } from "../utils/ui";
 import "./DownloadPopup";
 
@@ -263,7 +264,18 @@ export class PaintingControls extends SignalElement {
           const correctlyFinishedB = expectedTotalB === correctTotalB;
 
           if (correctlyFinishedA === correctlyFinishedB) {
-            return parseInt(hexCodeA.replace("#", ""), 16) - parseInt(hexCodeB.replace("#", ""), 16);
+            const hsvA = rgbToHsv(...hexToRgb(hexCodeA)!);
+            const hsvB = rgbToHsv(...hexToRgb(hexCodeB)!);
+            const hueDiff = (hsvA[0] % 360) - (hsvB[0] % 360);
+            const satDiff = hsvA[1] - hsvB[1];
+            const valDiff = hsvA[2] - hsvB[2];
+            if ((hsvA[2] < 0.1 || hsvB[2] < 0.1) && Math.abs(valDiff) > 0.1) {
+              return valDiff;
+            }
+            if ((hsvA[1] < 0.1 || hsvB[1] < 0.1) && Math.abs(satDiff) > 0.1) {
+              return satDiff;
+            }
+            return hueDiff;
           }
 
           return Number(correctlyFinishedA) - Number(correctlyFinishedB);

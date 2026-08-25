@@ -39,7 +39,7 @@ export function hsvToRgb(h: number, s: number, v: number): [number, number, numb
   return [Math.round((r + m) * 255), Math.round((g + m) * 255), Math.round((b + m) * 255)];
 }
 
-export function rgbToHsv(r: number, g: number, b: number): [number, number, number] {
+export function rgbToHsv(r: number, g: number, b: number, a?: number): [number, number, number] {
   r = Math.max(0, Math.min(255, r)) / 255;
   g = Math.max(0, Math.min(255, g)) / 255;
   b = Math.max(0, Math.min(255, b)) / 255;
@@ -104,19 +104,6 @@ export function normalizeHex(hex?: string | null): string {
     h = h + "FF";
   }
   return h;
-}
-
-export function getColorProperties(hexCode: string) {
-  const rgb = hexToRgb(hexCode);
-  if (!rgb) return { isGray: true, h: 0, s: 0, v: 0 };
-  const [h, s, v] = rgbToHsv(rgb[0], rgb[1], rgb[2]);
-
-  // A color is considered grayscale/achromatic if:
-  // - saturation is extremely low (s < 0.08)
-  // - or it's extremely dark (v < 0.08)
-  // - or it's very pale/light (s < 0.15 and v > 0.9)
-  const isGray = s < 0.08 || v < 0.08 || (s < 0.15 && v > 0.9);
-  return { isGray, h, s, v };
 }
 
 let canvas2dCtx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null = null;
