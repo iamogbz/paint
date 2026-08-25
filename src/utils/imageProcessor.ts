@@ -21,15 +21,32 @@ function getWorker() {
         _callbacks.delete(id);
       }
     };
+    _worker.onerror = (err) => {
+      console.error("Worker error encountered:", err);
+      _callbacks.forEach((cb) => cb.reject(new Error("Worker error occurred during image processing")));
+      _callbacks.clear();
+      _worker?.terminate();
+      _worker = null;
+    };
   }
   return _worker;
 }
 
-function runInWorker(type: string, payload: any): Promise<any> {
+function runInWorker(type: string, payload: any, transferList?: Transferable[]): Promise<any> {
   return new Promise((resolve, reject) => {
     const id = ++_msgId;
     _callbacks.set(id, { resolve, reject });
-    getWorker().postMessage({ id, type, payload });
+    try {
+      const worker = getWorker();
+      if (transferList && transferList.length > 0) {
+        worker.postMessage({ id, type, payload }, transferList);
+      } else {
+        worker.postMessage({ id, type, payload });
+      }
+    } catch (err) {
+      _callbacks.delete(id);
+      reject(err);
+    }
   });
 }
 
@@ -143,6 +160,10 @@ function downscaleCanvasMultiStep(source: HTMLCanvasElement | HTMLImageElement, 
     nextCtx.imageSmoothingQuality = "high";
     nextCtx.drawImage(currentCanvas, 0, 0, currentWidth, currentHeight, 0, 0, nextWidth, nextHeight);
 
+    // Free previous canvas backing buffer immediately
+    currentCanvas.width = 0;
+    currentCanvas.height = 0;
+
     currentWidth = nextWidth;
     currentHeight = nextHeight;
     currentCanvas = nextCanvas;
@@ -157,6 +178,11 @@ function downscaleCanvasMultiStep(source: HTMLCanvasElement | HTMLImageElement, 
     finalCtx.imageSmoothingEnabled = true;
     finalCtx.imageSmoothingQuality = "high";
     finalCtx.drawImage(currentCanvas, 0, 0, currentWidth, currentHeight, 0, 0, targetWidth, targetHeight);
+
+    // Free intermediate canvas backing buffer
+    currentCanvas.width = 0;
+    currentCanvas.height = 0;
+
     return finalCanvas;
   }
 
@@ -264,6 +290,10 @@ function sampleAndClusterRegionColors(
   });
 
   const idImgData = idCtx.getImageData(0, 0, width, height);
+  // Free offscreen canvas memory immediately after extracting pixel buffer
+  idCanvas.width = 0;
+  idCanvas.height = 0;
+
   const id32 = new Uint32Array(idImgData.data.buffer);
   const orig32 = new Uint32Array(origImgData.data.buffer);
 
@@ -612,12 +642,14 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     const origCtx = origCanvas.getContext("2d", { willReadFrequently: true });
     if (!origCtx) throw new Error("Failed to initialize canvas 2D context");
 
-    // Retain pristine downscaled image for true pixel color sampling
-    origImgDataForSampling = origCtx.getImageData(0, 0, imgWidth, imgHeight);
-
-    const rawPixels = origImgDataForSampling.data;
-    const svgStr = await runInWorker("VECTORIZE", { rawPixels, imgWidth, imgHeight, options });
+    const rawPixels = origCtx.getImageData(0, 0, imgWidth, imgHeight).data;
+    const svgStr = await runInWorker("VECTORIZE", { rawPixels, imgWidth, imgHeight, options }, [rawPixels.buffer]);
     svgDoc = parseSVG<SVGSVGElement>(cleanSvgStr(svgStr));
+
+    // Obtain pristine downscaled image data for sampling and free canvas memory
+    origImgDataForSampling = origCtx.getImageData(0, 0, imgWidth, imgHeight);
+    origCanvas.width = 0;
+    origCanvas.height = 0;
   } else {
     console.error(maybeImage);
     throw new Error(maybeImage.format?.toString());
@@ -664,6 +696,7 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
 
   // Determine fill colors: if bitmap, sample directly from pristine pixels with graph adjacency-constrained palette clumping
   const sampledData = origImgDataForSampling !== null ? sampleAndClusterRegionColors(origImgDataForSampling, processingImageWidthSignal.get(), processingImageHeightSignal.get(), allFillableElements) : null;
+  origImgDataForSampling = null;
 
   allFillableElements.forEach((fillElement, key) => {
     const fillRegionId = `region-${key}`;
@@ -701,7 +734,10 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     fillElement.setAttribute("stroke-linejoin", "round");
     fillElement.removeAttribute("style");
   });
-  document.body.removeChild(hiddenContainer);
+  if (hiddenContainer.parentElement) {
+    hiddenContainer.replaceChildren();
+    hiddenContainer.parentElement.removeChild(hiddenContainer);
+  }
 
   const imgW = processingImageWidthSignal.get();
   const imgH = processingImageHeightSignal.get();
