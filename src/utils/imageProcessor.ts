@@ -405,10 +405,10 @@ function sampleAndClusterRegionColors(
 function absolutizePathStart(d: string): string {
   d = d.trim();
   if (!d) return d;
-  
+
   const firstChar = d.charAt(0);
-  if (firstChar.toLowerCase() !== 'm' && /[a-zA-Z]/.test(firstChar)) {
-    d = 'M' + d.substring(1);
+  if (firstChar.toLowerCase() !== "m" && /[a-zA-Z]/.test(firstChar)) {
+    d = "M" + d.substring(1);
   }
 
   if (!d.startsWith("m")) return d;
@@ -425,7 +425,6 @@ function absolutizePathStart(d: string): string {
   }
   return d;
 }
-
 
 function mergeRegions(sourceId: string, targetId: string, regionsToRemove: Set<string>, regionBounds: Array<{ id: string; boundingBox: { width: number; height: number; x: number; y: number } }>, regionSVGElements: Map<string, SVGElement>, sampledData: any) {
   const el = regionSVGElements.get(sourceId)!;
@@ -599,79 +598,6 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     fillElement.removeAttribute("style");
   });
   document.body.removeChild(hiddenContainer);
-
-  const imgW = processingImageWidthSignal.get();
-  const imgH = processingImageHeightSignal.get();
-  const totalArea = imgW * imgH;
-  const maxEdge = Math.max(imgW, imgH);
-  const minDim = Math.max(2, maxEdge * 0.002);
-  const minArea = Math.max(8, totalArea * 0.0001);
-
-  // Merge small regions based on dynamic thresholds
-  let mergedAny = true;
-  while (mergedAny) {
-    mergedAny = false;
-    const regionsToRemove = new Set<string>();
-
-    for (let i = 0; i < regionBounds.length; i++) {
-      const region = regionBounds[i];
-      if (regionsToRemove.has(region.id)) continue;
-
-      const el = regionSVGElements.get(region.id);
-      if (!el || el.tagName.toLowerCase() !== "path") continue;
-
-      const w = region.boundingBox.width;
-      const h = region.boundingBox.height;
-      if (w < minDim || h < minDim || w * h < minArea) {
-        // Find a neighbor
-        let targetId: string | null = null;
-
-        // Prefer topological adjacency graph if available
-        if (sampledData && sampledData.adjacencyGraph.has(region.id)) {
-          const neighbors = sampledData.adjacencyGraph.get(region.id)!;
-          for (const n of neighbors) {
-            const nEl = regionSVGElements.get(n);
-            if (!regionsToRemove.has(n) && nEl && nEl.tagName.toLowerCase() === "path") {
-              targetId = n;
-              break;
-            }
-          }
-        }
-
-        // Fallback to bounding box overlap/proximity
-        if (!targetId) {
-          for (let j = 0; j < regionBounds.length; j++) {
-            if (i === j || regionsToRemove.has(regionBounds[j].id)) continue;
-            const r2 = regionBounds[j];
-            const nEl = regionSVGElements.get(r2.id);
-            if (!nEl || nEl.tagName.toLowerCase() !== "path") continue;
-
-            // check if boxes overlap or touch (with 1px tolerance)
-            const b1 = region.boundingBox;
-            const b2 = r2.boundingBox;
-            if (!(b1.x > b2.x + b2.width + 1 || b1.x + b1.width + 1 < b2.x || b1.y > b2.y + b2.height + 1 || b1.y + b1.height + 1 < b2.y)) {
-              targetId = r2.id;
-              break;
-            }
-          }
-        }
-
-        if (targetId) {
-          mergeRegions(region.id, targetId, regionsToRemove, regionBounds, regionSVGElements, sampledData);
-          mergedAny = true;
-        }
-      }
-    }
-
-    if (mergedAny) {
-      // Filter out removed regions from regionBounds
-      for (let i = regionBounds.length - 1; i >= 0; i--) {
-        if (regionsToRemove.has(regionBounds[i].id)) {
-          regionBounds.splice(i, 1);
-        }
-      }
-    }
-  }
 
   // Merge adjacent regions that have the same assigned color
   let mergedSameColor = true;
