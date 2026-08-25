@@ -92,7 +92,7 @@ async function loadImage(src: string): Promise<Readonly<{ data: HTMLImageElement
         processingImageHeightSignal.set(FALLBACK_IMAGE_SIZE_PX);
         resolve({
           format: contentType,
-          data: blob,
+          data: null,
         } as const);
       };
       img.src = objectUrl;
@@ -103,59 +103,6 @@ async function loadImage(src: string): Promise<Readonly<{ data: HTMLImageElement
       data: null,
     } as const;
   }
-}
-
-/**
- * Multi-step halving downscaler to target dimensions (capped at FALLBACK_IMAGE_SIZE_PX).
- * Downscaling incrementally in halves prevents aliasing, blur, and pixelation artifacts.
- */
-function downscaleCanvasMultiStep(source: HTMLCanvasElement | HTMLImageElement, targetWidth: number, targetHeight: number): HTMLCanvasElement {
-  let currentWidth = source instanceof HTMLImageElement ? source.naturalWidth : source.width;
-  let currentHeight = source instanceof HTMLImageElement ? source.naturalHeight : source.height;
-
-  let currentCanvas = document.createElement("canvas");
-  currentCanvas.width = currentWidth;
-  currentCanvas.height = currentHeight;
-  let ctx = currentCanvas.getContext("2d", { willReadFrequently: true })!;
-  ctx.imageSmoothingEnabled = true;
-  ctx.imageSmoothingQuality = "high";
-
-  // Fill canvas with white background for bitmap images in case of transparency
-  ctx.fillStyle = PAINTABLE_REGION_HEX;
-  ctx.fillRect(0, 0, currentWidth, currentHeight);
-  ctx.drawImage(source, 0, 0);
-
-  // Halving loop when current size is > 1.5x target
-  while (currentWidth > targetWidth * 1.5 || currentHeight > targetHeight * 1.5) {
-    const nextWidth = Math.max(targetWidth, Math.floor(currentWidth / 2));
-    const nextHeight = Math.max(targetHeight, Math.floor(currentHeight / 2));
-
-    const nextCanvas = document.createElement("canvas");
-    nextCanvas.width = nextWidth;
-    nextCanvas.height = nextHeight;
-    const nextCtx = nextCanvas.getContext("2d", { willReadFrequently: true })!;
-    nextCtx.imageSmoothingEnabled = true;
-    nextCtx.imageSmoothingQuality = "high";
-    nextCtx.drawImage(currentCanvas, 0, 0, currentWidth, currentHeight, 0, 0, nextWidth, nextHeight);
-
-    currentWidth = nextWidth;
-    currentHeight = nextHeight;
-    currentCanvas = nextCanvas;
-  }
-
-  // Final scale step if dimensions don't match target exact
-  if (currentWidth !== targetWidth || currentHeight !== targetHeight) {
-    const finalCanvas = document.createElement("canvas");
-    finalCanvas.width = targetWidth;
-    finalCanvas.height = targetHeight;
-    const finalCtx = finalCanvas.getContext("2d", { willReadFrequently: true })!;
-    finalCtx.imageSmoothingEnabled = true;
-    finalCtx.imageSmoothingQuality = "high";
-    finalCtx.drawImage(currentCanvas, 0, 0, currentWidth, currentHeight, 0, 0, targetWidth, targetHeight);
-    return finalCanvas;
-  }
-
-  return currentCanvas;
 }
 
 /**
@@ -513,9 +460,11 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     const imgWidth = processingImageWidthSignal.get();
     const imgHeight = processingImageHeightSignal.get();
 
-    // Multi-step downscale to target dimensions
-    const origCanvas = downscaleCanvasMultiStep(img, imgWidth, imgHeight);
+    const origCanvas = document.createElement("canvas");
     const origCtx = origCanvas.getContext("2d", { willReadFrequently: true });
+    origCanvas.width = imgWidth;
+    origCanvas.height = imgHeight;
+    origCtx?.drawImage(img, 0, 0);
     if (!origCtx) throw new Error("Failed to initialize canvas 2D context");
 
     // Retain pristine downscaled image for true pixel color sampling
