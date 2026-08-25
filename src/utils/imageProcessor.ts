@@ -43,14 +43,14 @@ async function loadImage(src: string): Promise<Readonly<{ data: HTMLImageElement
       const svgElement = parseSVG<SVGSVGElement>(await response.text());
       if (svgElement) {
         const dimensions = getSvgDimensions(svgElement);
-        processingImageWidthSignal.set(dimensions.width);
-        processingImageHeightSignal.set(dimensions.height);
-        if (dimensions.width < FALLBACK_IMAGE_SIZE_PX || dimensions.height < FALLBACK_IMAGE_SIZE_PX) {
-          // scale up dimension values
-          const scale = FALLBACK_IMAGE_SIZE_PX / Math.min(dimensions.width, dimensions.height);
-          svgElement.setAttribute("width", (dimensions.width * scale).toString());
-          svgElement.setAttribute("height", (dimensions.height * scale).toString());
-        }
+        // scale to fixed resolution values
+        const scale = FALLBACK_IMAGE_SIZE_PX / Math.min(dimensions.width, dimensions.height);
+        const targetWidth = dimensions.width * scale;
+        const targetHeight = dimensions.height * scale;
+        svgElement.setAttribute("width", targetWidth.toString());
+        svgElement.setAttribute("height", targetHeight.toString());
+        processingImageWidthSignal.set(targetWidth);
+        processingImageHeightSignal.set(targetHeight);
         blob = new Blob([svgElement.outerHTML], { type: contentType });
       }
     } else {
@@ -69,18 +69,22 @@ async function loadImage(src: string): Promise<Readonly<{ data: HTMLImageElement
       const objectUrl = URL.createObjectURL(blob);
       img.onload = () => {
         URL.revokeObjectURL(objectUrl);
-        let targetWidth = img.naturalWidth || FALLBACK_IMAGE_SIZE_PX;
-        let targetHeight = img.naturalHeight || FALLBACK_IMAGE_SIZE_PX;
-        const maxDim = Math.max(targetWidth, targetHeight);
+        let targetWidth = FALLBACK_IMAGE_SIZE_PX;
+        let targetHeight = FALLBACK_IMAGE_SIZE_PX;
 
-        if (!isSvg && maxDim > FALLBACK_IMAGE_SIZE_PX) {
-          const scale = FALLBACK_IMAGE_SIZE_PX / maxDim;
-          targetWidth = Math.round(targetWidth * scale);
-          targetHeight = Math.round(targetHeight * scale);
+        if (!isSvg) {
+          targetWidth = img.naturalWidth;
+          targetHeight = img.naturalHeight;
+          const maxDim = Math.max(targetWidth, targetHeight);
+          if (maxDim > FALLBACK_IMAGE_SIZE_PX) {
+            const scale = FALLBACK_IMAGE_SIZE_PX / maxDim;
+            targetWidth = targetWidth * scale;
+            targetHeight = targetHeight * scale;
+          }
+          processingImageWidthSignal.set(targetWidth);
+          processingImageHeightSignal.set(targetHeight);
         }
 
-        processingImageWidthSignal.set(targetWidth);
-        processingImageHeightSignal.set(targetHeight);
         resolve({
           format: contentType,
           data: img,
