@@ -443,7 +443,7 @@ function sampleAndClusterRegionColors(
     }
   }
 
-  // 5. Collapse colors within perceptual distance threshold (< 1.0) into their average
+  // 5. Collapse colors within perceptual distance threshold into their average
   interface MergeGroup {
     originalColors: Array<{ r: number; g: number; b: number; lab: [number, number, number] }>;
     avgR: number;
@@ -500,23 +500,9 @@ function sampleAndClusterRegionColors(
 
         const dist = deltaE(groupA.avgLab, groupB.avgLab);
         if (dist < minDistance && dist < COLOR_COLLAPSE_DELTA_E_THRESHOLD) {
-          const combinedOriginals = [...groupA.originalColors, ...groupB.originalColors];
-          const count = combinedOriginals.length;
-          const sumR = combinedOriginals.reduce((acc, col) => acc + col.r, 0);
-          const sumG = combinedOriginals.reduce((acc, col) => acc + col.g, 0);
-          const sumB = combinedOriginals.reduce((acc, col) => acc + col.b, 0);
-          const avgR = Math.round(sumR / count);
-          const avgG = Math.round(sumG / count);
-          const avgB = Math.round(sumB / count);
-          const avgLab = rgbToLab(avgR, avgG, avgB);
-
-          const allWithinThreshold = combinedOriginals.every((col) => deltaE(col.lab, avgLab) < COLOR_COLLAPSE_DELTA_E_THRESHOLD);
-
-          if (allWithinThreshold) {
-            minDistance = dist;
-            bestI = i;
-            bestJ = j;
-          }
+          minDistance = dist;
+          bestI = i;
+          bestJ = j;
         }
       }
     }
@@ -827,23 +813,12 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
 
         const candidateNeighbors: string[] = [];
 
-        // 1. Check topological adjacency graph
+        // 1. Check topological adjacency graph for direct physical contact
         if (sampledData && sampledData.adjacencyGraph && sampledData.adjacencyGraph.has(region.id)) {
           const neighbors = sampledData.adjacencyGraph.get(region.id)!;
           for (const n of neighbors) {
             if (!regionsToRemove.has(n)) {
               candidateNeighbors.push(n);
-            }
-          }
-        }
-
-        // 2. Fallback to bounding box proximity if no topological neighbors
-        if (candidateNeighbors.length === 0) {
-          const b1 = region.boundingBox;
-          for (const [r2Id, b2] of regionBoundsMap.entries()) {
-            if (r2Id === region.id || regionsToRemove.has(r2Id)) continue;
-            if (!(b1.x > b2.x + b2.width + 2 || b1.x + b1.width + 2 < b2.x || b1.y > b2.y + b2.height + 2 || b1.y + b1.height + 2 < b2.y)) {
-              candidateNeighbors.push(r2Id);
             }
           }
         }
@@ -909,24 +884,6 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
             const nAssignedColor = nEl.getAttribute("assigned-fill");
             if (nAssignedColor === assignedColor) {
               targetId = n;
-              break;
-            }
-          }
-        }
-      }
-
-      // Fallback to bounding box overlap
-      if (!targetId) {
-        const b1 = regionBoundsMap.get(regionId);
-        if (b1) {
-          for (const [r2Id, b2] of regionBoundsMap.entries()) {
-            if (regionId === r2Id || regionsToRemove.has(r2Id)) continue;
-            const nEl = regionSVGElements.get(r2Id);
-            if (!nEl || nEl.tagName.toLowerCase() !== "path") continue;
-            const nAssignedColor = nEl.getAttribute("assigned-fill");
-            if (nAssignedColor !== assignedColor) continue;
-            if (!(b1.x > b2.x + b2.width + 1 || b1.x + b1.width + 1 < b2.x || b1.y > b2.y + b2.height + 1 || b1.y + b1.height + 1 < b2.y)) {
-              targetId = r2Id;
               break;
             }
           }
