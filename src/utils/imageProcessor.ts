@@ -739,6 +739,131 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
   });
   document.body.removeChild(hiddenContainer);
 
+  const imgW = processingImageWidthSignal.get();
+  const imgH = processingImageHeightSignal.get();
+  const totalArea = imgW * imgH;
+  const maxEdge = Math.max(imgW, imgH);
+  const minDim = Math.max(2, maxEdge * 0.002);
+  const minArea = Math.max(8, totalArea * 0.0001);
+
+  // Merge small regions based on dynamic thresholds while strictly preserving shape, coherence, and color definition
+  const colorLabCache = new Map<string, readonly [number, number, number]>();
+  const getLabForHex = (hex: string) => {
+    let lab = colorLabCache.get(hex);
+    if (!lab) {
+      const rgb = hexToRgb(hex);
+      lab = rgb ? rgbToLab(rgb[0], rgb[1], rgb[2]) : [0, 0, 0];
+      colorLabCache.set(hex, lab);
+    }
+    return lab;
+  };
+
+  let mergedSmall = true;
+  while (mergedSmall) {
+    mergedSmall = false;
+    const regionsToRemove = new Set<string>();
+
+    // Sort candidate regions by area ascending so smallest speckles merge first
+    const sortedRegions = [...regionBounds].sort((a, b) => {
+      return a.boundingBox.width * a.boundingBox.height - b.boundingBox.width * b.boundingBox.height;
+    });
+
+    for (let i = 0; i < sortedRegions.length; i++) {
+      const region = sortedRegions[i];
+      if (regionsToRemove.has(region.id)) continue;
+
+      const el = regionSVGElements.get(region.id);
+      if (!el || el.tagName.toLowerCase() !== "path") continue;
+
+      const w = region.boundingBox.width;
+      const h = region.boundingBox.height;
+      const area = w * h;
+
+      if (w < minDim || h < minDim || area < minArea) {
+        const assignedColor = el.getAttribute("assigned-fill");
+        if (!assignedColor || assignedColor === TRANSPARENT_HEX) continue;
+
+        const candidateNeighbors: string[] = [];
+
+        // 1. Check topological adjacency graph
+        if (sampledData && sampledData.adjacencyGraph && sampledData.adjacencyGraph.has(region.id)) {
+          const neighbors = sampledData.adjacencyGraph.get(region.id)!;
+          for (const n of neighbors) {
+            if (!regionsToRemove.has(n)) {
+              candidateNeighbors.push(n);
+            }
+          }
+        }
+
+        // 2. Fallback to bounding box overlap / proximity if no topological neighbors
+        if (candidateNeighbors.length === 0) {
+          const b1 = region.boundingBox;
+          for (let j = 0; j < regionBounds.length; j++) {
+            const r2 = regionBounds[j];
+            if (r2.id === region.id || regionsToRemove.has(r2.id)) continue;
+            const b2 = r2.boundingBox;
+            if (!(b1.x > b2.x + b2.width + 2 || b1.x + b1.width + 2 < b2.x || b1.y > b2.y + b2.height + 2 || b1.y + b1.height + 2 < b2.y)) {
+              candidateNeighbors.push(r2.id);
+            }
+          }
+        }
+
+        const sourceLab = getLabForHex(assignedColor);
+        let bestNeighborId: string | null = null;
+        let bestDeltaE = Infinity;
+
+        for (const n of candidateNeighbors) {
+          const nEl = regionSVGElements.get(n);
+          if (!nEl || nEl.tagName.toLowerCase() !== "path") continue;
+
+          const nColor = nEl.getAttribute("assigned-fill");
+          if (!nColor || nColor === TRANSPARENT_HEX) continue;
+
+          const nLab = getLabForHex(nColor);
+          const dist = deltaE(sourceLab, nLab);
+
+          if (dist < bestDeltaE) {
+            bestDeltaE = dist;
+            bestNeighborId = n;
+          }
+        }
+
+        // 3. Fallback to nearest geometric region center if isolated island
+        if (!bestNeighborId) {
+          let minCenterDist = Infinity;
+          const cx1 = region.boundingBox.x + region.boundingBox.width / 2;
+          const cy1 = region.boundingBox.y + region.boundingBox.height / 2;
+          for (let j = 0; j < regionBounds.length; j++) {
+            const r2 = regionBounds[j];
+            if (r2.id === region.id || regionsToRemove.has(r2.id)) continue;
+            const nEl = regionSVGElements.get(r2.id);
+            if (!nEl || nEl.tagName.toLowerCase() !== "path") continue;
+            const cx2 = r2.boundingBox.x + r2.boundingBox.width / 2;
+            const cy2 = r2.boundingBox.y + r2.boundingBox.height / 2;
+            const d2 = Math.hypot(cx1 - cx2, cy1 - cy2);
+            if (d2 < minCenterDist) {
+              minCenterDist = d2;
+              bestNeighborId = r2.id;
+            }
+          }
+        }
+
+        if (bestNeighborId) {
+          mergeRegions(region.id, bestNeighborId, regionsToRemove, regionBounds, regionSVGElements, sampledData);
+          mergedSmall = true;
+        }
+      }
+    }
+
+    if (mergedSmall) {
+      for (let i = regionBounds.length - 1; i >= 0; i--) {
+        if (regionsToRemove.has(regionBounds[i].id)) {
+          regionBounds.splice(i, 1);
+        }
+      }
+    }
+  }
+
   // Merge adjacent regions that have the same assigned color
   let mergedSameColor = true;
   while (mergedSameColor) {
@@ -758,7 +883,7 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
       let targetId: string | null = null;
 
       // Find an adjacent region with the same assigned color using the adjacency graph
-      if (sampledData && sampledData.adjacencyGraph.has(region.id)) {
+      if (sampledData && sampledData.adjacencyGraph && sampledData.adjacencyGraph.has(region.id)) {
         const neighbors = sampledData.adjacencyGraph.get(region.id)!;
         for (const n of neighbors) {
           const nEl = regionSVGElements.get(n);
@@ -768,6 +893,24 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
               targetId = n;
               break;
             }
+          }
+        }
+      }
+
+      // Fallback to bounding box overlap
+      if (!targetId) {
+        const b1 = region.boundingBox;
+        for (let j = 0; j < regionBounds.length; j++) {
+          if (i === j || regionsToRemove.has(regionBounds[j].id)) continue;
+          const r2 = regionBounds[j];
+          const nEl = regionSVGElements.get(r2.id);
+          if (!nEl || nEl.tagName.toLowerCase() !== "path") continue;
+          const nAssignedColor = nEl.getAttribute("assigned-fill");
+          if (nAssignedColor !== assignedColor) continue;
+          const b2 = r2.boundingBox;
+          if (!(b1.x > b2.x + b2.width + 1 || b1.x + b1.width + 1 < b2.x || b1.y > b2.y + b2.height + 1 || b1.y + b1.height + 1 < b2.y)) {
+            targetId = r2.id;
+            break;
           }
         }
       }

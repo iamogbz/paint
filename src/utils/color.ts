@@ -180,7 +180,7 @@ const RAD_TO_DEG = 180 / Math.PI;
  * CIEDE2000 Color Difference formula (ΔE00).
  * Implements CIE Publication 142-2001 standard.
  */
-export function ciede2000(lab1: [number, number, number], lab2: [number, number, number]): number {
+export function ciede2000(lab1: readonly [number, number, number] | [number, number, number], lab2: readonly [number, number, number] | [number, number, number]): number {
   const [L1, a1, b1] = lab1;
   const [L2, a2, b2] = lab2;
 
@@ -265,6 +265,6 @@ export function ciede2000(lab1: [number, number, number], lab2: [number, number,
   return Math.sqrt(Math.max(0, delta_E00_sq));
 }
 
-export function deltaE(lab1: [number, number, number], lab2: [number, number, number]): number {
+export function deltaE(lab1: readonly [number, number, number] | [number, number, number], lab2: readonly [number, number, number] | [number, number, number]): number {
   return Math.hypot(lab1[0] - lab2[0], lab1[1] - lab2[1], lab1[2] - lab2[2]);
 }
