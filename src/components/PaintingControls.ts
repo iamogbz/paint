@@ -263,7 +263,7 @@ export class PaintingControls extends SignalElement {
           const correctlyFinishedB = expectedTotalB === correctTotalB;
 
           if (correctlyFinishedA === correctlyFinishedB) {
-            return parseInt(hexCodeA.replace("#", ""), 16) - parseInt(hexCodeB.replace("#", ""));
+            return parseInt(hexCodeA.replace("#", ""), 16) - parseInt(hexCodeB.replace("#", ""), 16);
           }
 
           return Number(correctlyFinishedA) - Number(correctlyFinishedB);
