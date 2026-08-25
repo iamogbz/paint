@@ -828,27 +828,11 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
           }
         }
 
-        // 3. Fallback to nearest geometric region center if isolated island
-        if (!bestNeighborId) {
-          let minCenterDist = Infinity;
-          const cx1 = region.boundingBox.x + region.boundingBox.width / 2;
-          const cy1 = region.boundingBox.y + region.boundingBox.height / 2;
-          for (let j = 0; j < regionBounds.length; j++) {
-            const r2 = regionBounds[j];
-            if (r2.id === region.id || regionsToRemove.has(r2.id)) continue;
-            const nEl = regionSVGElements.get(r2.id);
-            if (!nEl || nEl.tagName.toLowerCase() !== "path") continue;
-            const cx2 = r2.boundingBox.x + r2.boundingBox.width / 2;
-            const cy2 = r2.boundingBox.y + r2.boundingBox.height / 2;
-            const d2 = Math.hypot(cx1 - cx2, cy1 - cy2);
-            if (d2 < minCenterDist) {
-              minCenterDist = d2;
-              bestNeighborId = r2.id;
-            }
-          }
-        }
+        // Only merge into neighbor if color is perceptually similar (DeltaE within tolerance).
+        // If color difference is noticeable (e.g. eye pupil, sharp highlight, dark edge), preserve the region!
+        const maxAllowedDeltaE = COLOR_COLLAPSE_DELTA_E_THRESHOLD;
 
-        if (bestNeighborId) {
+        if (bestNeighborId && bestDeltaE <= maxAllowedDeltaE) {
           mergeRegions(region.id, bestNeighborId, regionsToRemove, regionBounds, regionSVGElements, sampledData);
           mergedSmall = true;
         }
