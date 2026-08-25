@@ -372,25 +372,23 @@ function sampleAndClusterRegionColors(
     rawRgbList.push({ id: regionId, r, g, b, count });
   }
 
-  // 4. Color Clumping / Palette Clustering with strict Adjacency Graph Constraints
+  // 4. Color Clumping / Palette Clustering
   const regionLabs = rawRgbList.map((item) => rgbToLab(item.r, item.g, item.b));
 
-  // Build cluster representatives (palette swatches)
   interface Cluster {
-    r: number;
-    g: number;
-    b: number;
-    lab: [number, number, number];
-    hex: string;
+    rSum: number;
+    gSum: number;
+    bSum: number;
     totalPixels: number;
+    avgR: number;
+    avgG: number;
+    avgB: number;
+    avgLab: [number, number, number];
     assignedRegionIds: Set<string>;
   }
 
   const clusters: Cluster[] = [];
   const CLUSTER_DELTA_E_THRESHOLD = 9.0; // Perceptually similar colors cluster together
-
-  // Map regionId -> cluster for O(1) neighbor cluster lookup
-  const regionToCluster = new Map<string, Cluster>();
 
   // Sort regions by pixel count descending so larger key regions establish initial palette anchors
   const sortedIndices = rawRgbList.map((_, idx) => idx).sort((a, b) => rawRgbList[b].count - rawRgbList[a].count);
@@ -398,93 +396,45 @@ function sampleAndClusterRegionColors(
   for (const idx of sortedIndices) {
     const item = rawRgbList[idx];
     const lab = regionLabs[idx];
-    const neighbors = adjacencyGraph.get(item.id);
-
-    // Forbidden clusters are clusters already assigned to directly touching neighbors
-    const forbiddenClusters = new Set<Cluster>();
-    if (neighbors) {
-      for (const n of neighbors) {
-        const nCluster = regionToCluster.get(n);
-        if (nCluster) forbiddenClusters.add(nCluster);
-      }
-    }
 
     let bestCluster: Cluster | null = null;
     let minDiff = Infinity;
 
     for (const cluster of clusters) {
-      if (forbiddenClusters.has(cluster)) continue;
-
-      const diff = deltaE(lab, cluster.lab);
+      const diff = deltaE(lab, cluster.avgLab);
       if (diff < CLUSTER_DELTA_E_THRESHOLD && diff < minDiff) {
         minDiff = diff;
         bestCluster = cluster;
       }
     }
 
+    const weight = Math.max(1, item.count);
     if (bestCluster) {
       bestCluster.assignedRegionIds.add(item.id);
-      regionToCluster.set(item.id, bestCluster);
-      regionColors.set(item.id, bestCluster.hex);
+      bestCluster.rSum += item.r * weight;
+      bestCluster.gSum += item.g * weight;
+      bestCluster.bSum += item.b * weight;
+      bestCluster.totalPixels += weight;
+      bestCluster.avgR = Math.round(bestCluster.rSum / bestCluster.totalPixels);
+      bestCluster.avgG = Math.round(bestCluster.gSum / bestCluster.totalPixels);
+      bestCluster.avgB = Math.round(bestCluster.bSum / bestCluster.totalPixels);
+      bestCluster.avgLab = rgbToLab(bestCluster.avgR, bestCluster.avgG, bestCluster.avgB);
     } else {
-      const hex = rgbToHex(item.r, item.g, item.b);
-      const newCluster: Cluster = {
-        r: item.r,
-        g: item.g,
-        b: item.b,
-        lab,
-        hex,
-        totalPixels: item.count,
+      clusters.push({
+        rSum: item.r * weight,
+        gSum: item.g * weight,
+        bSum: item.b * weight,
+        totalPixels: weight,
+        avgR: item.r,
+        avgG: item.g,
+        avgB: item.b,
+        avgLab: lab,
         assignedRegionIds: new Set([item.id]),
-      };
-      clusters.push(newCluster);
-      regionToCluster.set(item.id, newCluster);
-      regionColors.set(item.id, hex);
+      });
     }
   }
 
-  // 5. Collapse colors within perceptual distance threshold into their average
-  interface MergeGroup {
-    originalColors: Array<{ r: number; g: number; b: number; lab: [number, number, number] }>;
-    avgR: number;
-    avgG: number;
-    avgB: number;
-    avgLab: [number, number, number];
-    assignedRegionIds: Set<string>;
-    neighborGroups: Set<MergeGroup>;
-  }
-
-  const mergeGroups: MergeGroup[] = clusters.map((c) => ({
-    originalColors: [{ r: c.r, g: c.g, b: c.b, lab: c.lab }],
-    avgR: c.r,
-    avgG: c.g,
-    avgB: c.b,
-    avgLab: c.lab,
-    assignedRegionIds: new Set(c.assignedRegionIds),
-    neighborGroups: new Set<MergeGroup>(),
-  }));
-
-  const regionToGroup = new Map<string, MergeGroup>();
-  mergeGroups.forEach((g) => {
-    g.assignedRegionIds.forEach((rid) => regionToGroup.set(rid, g));
-  });
-
-  // Build initial group-to-group adjacency
-  mergeGroups.forEach((g) => {
-    g.assignedRegionIds.forEach((rid) => {
-      const nIds = adjacencyGraph.get(rid);
-      if (nIds) {
-        nIds.forEach((nId) => {
-          const nGroup = regionToGroup.get(nId);
-          if (nGroup && nGroup !== g) {
-            g.neighborGroups.add(nGroup);
-            nGroup.neighborGroups.add(g);
-          }
-        });
-      }
-    });
-  });
-
+  // 5. Strict Pairwise Color Collapse: Unconditionally merge ALL clusters within COLOR_COLLAPSE_DELTA_E_THRESHOLD
   let merged = true;
   while (merged) {
     merged = false;
@@ -492,13 +442,11 @@ function sampleAndClusterRegionColors(
     let bestJ = -1;
     let minDistance = Infinity;
 
-    for (let i = 0; i < mergeGroups.length; i++) {
-      const groupA = mergeGroups[i];
-      for (let j = i + 1; j < mergeGroups.length; j++) {
-        const groupB = mergeGroups[j];
-        if (groupA.neighborGroups.has(groupB)) continue; // O(1) topological adjacency check
-
-        const dist = deltaE(groupA.avgLab, groupB.avgLab);
+    for (let i = 0; i < clusters.length; i++) {
+      const clusterA = clusters[i];
+      for (let j = i + 1; j < clusters.length; j++) {
+        const clusterB = clusters[j];
+        const dist = deltaE(clusterA.avgLab, clusterB.avgLab);
         if (dist < minDistance && dist < COLOR_COLLAPSE_DELTA_E_THRESHOLD) {
           minDistance = dist;
           bestI = i;
@@ -508,39 +456,27 @@ function sampleAndClusterRegionColors(
     }
 
     if (bestI !== -1) {
-      const groupA = mergeGroups[bestI];
-      const groupB = mergeGroups[bestJ];
-      const combinedOriginals = [...groupA.originalColors, ...groupB.originalColors];
-      const count = combinedOriginals.length;
-      groupA.originalColors = combinedOriginals;
-      groupA.avgR = Math.round(combinedOriginals.reduce((acc, col) => acc + col.r, 0) / count);
-      groupA.avgG = Math.round(combinedOriginals.reduce((acc, col) => acc + col.g, 0) / count);
-      groupA.avgB = Math.round(combinedOriginals.reduce((acc, col) => acc + col.b, 0) / count);
-      groupA.avgLab = rgbToLab(groupA.avgR, groupA.avgG, groupA.avgB);
+      const clusterA = clusters[bestI];
+      const clusterB = clusters[bestJ];
+      clusterA.rSum += clusterB.rSum;
+      clusterA.gSum += clusterB.gSum;
+      clusterA.bSum += clusterB.bSum;
+      clusterA.totalPixels += clusterB.totalPixels;
+      clusterA.avgR = Math.round(clusterA.rSum / clusterA.totalPixels);
+      clusterA.avgG = Math.round(clusterA.gSum / clusterA.totalPixels);
+      clusterA.avgB = Math.round(clusterA.bSum / clusterA.totalPixels);
+      clusterA.avgLab = rgbToLab(clusterA.avgR, clusterA.avgG, clusterA.avgB);
 
-      groupB.assignedRegionIds.forEach((id) => {
-        groupA.assignedRegionIds.add(id);
-        regionToGroup.set(id, groupA);
-      });
-
-      groupB.neighborGroups.forEach((nGroup) => {
-        nGroup.neighborGroups.delete(groupB);
-        if (nGroup !== groupA) {
-          nGroup.neighborGroups.add(groupA);
-          groupA.neighborGroups.add(nGroup);
-        }
-      });
-      groupA.neighborGroups.delete(groupB);
-
-      mergeGroups.splice(bestJ, 1);
+      clusterB.assignedRegionIds.forEach((id) => clusterA.assignedRegionIds.add(id));
+      clusters.splice(bestJ, 1);
       merged = true;
     }
   }
 
   // Update regionColors with collapsed average hex values
-  for (const group of mergeGroups) {
-    const hex = rgbToHex(group.avgR, group.avgG, group.avgB);
-    for (const regionId of group.assignedRegionIds) {
+  for (const cluster of clusters) {
+    const hex = rgbToHex(cluster.avgR, cluster.avgG, cluster.avgB);
+    for (const regionId of cluster.assignedRegionIds) {
       regionColors.set(regionId, hex);
     }
   }
