@@ -5,7 +5,7 @@ export const transparentImgCss = `conic-gradient(#00000011 25%, #FFFFFF11 25%, #
 
 export const BASE_BRUSH_RADIUS = 20;
 export const DROPPER_BUFFER_PX = 60;
-export const FALLBACK_IMAGE_SIZE_PX = 3840;
+export const FALLBACK_IMAGE_SIZE_PX = 1920;
 export const MIN_ZOOM = 0.5;
 export const MAX_ZOOM = 16.0;
 
