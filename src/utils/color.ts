@@ -1,3 +1,5 @@
+import { TRUE_BLACK_HEX } from "./constants";
+
 // Color math utilities
 export function hsvToRgb(h: number, s: number, v: number): [number, number, number] {
   h = ((h % 360) + 360) % 360;
@@ -130,7 +132,7 @@ export function getHexCode(anyColor: string) {
     // update frequently used canvas
     canvas2dCtx = canvas.getContext("2d", { willReadFrequently: true });
   }
-  if (!canvas2dCtx) return "#000000ff";
+  if (!canvas2dCtx) return TRUE_BLACK_HEX;
 
   // 2. Clear canvas to absolute transparency
   canvas2dCtx.clearRect(0, 0, 1, 1);

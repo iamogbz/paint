@@ -20,3 +20,12 @@ export function getSvgDimensions(svg: SVGSVGElement, fallbackValue = FALLBACK_IM
     height: svg.viewBox.baseVal.height || svg.height.baseVal.value || fallbackValue,
   };
 }
+
+/**
+ * Simple clean up for possible errors in svg before parsing
+ */
+export function cleanSvgStr(svgStr: string) {
+  let cleanedSvg = svgStr.includes("xmlns=") ? svgStr : svgStr.replace("<svg", `<svg xmlns="${XML_NS}"`);
+  cleanedSvg = cleanedSvg.replaceAll(` d="L`, ` d="M`);
+  return cleanedSvg;
+}

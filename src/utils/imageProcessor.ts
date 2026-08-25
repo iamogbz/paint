@@ -1,8 +1,8 @@
-import { COLOR_COLLAPSE_DELTA_E_THRESHOLD, FALLBACK_IMAGE_SIZE_PX, FILLABLE_SVG_ELEMENTS_SELECTOR, PAINTABLE_REGION_HEX, TRANSPARENT_HEX } from "./constants.js";
+import { COLOR_COLLAPSE_DELTA_E_THRESHOLD, FALLBACK_IMAGE_SIZE_PX, FILLABLE_SVG_ELEMENTS_SELECTOR, PAINTABLE_REGION_HEX, TRANSPARENT_HEX, TRUE_BLACK_HEX } from "./constants.js";
 import { processingImageHeightSignal, processingImageWidthSignal } from "../state/store.js";
 import { ProcessedArtwork } from "../types";
 import { deltaE, getHexCode, normalizeHex, rgbToHex, rgbToLab } from "./color.js";
-import { getSvgDimensions, parseSVG, SVGFillableElement, XML_NS } from "./html.js";
+import { cleanSvgStr, getSvgDimensions, parseSVG, SVGFillableElement, XML_NS } from "./html.js";
 import { Options } from "@visioncortex/vtracer";
 
 let _worker: Worker | null = null;
@@ -33,70 +33,72 @@ function runInWorker(type: string, payload: any): Promise<any> {
   });
 }
 
-async function loadImage(src: string): Promise<Readonly<({ type: "err"; data: unknown } | { type: "svg"; data: SVGSVGElement } | { type: "bin"; data: HTMLImageElement }) & { format: string | null }>> {
+async function loadImage(src: string): Promise<Readonly<{ data: HTMLImageElement | null; format: string | null }>> {
   const response = await fetch(src);
   const contentType = response.headers.get("content-type");
+  let blob: Blob | null = null;
   if (contentType && contentType.includes("image/")) {
-    if (contentType.includes("image/svg+xml")) {
-      const text = await response.text();
-      const svgElement = parseSVG<SVGSVGElement>(text);
+    const isSvg = contentType.includes("image/svg+xml");
+    if (isSvg) {
+      const svgElement = parseSVG<SVGSVGElement>(await response.text());
       if (svgElement) {
         const dimensions = getSvgDimensions(svgElement);
         processingImageWidthSignal.set(dimensions.width);
         processingImageHeightSignal.set(dimensions.height);
-        return {
-          type: "svg",
-          format: contentType,
-          data: svgElement,
-        } as const;
+        if (dimensions.width < FALLBACK_IMAGE_SIZE_PX || dimensions.height < FALLBACK_IMAGE_SIZE_PX) {
+          // scale up dimension values
+          const scale = FALLBACK_IMAGE_SIZE_PX / Math.min(dimensions.width, dimensions.height);
+          svgElement.setAttribute("width", (dimensions.width * scale).toString());
+          svgElement.setAttribute("height", (dimensions.height * scale).toString());
+        }
+        blob = new Blob([svgElement.outerHTML], { type: contentType });
       }
-      return {
-        type: "err",
-        format: contentType,
-        data: text,
-      } as const;
     } else {
-      const blob = await response.blob();
-      return new Promise((resolve) => {
-        const img = new Image();
-        img.crossOrigin = "anonymous";
-        const objectUrl = URL.createObjectURL(blob);
-        img.onload = () => {
-          URL.revokeObjectURL(objectUrl);
-          let targetWidth = img.naturalWidth || FALLBACK_IMAGE_SIZE_PX;
-          let targetHeight = img.naturalHeight || FALLBACK_IMAGE_SIZE_PX;
-          const maxDim = Math.max(targetWidth, targetHeight);
-
-          if (maxDim > FALLBACK_IMAGE_SIZE_PX) {
-            const scale = FALLBACK_IMAGE_SIZE_PX / maxDim;
-            targetWidth = Math.round(targetWidth * scale);
-            targetHeight = Math.round(targetHeight * scale);
-          }
-
-          processingImageWidthSignal.set(targetWidth);
-          processingImageHeightSignal.set(targetHeight);
-          resolve({
-            type: "bin",
-            format: contentType,
-            data: img,
-          } as const);
-        };
-        img.onerror = () => {
-          URL.revokeObjectURL(objectUrl);
-          processingImageWidthSignal.set(FALLBACK_IMAGE_SIZE_PX);
-          processingImageHeightSignal.set(FALLBACK_IMAGE_SIZE_PX);
-          resolve({
-            type: "err",
-            format: contentType,
-            data: blob,
-          } as const);
-        };
-        img.src = objectUrl;
-      });
+      blob = await response.blob();
     }
+    if (!blob) {
+      return {
+        format: contentType,
+        data: blob,
+      } as const;
+    }
+
+    return new Promise((resolve) => {
+      const img = new Image();
+      img.crossOrigin = "anonymous";
+      const objectUrl = URL.createObjectURL(blob);
+      img.onload = () => {
+        URL.revokeObjectURL(objectUrl);
+        let targetWidth = img.naturalWidth || FALLBACK_IMAGE_SIZE_PX;
+        let targetHeight = img.naturalHeight || FALLBACK_IMAGE_SIZE_PX;
+        const maxDim = Math.max(targetWidth, targetHeight);
+
+        if (!isSvg && maxDim > FALLBACK_IMAGE_SIZE_PX) {
+          const scale = FALLBACK_IMAGE_SIZE_PX / maxDim;
+          targetWidth = Math.round(targetWidth * scale);
+          targetHeight = Math.round(targetHeight * scale);
+        }
+
+        processingImageWidthSignal.set(targetWidth);
+        processingImageHeightSignal.set(targetHeight);
+        resolve({
+          format: contentType,
+          data: img,
+        } as const);
+      };
+      img.onerror = () => {
+        URL.revokeObjectURL(objectUrl);
+        processingImageWidthSignal.set(FALLBACK_IMAGE_SIZE_PX);
+        processingImageHeightSignal.set(FALLBACK_IMAGE_SIZE_PX);
+        resolve({
+          format: contentType,
+          data: blob,
+        } as const);
+      };
+      img.src = objectUrl;
+    });
   } else {
     return {
-      type: "err",
       format: contentType,
       data: null,
     } as const;
@@ -154,33 +156,6 @@ function downscaleCanvasMultiStep(source: HTMLCanvasElement | HTMLImageElement, 
   }
 
   return currentCanvas;
-}
-
-/**
- * Turns svg outlines into paths and fragments overlapping shapes into non-overlapping islands.
- */
-async function transformSVGForPainting(svg: SVGSVGElement) {
-  // TODO
-  // 1. turn all the strokes with >0 widths into paths, the stroke color is now the fill and the new path has no stroke
-  // 2. check all the paths in the document including the strokes that just got turned to paths and divide them into unique islands until they are no overlapping paths
-  // 3. make sure that the fills for all paths even if was assigned by inheritance are preserved during the previous step
-  // 4. parse the generated svg and return it for processing
-
-  // assign black fill to all elements without a fill attribute
-  // this solve the issue of some paths needing to be rendered as black by default
-  // but introduces an issue where elements that can not be painted are added to the region count
-  svg.querySelectorAll(`:is(${FILLABLE_SVG_ELEMENTS_SELECTOR}):not([fill])`).forEach((el) => {
-    el.setAttribute("fill", "#000000FF");
-  });
-
-  // assign transparent fill to all elements with fill="none"
-  // this solve the issue of including transparent regions as places that can be filled in
-  // however when the splitting of overlapping region occurs transparent sections should not win over coloured sections
-  svg.querySelectorAll(`[fill="none"]`).forEach((el) => {
-    el.setAttribute("fill", TRANSPARENT_HEX);
-  });
-
-  return svg;
 }
 
 /**
@@ -482,15 +457,15 @@ function sampleAndClusterRegionColors(
 
 function absolutizePathStart(d: string): string {
   d = d.trim();
-  if (!d.startsWith('m')) return d;
-  
+  if (!d.startsWith("m")) return d;
+
   // match 'm' followed by two floats.
   const match = d.match(/^m\s*([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)\s*(?:,|\s+)?\s*([+-]?\d*\.?\d+(?:[eE][+-]?\d+)?)([\s\S]*)$/);
   if (match) {
     let rest = match[3];
     // if rest doesn't start with a letter, insert relative lineto command
     if (rest.trim().length > 0 && !/^[a-zA-Z]/.test(rest.trim())) {
-      rest = ' l ' + rest;
+      rest = " l " + rest;
     }
     return `M ${match[1]} ${match[2]}${rest}`;
   }
@@ -502,10 +477,38 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
 
   let svgDoc: SVGSVGElement | null = null;
   let origImgDataForSampling: ImageData | null = null;
+  // vtracer options for line/boundary extraction
+  const options: Options = {
+    /** default: color-cluster */
+    clustering: "watershed",
+    /** shapes disjoint with others */
+    hierarchical: "cutout",
+    /** Auto-quantize target color count */
+    // maxColors: 24,
+    watershedDetail: 255,
+    /** If a pallete is defined maps colors to this */
+    // palette: palette,
+    /** Discard patches smaller than X px in size (0..=128) */
+    filterSpeckle: 2,
+    /** default: 8 (best) - Significant bits per RGB channel (1..=8)  */
+    colorPrecision: 8,
+    pathPrecision: 8,
+    /** Color difference between gradient layers (0..=255) */
+    // layerDifference: 16,
+    /** Method for converting in to shapes. Values below only valid in spline */
+    mode: "pixel",
+    /** default: 60, Minimum Momentary Angle (in degrees) to be considered a corner (to be kept after smoothing) - Higher = smoother */
+    cornerThreshold: 60,
+    /** default: 4, Perform Iterative Subdivide Smooth until all segments are shorter than this length <3.5..=10> */
+    lengthThreshold: 4.0,
+    /** default: 45, Minimum Angle Displacement (in degrees) to be considered a cutting point between curves <0..=180> */
+    spliceThreshold: 45,
+    /** default: off, Simplify curves: fewest cubics within this tolerance in px (try 1–2.5) */
+    simplify: 2,
+    maxIterations: 10,
+  };
 
-  if (maybeImage.type === "svg") {
-    svgDoc = maybeImage.data;
-  } else if (maybeImage.type === "bin") {
+  if (maybeImage.data) {
     const img = maybeImage.data;
     const imgWidth = processingImageWidthSignal.get();
     const imgHeight = processingImageHeightSignal.get();
@@ -519,54 +522,18 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     origImgDataForSampling = origCtx.getImageData(0, 0, imgWidth, imgHeight);
 
     const rawPixels = origImgDataForSampling.data;
-
-    // Run vtracer in worker solely for line/boundary extraction
-    const options: Options = {
-      /** default: color-cluster */
-      clustering: "watershed",
-      /** shapes disjoint with others */
-      hierarchical: "cutout",
-      /** Auto-quantize target color count */
-      // maxColors: 24,
-      watershedDetail: 255,
-      /** If a pallete is defined maps colors to this */
-      // palette: palette,
-      /** Discard patches smaller than X px in size (0..=128) */
-      filterSpeckle: 2,
-      /** default: 8 (best) - Significant bits per RGB channel (1..=8)  */
-      colorPrecision: 8,
-      pathPrecision: 8,
-      /** Color difference between gradient layers (0..=255) */
-      // layerDifference: 16,
-      /** Method for converting in to shapes. Values below only valid in spline */
-      mode: "pixel",
-      /** default: 60, Minimum Momentary Angle (in degrees) to be considered a corner (to be kept after smoothing) - Higher = smoother */
-      cornerThreshold: 60,
-      /** default: 4, Perform Iterative Subdivide Smooth until all segments are shorter than this length <3.5..=10> */
-      lengthThreshold: 4.0,
-      /** default: 45, Minimum Angle Displacement (in degrees) to be considered a cutting point between curves <0..=180> */
-      spliceThreshold: 45,
-      /** default: off, Simplify curves: fewest cubics within this tolerance in px (try 1–2.5) */
-      simplify: 2,
-      maxIterations: 10,
-    };
     const svgStr = await runInWorker("VECTORIZE", { rawPixels, imgWidth, imgHeight, options });
-    let cleanSvgStr = svgStr.includes("xmlns=") ? svgStr : svgStr.replace("<svg", `<svg xmlns="${XML_NS}"`);
-    cleanSvgStr = cleanSvgStr.replaceAll(` d="L`, ` d="M`);
-    svgDoc = parseSVG<SVGSVGElement>(cleanSvgStr);
-  } else if (maybeImage.type === "err") {
+    svgDoc = parseSVG<SVGSVGElement>(cleanSvgStr(svgStr));
+  } else {
     console.error(maybeImage);
     throw new Error(maybeImage.format?.toString());
   }
-
-  // Parse output SVG
-  svgDoc = await transformSVGForPainting(svgDoc!);
 
   /** Region ID to the elements for creating brush stroke clipping paths */
   const regionSVGElements: Map<string, SVGElement> = new Map();
   const regionBounds: Array<{ id: string; boundingBox: { width: number; height: number; x: number; y: number } }> = [];
 
-  const renderNode = svgDoc.cloneNode(true) as typeof svgDoc;
+  const renderNode = svgDoc!.cloneNode(true) as NonNullable<typeof svgDoc>;
   const hiddenContainer = document.createElement("div");
   hiddenContainer.style.position = "absolute";
   hiddenContainer.style.visibility = "hidden";
@@ -616,9 +583,7 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
       fillElement.setAttribute("assigned-fill", TRANSPARENT_HEX);
       fillElement.setAttribute("fill", TRANSPARENT_HEX);
     } else {
-      const fillColor = sampledData && sampledData.regionColors.has(fillRegionId)
-        ? sampledData.regionColors.get(fillRegionId)!
-        : (elementFill ? getHexCode(elementFill) : "#00000000");
+      const fillColor = sampledData && sampledData.regionColors.has(fillRegionId) ? sampledData.regionColors.get(fillRegionId)! : elementFill ? getHexCode(elementFill) : TRUE_BLACK_HEX;
 
       fillElement.setAttribute("assigned-fill", fillColor);
       fillElement.setAttribute("fill", PAINTABLE_REGION_HEX);
@@ -679,10 +644,7 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
             // check if boxes overlap or touch (with 1px tolerance)
             const b1 = region.boundingBox;
             const b2 = r2.boundingBox;
-            if (!(b1.x > b2.x + b2.width + 1 ||
-                  b1.x + b1.width + 1 < b2.x ||
-                  b1.y > b2.y + b2.height + 1 ||
-                  b1.y + b1.height + 1 < b2.y)) {
+            if (!(b1.x > b2.x + b2.width + 1 || b1.x + b1.width + 1 < b2.x || b1.y > b2.y + b2.height + 1 || b1.y + b1.height + 1 < b2.y)) {
               targetId = r2.id;
               break;
             }
@@ -697,7 +659,7 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
 
           // Update target bounding box
           const b1 = region.boundingBox;
-          const b2 = regionBounds.find(r => r.id === targetId)!.boundingBox;
+          const b2 = regionBounds.find((r) => r.id === targetId)!.boundingBox;
           const minX = Math.min(b1.x, b2.x);
           const minY = Math.min(b1.y, b2.y);
           const maxX = Math.max(b1.x + b1.width, b2.x + b2.width);
@@ -719,7 +681,7 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
             const neighbors = sampledData.adjacencyGraph.get(region.id)!;
             const targetNeighbors = sampledData.adjacencyGraph.get(targetId);
             if (targetNeighbors) {
-              neighbors.forEach(n => {
+              neighbors.forEach((n) => {
                 if (n !== targetId) targetNeighbors.add(n);
               });
             }
@@ -798,10 +760,7 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
         b2.y = minY;
         b2.width = maxX - minX;
         b2.height = maxY - minY;
-        targetEl.setAttribute(
-          "data-bbox",
-          `${b2.width.toFixed(2)},${b2.height.toFixed(2)},${b2.x.toFixed(2)},${b2.y.toFixed(2)}`
-        );
+        targetEl.setAttribute("data-bbox", `${b2.width.toFixed(2)},${b2.height.toFixed(2)},${b2.x.toFixed(2)},${b2.y.toFixed(2)}`);
 
         // Remove the swallowed region
         el.remove();
@@ -905,7 +864,7 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
   renderNode.setAttribute("data-created-at", now.toString());
   renderNode.setAttribute("data-modified-at", now.toString());
 
-  const cartoonDataUrl = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgDoc.outerHTML)));
+  const cartoonDataUrl = "data:image/svg+xml;base64," + btoa(unescape(encodeURIComponent(svgDoc!.outerHTML)));
   return hydrateArtworkFromSvg(renderNode.outerHTML, {
     originalDataUrl: imageSrc,
     cartoonDataUrl,
@@ -983,7 +942,11 @@ export function hydrateArtworkFromSvg(svgString: string, fallback?: Partial<Proc
     let neighbourRegionIds = new Set<string>();
     const neighborsAttr = el.getAttribute("data-neighbors");
     if (neighborsAttr) {
-      neighborsAttr.split(",").map((s) => s.trim()).filter(Boolean).forEach((nId) => neighbourRegionIds.add(nId));
+      neighborsAttr
+        .split(",")
+        .map((s) => s.trim())
+        .filter(Boolean)
+        .forEach((nId) => neighbourRegionIds.add(nId));
     } else if (fallbackRegion?.neighbourRegionIds) {
       const nIds = fallbackRegion.neighbourRegionIds;
       if (nIds instanceof Set) {
