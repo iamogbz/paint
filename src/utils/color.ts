@@ -1,4 +1,4 @@
-import { TRUE_BLACK_HEX } from "./constants";
+import { TRANSPARENT_HEX, TRUE_BLACK_HEX } from "./constants";
 
 // Color math utilities
 export function hsvToRgb(h: number, s: number, v: number): [number, number, number] {
@@ -67,14 +67,14 @@ export function rgbToHsv(r: number, g: number, b: number, a?: number): [number, 
 }
 
 export function hexToRgb(hexCode: string) {
-  const hexPartDx = hexCode.length > 4 ? 2 : 1;
-  const strippedHexCode = hexCode.replace("#", "");
-  if (strippedHexCode.length !== 3 && strippedHexCode.length < 6) {
+  const normalized = normalizeHex(hexCode);
+  if (!normalized || normalized.length !== 9) {
     return null;
   }
+  const strippedHexCode = normalized.substring(1);
   const rbga: number[] = [];
   for (let i = 0; i < 4; i++) {
-    rbga.push(parseInt(strippedHexCode.slice(i * hexPartDx, i * hexPartDx + hexPartDx) || "FF", 16));
+    rbga.push(parseInt(strippedHexCode.slice(i * 2, i * 2 + 2), 16));
   }
   return Object.freeze(rbga) as readonly [number, number, number, number];
 }
@@ -100,7 +100,14 @@ export function normalizeHex(hex?: string | null): string {
   if (!h.startsWith("#")) {
     h = "#" + h;
   }
-  if (h.length === 7) {
+  if (h.length === 4) {
+    // #RGB -> #RRGGBBFF
+    h = `#${h[1]}${h[1]}${h[2]}${h[2]}${h[3]}${h[3]}FF`;
+  } else if (h.length === 5) {
+    // #RGBA -> #RRGGBBAA
+    h = `#${h[1]}${h[1]}${h[2]}${h[2]}${h[3]}${h[3]}${h[4]}${h[4]}`;
+  } else if (h.length === 7) {
+    // #RRGGBB -> #RRGGBBFF
     h = h + "FF";
   }
   return h;
@@ -108,6 +115,12 @@ export function normalizeHex(hex?: string | null): string {
 
 let canvas2dCtx: CanvasRenderingContext2D | OffscreenCanvasRenderingContext2D | null = null;
 export function getHexCode(anyColor: string) {
+  if (!anyColor || anyColor === "none") return TRANSPARENT_HEX;
+  const trimmed = anyColor.trim();
+  if (/^#[0-9a-fA-F]{3,8}$/.test(trimmed)) {
+    return normalizeHex(trimmed);
+  }
+
   if (!canvas2dCtx) {
     // 1. Create a tiny off-screen canvas
     const canvas = typeof OffscreenCanvas !== "undefined" ? new OffscreenCanvas(1, 1) : document.createElement("canvas");

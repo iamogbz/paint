@@ -1,7 +1,7 @@
 import { COLOR_COLLAPSE_DELTA_E_THRESHOLD, FALLBACK_IMAGE_SIZE_PX, FILLABLE_SVG_ELEMENTS_SELECTOR, PAINTABLE_REGION_HEX, TRANSPARENT_HEX, TRUE_BLACK_HEX } from "./constants.js";
 import { processingImageHeightSignal, processingImageWidthSignal } from "../state/store.js";
 import { ProcessedArtwork } from "../types";
-import { deltaE, getHexCode, normalizeHex, rgbToHex, rgbToLab } from "./color.js";
+import { deltaE, getHexCode, hexToRgb, normalizeHex, rgbToHex, rgbToLab } from "./color.js";
 import { cleanSvgStr, getSvgDimensions, parseSVG, SVGFillableElement, XML_NS } from "./html.js";
 import { Options } from "@visioncortex/vtracer";
 
@@ -59,14 +59,15 @@ async function loadImage(src: string): Promise<Readonly<{ data: HTMLImageElement
     if (!blob) {
       return {
         format: contentType,
-        data: blob,
+        data: null,
       } as const;
     }
 
+    const validBlob = blob;
     return new Promise((resolve) => {
       const img = new Image();
       img.crossOrigin = "anonymous";
-      const objectUrl = URL.createObjectURL(blob);
+      const objectUrl = URL.createObjectURL(validBlob);
       img.onload = () => {
         URL.revokeObjectURL(objectUrl);
         let targetWidth = FALLBACK_IMAGE_SIZE_PX;
@@ -96,7 +97,7 @@ async function loadImage(src: string): Promise<Readonly<{ data: HTMLImageElement
         processingImageHeightSignal.set(FALLBACK_IMAGE_SIZE_PX);
         resolve({
           format: contentType,
-          data: blob,
+          data: null,
         } as const);
       };
       img.src = objectUrl;
@@ -205,12 +206,59 @@ function sampleAndClusterRegionColors(
     const b = (regionNum >> 16) & 0xff;
     const colorStr = `rgb(${r},${g},${b})`;
 
-    if (elem instanceof SVGPathElement) {
+    const tag = elem.tagName.toLowerCase();
+    if (tag === "path") {
       const d = elem.getAttribute("d");
       if (d) {
         const path2d = new Path2D(d);
+        const fillRule = elem.getAttribute("fill-rule") === "evenodd" ? "evenodd" : "nonzero";
         idCtx.fillStyle = colorStr;
-        idCtx.fill(path2d);
+        idCtx.fill(path2d, fillRule);
+      }
+    } else if (tag === "rect") {
+      const x = parseFloat(elem.getAttribute("x") || "0") || 0;
+      const y = parseFloat(elem.getAttribute("y") || "0") || 0;
+      const w = parseFloat(elem.getAttribute("width") || "0") || 0;
+      const h = parseFloat(elem.getAttribute("height") || "0") || 0;
+      if (w > 0 && h > 0) {
+        idCtx.fillStyle = colorStr;
+        idCtx.fillRect(x, y, w, h);
+      }
+    } else if (tag === "circle") {
+      const cx = parseFloat(elem.getAttribute("cx") || "0") || 0;
+      const cy = parseFloat(elem.getAttribute("cy") || "0") || 0;
+      const rVal = parseFloat(elem.getAttribute("r") || "0") || 0;
+      if (rVal > 0) {
+        idCtx.fillStyle = colorStr;
+        idCtx.beginPath();
+        idCtx.arc(cx, cy, rVal, 0, Math.PI * 2);
+        idCtx.fill();
+      }
+    } else if (tag === "ellipse") {
+      const cx = parseFloat(elem.getAttribute("cx") || "0") || 0;
+      const cy = parseFloat(elem.getAttribute("cy") || "0") || 0;
+      const rx = parseFloat(elem.getAttribute("rx") || "0") || 0;
+      const ry = parseFloat(elem.getAttribute("ry") || "0") || 0;
+      if (rx > 0 && ry > 0) {
+        idCtx.fillStyle = colorStr;
+        idCtx.beginPath();
+        idCtx.ellipse(cx, cy, rx, ry, 0, 0, Math.PI * 2);
+        idCtx.fill();
+      }
+    } else if (tag === "polygon" || tag === "polyline") {
+      const pointsAttr = elem.getAttribute("points");
+      if (pointsAttr) {
+        const nums = pointsAttr.trim().split(/[\s,]+/).map(Number).filter((n) => !isNaN(n));
+        if (nums.length >= 4) {
+          idCtx.fillStyle = colorStr;
+          idCtx.beginPath();
+          idCtx.moveTo(nums[0], nums[1]);
+          for (let p = 2; p < nums.length; p += 2) {
+            idCtx.lineTo(nums[p], nums[p + 1]);
+          }
+          idCtx.closePath();
+          idCtx.fill();
+        }
       }
     }
   });
@@ -232,7 +280,8 @@ function sampleAndClusterRegionColors(
       const idx = rowOffset + x;
       const idPixel = id32[idx];
 
-      if (idPixel >>> 24 === 0) continue;
+      const alpha = idPixel >>> 24;
+      if (alpha < 128) continue;
 
       const regionNum = idPixel & 0x00ffffff;
       if (regionNum > 0 && regionNum <= regionCount) {
@@ -245,7 +294,7 @@ function sampleAndClusterRegionColors(
         // Adjacency check to the right
         if (x + 1 < width) {
           const rightPixel = id32[idx + 1];
-          if (rightPixel >>> 24 > 0) {
+          if (rightPixel >>> 24 >= 128) {
             const rightNum = rightPixel & 0x00ffffff;
             if (rightNum > 0 && rightNum <= regionCount && rightNum !== regionNum) {
               const idA = `region-${regionNum - 1}`;
@@ -259,7 +308,7 @@ function sampleAndClusterRegionColors(
         // Adjacency check downwards
         if (y + 1 < height) {
           const downPixel = id32[idx + width];
-          if (downPixel >>> 24 > 0) {
+          if (downPixel >>> 24 >= 128) {
             const downNum = downPixel & 0x00ffffff;
             if (downNum > 0 && downNum <= regionCount && downNum !== regionNum) {
               const idA = `region-${regionNum - 1}`;
@@ -286,20 +335,32 @@ function sampleAndClusterRegionColors(
       g = Math.round(sumG[i] / count);
       b = Math.round(sumB[i] / count);
     } else {
-      // Fallback for sub-pixel / thin vector paths: sample centroid from bounding box
+      // Fallback for sub-pixel / thin vector paths: check element's existing fill first
       const elem = fillableElements[i - 1];
-      let cx = Math.floor(width / 2);
-      let cy = Math.floor(height / 2);
-      try {
-        const bbox = elem.getBBox();
-        cx = Math.max(0, Math.min(width - 1, Math.floor(bbox.x + bbox.width / 2)));
-        cy = Math.max(0, Math.min(height - 1, Math.floor(bbox.y + bbox.height / 2)));
-      } catch (_) {}
-      const fallbackIdx = cy * width + cx;
-      const fallbackPixel = orig32[fallbackIdx];
-      r = fallbackPixel & 0xff;
-      g = (fallbackPixel >> 8) & 0xff;
-      b = (fallbackPixel >> 16) & 0xff;
+      const existingFill = elem.getAttribute("fill");
+      let fallbackRgb: readonly [number, number, number, number] | null = null;
+      if (existingFill && existingFill !== "none") {
+        fallbackRgb = hexToRgb(getHexCode(existingFill));
+      }
+
+      if (fallbackRgb && fallbackRgb[3] > 0) {
+        r = fallbackRgb[0];
+        g = fallbackRgb[1];
+        b = fallbackRgb[2];
+      } else {
+        let cx = Math.floor(width / 2);
+        let cy = Math.floor(height / 2);
+        try {
+          const bbox = elem.getBBox();
+          cx = Math.max(0, Math.min(width - 1, Math.floor(bbox.x + bbox.width / 2)));
+          cy = Math.max(0, Math.min(height - 1, Math.floor(bbox.y + bbox.height / 2)));
+        } catch (_) {}
+        const fallbackIdx = cy * width + cx;
+        const fallbackPixel = orig32[fallbackIdx];
+        r = fallbackPixel & 0xff;
+        g = (fallbackPixel >> 8) & 0xff;
+        b = (fallbackPixel >> 16) & 0xff;
+      }
     }
     rawRgbList.push({ id: regionId, r, g, b, count });
   }
@@ -405,6 +466,22 @@ function sampleAndClusterRegionColors(
         const dist = deltaE(groupA.avgLab, groupB.avgLab);
 
         if (dist < minDistance) {
+          // Check for direct topological adjacency conflict between groupA and groupB
+          let hasAdjacencyConflict = false;
+          for (const idA of groupA.assignedRegionIds) {
+            const neighborsA = adjacencyGraph.get(idA);
+            if (!neighborsA) continue;
+            for (const idB of groupB.assignedRegionIds) {
+              if (neighborsA.has(idB)) {
+                hasAdjacencyConflict = true;
+                break;
+              }
+            }
+            if (hasAdjacencyConflict) break;
+          }
+
+          if (hasAdjacencyConflict) continue;
+
           const combinedOriginals = [...groupA.originalColors, ...groupB.originalColors];
           const count = combinedOriginals.length;
           const sumR = combinedOriginals.reduce((acc, col) => acc + col.r, 0);
@@ -514,12 +591,12 @@ function mergeRegions(sourceId: string, targetId: string, regionsToRemove: Set<s
     const neighbors = sampledData.adjacencyGraph.get(sourceId)!;
     const targetNeighbors = sampledData.adjacencyGraph.get(targetId);
     if (targetNeighbors) {
-      neighbors.forEach((n) => {
+      neighbors.forEach((n: string) => {
         if (n !== targetId) targetNeighbors.add(n);
       });
     }
     // Remove from other neighbors and redirect to target
-    sampledData.adjacencyGraph.forEach((ns, nid) => {
+    sampledData.adjacencyGraph.forEach((ns: Set<string>, nid: string) => {
       if (ns.has(sourceId)) {
         ns.delete(sourceId);
         if (nid !== targetId && !regionsToRemove.has(nid)) {
@@ -604,7 +681,21 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
   const isFillableElemSelector = `:is(${FILLABLE_SVG_ELEMENTS_SELECTOR})` as typeof FILLABLE_SVG_ELEMENTS_SELECTOR;
 
   const preservedTreeElements = new Set<SVGElement>();
-  const allFillableElements = Array.from(renderNode.querySelectorAll(isFillableElemSelector));
+  const allFillableElements = Array.from(renderNode.querySelectorAll(isFillableElemSelector)).filter(
+    (elem) => elem.closest("defs") === null
+  ) as SVGFillableElement[];
+
+  // Sort fillable elements so larger regions are background and smaller regions are on top for sampling and rendering
+  allFillableElements.sort((a, b) => {
+    try {
+      const bA = a.getBBox();
+      const bB = b.getBBox();
+      return bB.width * bB.height - bA.width * bA.height;
+    } catch (_) {
+      return 0;
+    }
+  });
+  allFillableElements.forEach((elem) => elem.parentElement?.appendChild(elem));
 
   // Determine fill colors: if bitmap, sample directly from pristine pixels with graph adjacency-constrained palette clumping
   const sampledData = origImgDataForSampling !== null ? sampleAndClusterRegionColors(origImgDataForSampling, processingImageWidthSignal.get(), processingImageHeightSignal.get(), allFillableElements) : null;
@@ -626,13 +717,7 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
       topElem = topElem.parentElement;
     }
 
-    const computedStyle = fillElement.computedStyleMap();
-    const elementFill = computedStyle.get("fill")?.toString();
-
-    // skip elements in defintions
-    if (fillElement.closest("defs") !== null) {
-      return;
-    }
+    const elementFill = fillElement.getAttribute("fill") || fillElement.computedStyleMap?.().get("fill")?.toString();
 
     const { width, height, x, y } = fillElement.getBBox();
     regionBounds.push({ id: fillRegionId, boundingBox: { width, height, x, y } });
@@ -702,6 +787,20 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
       }
     }
   }
+
+  // Sort remaining elements in DOM so smaller paths render above larger ones
+  regionBounds.sort((a, b) => {
+    const areaA = a.boundingBox.width * a.boundingBox.height;
+    const areaB = b.boundingBox.width * b.boundingBox.height;
+    return areaB - areaA; // Largest first (rendered behind), smallest last (rendered on top)
+  });
+
+  regionBounds.forEach(({ id }) => {
+    const el = regionSVGElements.get(id);
+    if (el && el.parentElement) {
+      el.parentElement.appendChild(el);
+    }
+  });
 
   // remove all style elements after processing of layout and colors is done.
   renderNode.querySelectorAll("style").forEach((elem) => elem.remove());
