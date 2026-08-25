@@ -1,7 +1,7 @@
 import { html, PropertyValues } from "lit";
 import { customElement, property } from "lit/decorators.js";
 import { SignalElement } from "../utils/SignalElement";
-import { activeHighlightColorSignal, copiedHexSignal, currentArtworkSignal, isProcessingSignal, isGalleryOpenSignal, isColorPickerOpenSignal, zoomScaleSignal, draggedColorPositionSignal, undoStackSignal, handleUndo, handleDeleteSwatchColor, isBrushModeSignal, panDragActiveSignal, artworkIdsSortedSignal } from "../state/store";
+import { activeHighlightColorSignal, copiedHexSignal, currentArtworkSignal, isProcessingSignal, isGalleryOpenSignal, isColorPickerOpenSignal, zoomScaleSignal, draggedColorPositionSignal, undoStackSignal, handleUndo, handleDeleteSwatchColor, isBrushModeSignal, panDragActiveSignal, artworkIdsSortedSignal, swatchCopyHexCode } from "../state/store";
 import { iconPaintBucket, iconPaintbrush, iconCheck, iconFolderOpen, iconDownload, iconZoomIn, iconZoomOut, iconRotateCcw, iconMove, iconTrash2 } from "./icons";
 import { DROPPER_BUFFER_PX, TRANSPARENT_HEX, transparentImgCss } from "../utils/constants";
 import { soundEffects } from "../utils/soundEffects";
@@ -103,18 +103,8 @@ export class PaintingControls extends SignalElement {
     const activeColor = activeHighlightColorSignal.get();
 
     if (activeColor !== hexCode) {
-      window.clearTimeout(this.timeoutId);
       activeHighlightColorSignal.set(hexCode);
-
-      navigator.clipboard
-        .writeText(hexCode)
-        .then(() => {
-          copiedHexSignal.set(hexCode);
-          this.timeoutId = window.setTimeout(() => {
-            copiedHexSignal.set(null);
-          }, 1500);
-        })
-        .catch(() => {});
+      swatchCopyHexCode(hexCode);
     }
   };
 

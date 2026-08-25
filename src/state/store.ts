@@ -66,6 +66,20 @@ export const footerStyleSignal = computed(() => ({
   color: "#4A2810",
 }));
 
+let copiedHexSignalId = Number.NaN;
+export function swatchCopyHexCode(hexCode: string) {
+  window.clearTimeout(copiedHexSignalId);
+  navigator.clipboard
+    .writeText(hexCode)
+    .then(() => {
+      copiedHexSignal.set(hexCode);
+      copiedHexSignalId = window.setTimeout(() => {
+        copiedHexSignal.set(null);
+      }, 1500);
+    })
+    .catch(() => {});
+}
+
 export function countCorrectlyFilledRegions(art: ProcessedArtwork): { correct: number; total: number } {
   if (!art) return { correct: 0, total: 0 };
   let correct = 0;
