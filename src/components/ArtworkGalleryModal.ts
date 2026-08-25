@@ -197,21 +197,17 @@ export class ArtworkGalleryModal extends SignalElement {
                               }}"
                             >
                               <span style="white-space: nowrap; overflow: hidden; text-overflow: ellipsis;">${art.name}</span>
-                              ${!art.name.startsWith("Daily Challenge")
-                                ? html`
-                                    <button
-                                      style="margin-left: 0.5rem; background: none; border: none; cursor: pointer; padding: 0; display: flex; align-items: center; flex-shrink: 0;"
-                                      title="Rename"
-                                      @click="${(e: Event) => {
-                                        e.stopPropagation();
-                                        this.editingId = art.id;
-                                        this.editNameValue = art.name;
-                                      }}"
-                                    >
-                                      ${iconEdit2(14, "#4A2810")}
-                                    </button>
-                                  `
-                                : ""}
+                                <button
+                                  style="margin-left: 0.5rem; background: none; border: none; cursor: pointer; padding: 0; display: flex; align-items: center; flex-shrink: 0;"
+                                  title="Rename"
+                                  @click="${(e: Event) => {
+                                    e.stopPropagation();
+                                    this.editingId = art.id;
+                                    this.editNameValue = art.name;
+                                  }}"
+                                >
+                                  ${iconEdit2(14, "#4A2810")}
+                                </button>
                             </h3>
                           `}
                       <p style="font-size: 0.75rem; color: #4A2810; font-weight: 700; margin: 0.25rem 0 0 0;">Created: ${dateStr} • ${Math.round(art.width)}×${Math.round(art.height)}px</p>
