@@ -272,55 +272,62 @@ function sampleAndClusterRegionColors(
   const sumG = new Float64Array(regionCount + 1);
   const sumB = new Float64Array(regionCount + 1);
   const pixelCounts = new Uint32Array(regionCount + 1);
+  const touchingPairs = new Set<number>();
 
   // 2. Scan pixels: accumulate colors and discover topological 4-connected adjacencies
-  for (let y = 0; y < height; y++) {
-    const rowOffset = y * width;
-    for (let x = 0; x < width; x++) {
-      const idx = rowOffset + x;
-      const idPixel = id32[idx];
+  const totalPixels = width * height;
+  for (let idx = 0; idx < totalPixels; idx++) {
+    const idPixel = id32[idx];
+    const alpha = idPixel >>> 24;
+    if (alpha < 128) continue;
 
-      const alpha = idPixel >>> 24;
-      if (alpha < 128) continue;
+    const regionNum = idPixel & 0x00ffffff;
+    if (regionNum > 0 && regionNum <= regionCount) {
+      const origPixel = orig32[idx];
+      sumR[regionNum] += origPixel & 0xff;
+      sumG[regionNum] += (origPixel >> 8) & 0xff;
+      sumB[regionNum] += (origPixel >> 16) & 0xff;
+      pixelCounts[regionNum]++;
 
-      const regionNum = idPixel & 0x00ffffff;
-      if (regionNum > 0 && regionNum <= regionCount) {
-        const origPixel = orig32[idx];
-        sumR[regionNum] += origPixel & 0xff;
-        sumG[regionNum] += (origPixel >> 8) & 0xff;
-        sumB[regionNum] += (origPixel >> 16) & 0xff;
-        pixelCounts[regionNum]++;
-
-        // Adjacency check to the right
-        if (x + 1 < width) {
-          const rightPixel = id32[idx + 1];
-          if (rightPixel >>> 24 >= 128) {
-            const rightNum = rightPixel & 0x00ffffff;
-            if (rightNum > 0 && rightNum <= regionCount && rightNum !== regionNum) {
-              const idA = `region-${regionNum - 1}`;
-              const idB = `region-${rightNum - 1}`;
-              adjacencyGraph.get(idA)?.add(idB);
-              adjacencyGraph.get(idB)?.add(idA);
-            }
+      const x = idx % width;
+      // Adjacency check to the right
+      if (x + 1 < width) {
+        const rightPixel = id32[idx + 1];
+        if (rightPixel >>> 24 >= 128) {
+          const rightNum = rightPixel & 0x00ffffff;
+          if (rightNum > 0 && rightNum <= regionCount && rightNum !== regionNum) {
+            const minNum = regionNum < rightNum ? regionNum : rightNum;
+            const maxNum = regionNum < rightNum ? rightNum : regionNum;
+            touchingPairs.add(minNum * 1000000 + maxNum);
           }
         }
+      }
 
-        // Adjacency check downwards
-        if (y + 1 < height) {
-          const downPixel = id32[idx + width];
-          if (downPixel >>> 24 >= 128) {
-            const downNum = downPixel & 0x00ffffff;
-            if (downNum > 0 && downNum <= regionCount && downNum !== regionNum) {
-              const idA = `region-${regionNum - 1}`;
-              const idB = `region-${downNum - 1}`;
-              adjacencyGraph.get(idA)?.add(idB);
-              adjacencyGraph.get(idB)?.add(idA);
-            }
+      // Adjacency check downwards
+      const downIdx = idx + width;
+      if (downIdx < totalPixels) {
+        const downPixel = id32[downIdx];
+        if (downPixel >>> 24 >= 128) {
+          const downNum = downPixel & 0x00ffffff;
+          if (downNum > 0 && downNum <= regionCount && downNum !== regionNum) {
+            const minNum = regionNum < downNum ? regionNum : downNum;
+            const maxNum = regionNum < downNum ? downNum : regionNum;
+            touchingPairs.add(minNum * 1000000 + maxNum);
           }
         }
       }
     }
   }
+
+  // Populate adjacency graph from unique touching pairs
+  touchingPairs.forEach((packed) => {
+    const minNum = Math.floor(packed / 1000000);
+    const maxNum = packed % 1000000;
+    const idA = `region-${minNum - 1}`;
+    const idB = `region-${maxNum - 1}`;
+    adjacencyGraph.get(idA)?.add(idB);
+    adjacencyGraph.get(idB)?.add(idA);
+  });
 
   // 3. Compute base sampled representative color for each region
   const rawRgbList: Array<{ id: string; r: number; g: number; b: number; count: number }> = [];
@@ -382,29 +389,31 @@ function sampleAndClusterRegionColors(
   const clusters: Cluster[] = [];
   const CLUSTER_DELTA_E_THRESHOLD = 9.0; // Perceptually similar colors cluster together
 
+  // Map regionId -> cluster for O(1) neighbor cluster lookup
+  const regionToCluster = new Map<string, Cluster>();
+
   // Sort regions by pixel count descending so larger key regions establish initial palette anchors
   const sortedIndices = rawRgbList.map((_, idx) => idx).sort((a, b) => rawRgbList[b].count - rawRgbList[a].count);
 
   for (const idx of sortedIndices) {
     const item = rawRgbList[idx];
     const lab = regionLabs[idx];
-    const neighbors = adjacencyGraph.get(item.id) || new Set<string>();
+    const neighbors = adjacencyGraph.get(item.id);
 
-    // Find best cluster candidate where no adjacent neighbor is already assigned this cluster's color
+    // Forbidden clusters are clusters already assigned to directly touching neighbors
+    const forbiddenClusters = new Set<Cluster>();
+    if (neighbors) {
+      for (const n of neighbors) {
+        const nCluster = regionToCluster.get(n);
+        if (nCluster) forbiddenClusters.add(nCluster);
+      }
+    }
+
     let bestCluster: Cluster | null = null;
     let minDiff = Infinity;
 
     for (const cluster of clusters) {
-      // Check for direct topological adjacency conflict
-      let hasAdjacencyConflict = false;
-      for (const assignedId of cluster.assignedRegionIds) {
-        if (neighbors.has(assignedId)) {
-          hasAdjacencyConflict = true;
-          break;
-        }
-      }
-
-      if (hasAdjacencyConflict) continue;
+      if (forbiddenClusters.has(cluster)) continue;
 
       const diff = deltaE(lab, cluster.lab);
       if (diff < CLUSTER_DELTA_E_THRESHOLD && diff < minDiff) {
@@ -414,11 +423,10 @@ function sampleAndClusterRegionColors(
     }
 
     if (bestCluster) {
-      // Assign to existing non-conflicting cluster
       bestCluster.assignedRegionIds.add(item.id);
+      regionToCluster.set(item.id, bestCluster);
       regionColors.set(item.id, bestCluster.hex);
     } else {
-      // Create new distinct palette cluster
       const hex = rgbToHex(item.r, item.g, item.b);
       const newCluster: Cluster = {
         r: item.r,
@@ -430,6 +438,7 @@ function sampleAndClusterRegionColors(
         assignedRegionIds: new Set([item.id]),
       };
       clusters.push(newCluster);
+      regionToCluster.set(item.id, newCluster);
       regionColors.set(item.id, hex);
     }
   }
@@ -442,6 +451,7 @@ function sampleAndClusterRegionColors(
     avgB: number;
     avgLab: [number, number, number];
     assignedRegionIds: Set<string>;
+    neighborGroups: Set<MergeGroup>;
   }
 
   const mergeGroups: MergeGroup[] = clusters.map((c) => ({
@@ -451,37 +461,45 @@ function sampleAndClusterRegionColors(
     avgB: c.b,
     avgLab: c.lab,
     assignedRegionIds: new Set(c.assignedRegionIds),
+    neighborGroups: new Set<MergeGroup>(),
   }));
+
+  const regionToGroup = new Map<string, MergeGroup>();
+  mergeGroups.forEach((g) => {
+    g.assignedRegionIds.forEach((rid) => regionToGroup.set(rid, g));
+  });
+
+  // Build initial group-to-group adjacency
+  mergeGroups.forEach((g) => {
+    g.assignedRegionIds.forEach((rid) => {
+      const nIds = adjacencyGraph.get(rid);
+      if (nIds) {
+        nIds.forEach((nId) => {
+          const nGroup = regionToGroup.get(nId);
+          if (nGroup && nGroup !== g) {
+            g.neighborGroups.add(nGroup);
+            nGroup.neighborGroups.add(g);
+          }
+        });
+      }
+    });
+  });
 
   let merged = true;
   while (merged) {
     merged = false;
-    let bestPair: [number, number] | null = null;
+    let bestI = -1;
+    let bestJ = -1;
     let minDistance = Infinity;
 
     for (let i = 0; i < mergeGroups.length; i++) {
+      const groupA = mergeGroups[i];
       for (let j = i + 1; j < mergeGroups.length; j++) {
-        const groupA = mergeGroups[i];
         const groupB = mergeGroups[j];
+        if (groupA.neighborGroups.has(groupB)) continue; // O(1) topological adjacency check
+
         const dist = deltaE(groupA.avgLab, groupB.avgLab);
-
-        if (dist < minDistance) {
-          // Check for direct topological adjacency conflict between groupA and groupB
-          let hasAdjacencyConflict = false;
-          for (const idA of groupA.assignedRegionIds) {
-            const neighborsA = adjacencyGraph.get(idA);
-            if (!neighborsA) continue;
-            for (const idB of groupB.assignedRegionIds) {
-              if (neighborsA.has(idB)) {
-                hasAdjacencyConflict = true;
-                break;
-              }
-            }
-            if (hasAdjacencyConflict) break;
-          }
-
-          if (hasAdjacencyConflict) continue;
-
+        if (dist < minDistance && dist < COLOR_COLLAPSE_DELTA_E_THRESHOLD) {
           const combinedOriginals = [...groupA.originalColors, ...groupB.originalColors];
           const count = combinedOriginals.length;
           const sumR = combinedOriginals.reduce((acc, col) => acc + col.r, 0);
@@ -496,31 +514,39 @@ function sampleAndClusterRegionColors(
 
           if (allWithinThreshold) {
             minDistance = dist;
-            bestPair = [i, j];
+            bestI = i;
+            bestJ = j;
           }
         }
       }
     }
 
-    if (bestPair !== null) {
-      const [i, j] = bestPair;
-      const groupA = mergeGroups[i];
-      const groupB = mergeGroups[j];
+    if (bestI !== -1) {
+      const groupA = mergeGroups[bestI];
+      const groupB = mergeGroups[bestJ];
       const combinedOriginals = [...groupA.originalColors, ...groupB.originalColors];
       const count = combinedOriginals.length;
-      const avgR = Math.round(combinedOriginals.reduce((acc, col) => acc + col.r, 0) / count);
-      const avgG = Math.round(combinedOriginals.reduce((acc, col) => acc + col.g, 0) / count);
-      const avgB = Math.round(combinedOriginals.reduce((acc, col) => acc + col.b, 0) / count);
-      const avgLab = rgbToLab(avgR, avgG, avgB);
-
       groupA.originalColors = combinedOriginals;
-      groupA.avgR = avgR;
-      groupA.avgG = avgG;
-      groupA.avgB = avgB;
-      groupA.avgLab = avgLab;
-      groupB.assignedRegionIds.forEach((id) => groupA.assignedRegionIds.add(id));
+      groupA.avgR = Math.round(combinedOriginals.reduce((acc, col) => acc + col.r, 0) / count);
+      groupA.avgG = Math.round(combinedOriginals.reduce((acc, col) => acc + col.g, 0) / count);
+      groupA.avgB = Math.round(combinedOriginals.reduce((acc, col) => acc + col.b, 0) / count);
+      groupA.avgLab = rgbToLab(groupA.avgR, groupA.avgG, groupA.avgB);
 
-      mergeGroups.splice(j, 1);
+      groupB.assignedRegionIds.forEach((id) => {
+        groupA.assignedRegionIds.add(id);
+        regionToGroup.set(id, groupA);
+      });
+
+      groupB.neighborGroups.forEach((nGroup) => {
+        nGroup.neighborGroups.delete(groupB);
+        if (nGroup !== groupA) {
+          nGroup.neighborGroups.add(groupA);
+          groupA.neighborGroups.add(nGroup);
+        }
+      });
+      groupA.neighborGroups.delete(groupB);
+
+      mergeGroups.splice(bestJ, 1);
       merged = true;
     }
   }
@@ -560,7 +586,14 @@ function absolutizePathStart(d: string): string {
   return d;
 }
 
-function mergeRegions(sourceId: string, targetId: string, regionsToRemove: Set<string>, regionBounds: Array<{ id: string; boundingBox: { width: number; height: number; x: number; y: number } }>, regionSVGElements: Map<string, SVGElement>, sampledData: any) {
+function mergeRegions(
+  sourceId: string,
+  targetId: string,
+  regionsToRemove: Set<string>,
+  regionBoundsMap: Map<string, { width: number; height: number; x: number; y: number }>,
+  regionSVGElements: Map<string, SVGElement>,
+  sampledData: any
+) {
   const el = regionSVGElements.get(sourceId)!;
   const targetEl = regionSVGElements.get(targetId)!;
 
@@ -568,26 +601,29 @@ function mergeRegions(sourceId: string, targetId: string, regionsToRemove: Set<s
   const dB = absolutizePathStart(targetEl.getAttribute("d") || "");
   targetEl.setAttribute("d", `${dB} ${dA}`);
 
-  // Update target bounding box
-  const b1 = regionBounds.find((r) => r.id === sourceId)!.boundingBox;
-  const b2 = regionBounds.find((r) => r.id === targetId)!.boundingBox;
-  const minX = Math.min(b1.x, b2.x);
-  const minY = Math.min(b1.y, b2.y);
-  const maxX = Math.max(b1.x + b1.width, b2.x + b2.width);
-  const maxY = Math.max(b1.y + b1.height, b2.y + b2.height);
-  b2.x = minX;
-  b2.y = minY;
-  b2.width = maxX - minX;
-  b2.height = maxY - minY;
-  targetEl.setAttribute("data-bbox", `${b2.width.toFixed(2)},${b2.height.toFixed(2)},${b2.x.toFixed(2)},${b2.y.toFixed(2)}`);
+  // Update target bounding box in O(1)
+  const b1 = regionBoundsMap.get(sourceId);
+  const b2 = regionBoundsMap.get(targetId);
+  if (b1 && b2) {
+    const minX = Math.min(b1.x, b2.x);
+    const minY = Math.min(b1.y, b2.y);
+    const maxX = Math.max(b1.x + b1.width, b2.x + b2.width);
+    const maxY = Math.max(b1.y + b1.height, b2.y + b2.height);
+    b2.x = minX;
+    b2.y = minY;
+    b2.width = maxX - minX;
+    b2.height = maxY - minY;
+    targetEl.setAttribute("data-bbox", `${b2.width.toFixed(2)},${b2.height.toFixed(2)},${b2.x.toFixed(2)},${b2.y.toFixed(2)}`);
+  }
 
   // Remove small region
   el.remove();
   regionSVGElements.delete(sourceId);
   regionsToRemove.add(sourceId);
+  regionBoundsMap.delete(sourceId);
 
   // Update adjacency graph
-  if (sampledData && sampledData.adjacencyGraph.has(sourceId)) {
+  if (sampledData && sampledData.adjacencyGraph && sampledData.adjacencyGraph.has(sourceId)) {
     const neighbors = sampledData.adjacencyGraph.get(sourceId)!;
     const targetNeighbors = sampledData.adjacencyGraph.get(targetId);
     if (targetNeighbors) {
@@ -667,7 +703,7 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
 
   /** Region ID to the elements for creating brush stroke clipping paths */
   const regionSVGElements: Map<string, SVGElement> = new Map();
-  const regionBounds: Array<{ id: string; boundingBox: { width: number; height: number; x: number; y: number } }> = [];
+  const regionBoundsMap: Map<string, { width: number; height: number; x: number; y: number }> = new Map();
 
   const renderNode = svgDoc!.cloneNode(true) as NonNullable<typeof svgDoc>;
   const hiddenContainer = document.createElement("div");
@@ -685,15 +721,22 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     (elem) => elem.closest("defs") === null
   ) as SVGFillableElement[];
 
+  // Cache getBBox calls once to prevent repeated layout reflows during sorting
+  const cachedBBoxes = new Map<SVGFillableElement, { width: number; height: number; x: number; y: number }>();
+  allFillableElements.forEach((elem) => {
+    try {
+      const { width, height, x, y } = elem.getBBox();
+      cachedBBoxes.set(elem, { width, height, x, y });
+    } catch (_) {
+      cachedBBoxes.set(elem, { width: 0, height: 0, x: 0, y: 0 });
+    }
+  });
+
   // Sort fillable elements so larger regions are background and smaller regions are on top for sampling and rendering
   allFillableElements.sort((a, b) => {
-    try {
-      const bA = a.getBBox();
-      const bB = b.getBBox();
-      return bB.width * bB.height - bA.width * bA.height;
-    } catch (_) {
-      return 0;
-    }
+    const bA = cachedBBoxes.get(a)!;
+    const bB = cachedBBoxes.get(b)!;
+    return bB.width * bB.height - bA.width * bA.height;
   });
   allFillableElements.forEach((elem) => elem.parentElement?.appendChild(elem));
 
@@ -718,10 +761,9 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     }
 
     const elementFill = fillElement.getAttribute("fill") || fillElement.computedStyleMap?.().get("fill")?.toString();
-
-    const { width, height, x, y } = fillElement.getBBox();
-    regionBounds.push({ id: fillRegionId, boundingBox: { width, height, x, y } });
-    fillElement.setAttribute("data-bbox", `${width.toFixed(2)},${height.toFixed(2)},${x.toFixed(2)},${y.toFixed(2)}`);
+    const bbox = cachedBBoxes.get(fillElement) || { width: 0, height: 0, x: 0, y: 0 };
+    regionBoundsMap.set(fillRegionId, { ...bbox });
+    fillElement.setAttribute("data-bbox", `${bbox.width.toFixed(2)},${bbox.height.toFixed(2)},${bbox.x.toFixed(2)},${bbox.y.toFixed(2)}`);
 
     if (elementFill === "none") {
       fillElement.setAttribute("assigned-fill", TRANSPARENT_HEX);
@@ -764,9 +806,9 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     const regionsToRemove = new Set<string>();
 
     // Sort candidate regions by area ascending so smallest speckles merge first
-    const sortedRegions = [...regionBounds].sort((a, b) => {
-      return a.boundingBox.width * a.boundingBox.height - b.boundingBox.width * b.boundingBox.height;
-    });
+    const sortedRegions = Array.from(regionBoundsMap.entries())
+      .map(([id, boundingBox]) => ({ id, boundingBox }))
+      .sort((a, b) => a.boundingBox.width * a.boundingBox.height - b.boundingBox.width * b.boundingBox.height);
 
     for (let i = 0; i < sortedRegions.length; i++) {
       const region = sortedRegions[i];
@@ -795,15 +837,13 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
           }
         }
 
-        // 2. Fallback to bounding box overlap / proximity if no topological neighbors
+        // 2. Fallback to bounding box proximity if no topological neighbors
         if (candidateNeighbors.length === 0) {
           const b1 = region.boundingBox;
-          for (let j = 0; j < regionBounds.length; j++) {
-            const r2 = regionBounds[j];
-            if (r2.id === region.id || regionsToRemove.has(r2.id)) continue;
-            const b2 = r2.boundingBox;
+          for (const [r2Id, b2] of regionBoundsMap.entries()) {
+            if (r2Id === region.id || regionsToRemove.has(r2Id)) continue;
             if (!(b1.x > b2.x + b2.width + 2 || b1.x + b1.width + 2 < b2.x || b1.y > b2.y + b2.height + 2 || b1.y + b1.height + 2 < b2.y)) {
-              candidateNeighbors.push(r2.id);
+              candidateNeighbors.push(r2Id);
             }
           }
         }
@@ -828,21 +868,14 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
           }
         }
 
-        // Only merge into neighbor if color is perceptually similar (DeltaE within tolerance).
-        // If color difference is noticeable (e.g. eye pupil, sharp highlight, dark edge), preserve the region!
-        const maxAllowedDeltaE = COLOR_COLLAPSE_DELTA_E_THRESHOLD;
+        // For microscopic / sub-pixel artifacts (< 1/3 threshold), ALWAYS merge into nearest adjacent neighbor to clean unpaintable noise.
+        // For moderately small regions, merge into neighbor if color is perceptually similar (DeltaE within tolerance).
+        const isMicroscopicSpeckle = w < minDim * 0.35 || h < minDim * 0.35 || area < minArea * 0.2;
+        const maxAllowedDeltaE = isMicroscopicSpeckle ? Infinity : COLOR_COLLAPSE_DELTA_E_THRESHOLD;
 
-        if (bestNeighborId && bestDeltaE <= maxAllowedDeltaE) {
-          mergeRegions(region.id, bestNeighborId, regionsToRemove, regionBounds, regionSVGElements, sampledData);
+        if (bestNeighborId && (isMicroscopicSpeckle || bestDeltaE <= maxAllowedDeltaE)) {
+          mergeRegions(region.id, bestNeighborId, regionsToRemove, regionBoundsMap, regionSVGElements, sampledData);
           mergedSmall = true;
-        }
-      }
-    }
-
-    if (mergedSmall) {
-      for (let i = regionBounds.length - 1; i >= 0; i--) {
-        if (regionsToRemove.has(regionBounds[i].id)) {
-          regionBounds.splice(i, 1);
         }
       }
     }
@@ -853,12 +886,13 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
   while (mergedSameColor) {
     mergedSameColor = false;
     const regionsToRemove = new Set<string>();
+    const currentRegionIds = Array.from(regionBoundsMap.keys());
 
-    for (let i = 0; i < regionBounds.length; i++) {
-      const region = regionBounds[i];
-      if (regionsToRemove.has(region.id)) continue;
+    for (let i = 0; i < currentRegionIds.length; i++) {
+      const regionId = currentRegionIds[i];
+      if (regionsToRemove.has(regionId)) continue;
 
-      const el = regionSVGElements.get(region.id);
+      const el = regionSVGElements.get(regionId);
       if (!el || el.tagName.toLowerCase() !== "path") continue;
 
       const assignedColor = el.getAttribute("assigned-fill");
@@ -867,8 +901,8 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
       let targetId: string | null = null;
 
       // Find an adjacent region with the same assigned color using the adjacency graph
-      if (sampledData && sampledData.adjacencyGraph && sampledData.adjacencyGraph.has(region.id)) {
-        const neighbors = sampledData.adjacencyGraph.get(region.id)!;
+      if (sampledData && sampledData.adjacencyGraph && sampledData.adjacencyGraph.has(regionId)) {
+        const neighbors = sampledData.adjacencyGraph.get(regionId)!;
         for (const n of neighbors) {
           const nEl = regionSVGElements.get(n);
           if (!regionsToRemove.has(n) && nEl && nEl.tagName.toLowerCase() === "path") {
@@ -883,46 +917,39 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
 
       // Fallback to bounding box overlap
       if (!targetId) {
-        const b1 = region.boundingBox;
-        for (let j = 0; j < regionBounds.length; j++) {
-          if (i === j || regionsToRemove.has(regionBounds[j].id)) continue;
-          const r2 = regionBounds[j];
-          const nEl = regionSVGElements.get(r2.id);
-          if (!nEl || nEl.tagName.toLowerCase() !== "path") continue;
-          const nAssignedColor = nEl.getAttribute("assigned-fill");
-          if (nAssignedColor !== assignedColor) continue;
-          const b2 = r2.boundingBox;
-          if (!(b1.x > b2.x + b2.width + 1 || b1.x + b1.width + 1 < b2.x || b1.y > b2.y + b2.height + 1 || b1.y + b1.height + 1 < b2.y)) {
-            targetId = r2.id;
-            break;
+        const b1 = regionBoundsMap.get(regionId);
+        if (b1) {
+          for (const [r2Id, b2] of regionBoundsMap.entries()) {
+            if (regionId === r2Id || regionsToRemove.has(r2Id)) continue;
+            const nEl = regionSVGElements.get(r2Id);
+            if (!nEl || nEl.tagName.toLowerCase() !== "path") continue;
+            const nAssignedColor = nEl.getAttribute("assigned-fill");
+            if (nAssignedColor !== assignedColor) continue;
+            if (!(b1.x > b2.x + b2.width + 1 || b1.x + b1.width + 1 < b2.x || b1.y > b2.y + b2.height + 1 || b1.y + b1.height + 1 < b2.y)) {
+              targetId = r2Id;
+              break;
+            }
           }
         }
       }
 
       if (targetId) {
-        mergeRegions(region.id, targetId, regionsToRemove, regionBounds, regionSVGElements, sampledData);
+        mergeRegions(regionId, targetId, regionsToRemove, regionBoundsMap, regionSVGElements, sampledData);
         mergedSameColor = true;
-      }
-    }
-
-    if (mergedSameColor) {
-      // Filter out removed regions from regionBounds
-      for (let i = regionBounds.length - 1; i >= 0; i--) {
-        if (regionsToRemove.has(regionBounds[i].id)) {
-          regionBounds.splice(i, 1);
-        }
       }
     }
   }
 
   // Sort remaining elements in DOM so smaller paths render above larger ones
-  regionBounds.sort((a, b) => {
-    const areaA = a.boundingBox.width * a.boundingBox.height;
-    const areaB = b.boundingBox.width * b.boundingBox.height;
-    return areaB - areaA; // Largest first (rendered behind), smallest last (rendered on top)
-  });
+  const finalSortedRegionBounds = Array.from(regionBoundsMap.entries())
+    .map(([id, boundingBox]) => ({ id, boundingBox }))
+    .sort((a, b) => {
+      const areaA = a.boundingBox.width * a.boundingBox.height;
+      const areaB = b.boundingBox.width * b.boundingBox.height;
+      return areaB - areaA; // Largest first (rendered behind), smallest last (rendered on top)
+    });
 
-  regionBounds.forEach(({ id }) => {
+  finalSortedRegionBounds.forEach(({ id }) => {
     const el = regionSVGElements.get(id);
     if (el && el.parentElement) {
       el.parentElement.appendChild(el);
@@ -972,7 +999,7 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
   try {
     const maxDim = Math.max(width, height);
     const expandPx = Math.max(8, maxDim * 0.015);
-    const computedNeighbours = await runInWorker("COMPUTE_NEIGHBORS", { regions: regionBounds, expandPx });
+    const computedNeighbours = await runInWorker("COMPUTE_NEIGHBORS", { regions: finalSortedRegionBounds, expandPx });
 
     for (const [id, neighbours] of computedNeighbours) {
       const el = regionSVGElements.get(id);
