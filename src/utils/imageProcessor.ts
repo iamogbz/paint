@@ -404,6 +404,13 @@ function sampleAndClusterRegionColors(
 
 function absolutizePathStart(d: string): string {
   d = d.trim();
+  if (!d) return d;
+  
+  const firstChar = d.charAt(0);
+  if (firstChar.toLowerCase() !== 'm' && /[a-zA-Z]/.test(firstChar)) {
+    d = 'M' + d.substring(1);
+  }
+
   if (!d.startsWith("m")) return d;
 
   // match 'm' followed by two floats.
@@ -417,6 +424,55 @@ function absolutizePathStart(d: string): string {
     return `M ${match[1]} ${match[2]}${rest}`;
   }
   return d;
+}
+
+
+function mergeRegions(sourceId: string, targetId: string, regionsToRemove: Set<string>, regionBounds: Array<{ id: string; boundingBox: { width: number; height: number; x: number; y: number } }>, regionSVGElements: Map<string, SVGElement>, sampledData: any) {
+  const el = regionSVGElements.get(sourceId)!;
+  const targetEl = regionSVGElements.get(targetId)!;
+
+  const dA = absolutizePathStart(el.getAttribute("d") || "");
+  const dB = absolutizePathStart(targetEl.getAttribute("d") || "");
+  targetEl.setAttribute("d", `${dB} ${dA}`);
+
+  // Update target bounding box
+  const b1 = regionBounds.find((r) => r.id === sourceId)!.boundingBox;
+  const b2 = regionBounds.find((r) => r.id === targetId)!.boundingBox;
+  const minX = Math.min(b1.x, b2.x);
+  const minY = Math.min(b1.y, b2.y);
+  const maxX = Math.max(b1.x + b1.width, b2.x + b2.width);
+  const maxY = Math.max(b1.y + b1.height, b2.y + b2.height);
+  b2.x = minX;
+  b2.y = minY;
+  b2.width = maxX - minX;
+  b2.height = maxY - minY;
+  targetEl.setAttribute("data-bbox", `${b2.width.toFixed(2)},${b2.height.toFixed(2)},${b2.x.toFixed(2)},${b2.y.toFixed(2)}`);
+
+  // Remove small region
+  el.remove();
+  regionSVGElements.delete(sourceId);
+  regionsToRemove.add(sourceId);
+
+  // Update adjacency graph
+  if (sampledData && sampledData.adjacencyGraph.has(sourceId)) {
+    const neighbors = sampledData.adjacencyGraph.get(sourceId)!;
+    const targetNeighbors = sampledData.adjacencyGraph.get(targetId);
+    if (targetNeighbors) {
+      neighbors.forEach((n) => {
+        if (n !== targetId) targetNeighbors.add(n);
+      });
+    }
+    // Remove from other neighbors and redirect to target
+    sampledData.adjacencyGraph.forEach((ns, nid) => {
+      if (ns.has(sourceId)) {
+        ns.delete(sourceId);
+        if (nid !== targetId && !regionsToRemove.has(nid)) {
+          ns.add(targetId);
+        }
+      }
+    });
+    sampledData.adjacencyGraph.delete(sourceId);
+  }
 }
 
 export async function processImageToCartoonPalette(imageSrc: string, artworkName: string): Promise<ProcessedArtwork> {
@@ -601,50 +657,8 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
         }
 
         if (targetId) {
-          const targetEl = regionSVGElements.get(targetId)!;
-          const dA = absolutizePathStart(el.getAttribute("d") || "");
-          const dB = absolutizePathStart(targetEl.getAttribute("d") || "");
-          targetEl.setAttribute("d", `${dB} ${dA}`);
-
-          // Update target bounding box
-          const b1 = region.boundingBox;
-          const b2 = regionBounds.find((r) => r.id === targetId)!.boundingBox;
-          const minX = Math.min(b1.x, b2.x);
-          const minY = Math.min(b1.y, b2.y);
-          const maxX = Math.max(b1.x + b1.width, b2.x + b2.width);
-          const maxY = Math.max(b1.y + b1.height, b2.y + b2.height);
-          b2.x = minX;
-          b2.y = minY;
-          b2.width = maxX - minX;
-          b2.height = maxY - minY;
-          targetEl.setAttribute("data-bbox", `${b2.width.toFixed(2)},${b2.height.toFixed(2)},${b2.x.toFixed(2)},${b2.y.toFixed(2)}`);
-
-          // Remove small region
-          el.remove();
-          regionSVGElements.delete(region.id);
-          regionsToRemove.add(region.id);
+          mergeRegions(region.id, targetId, regionsToRemove, regionBounds, regionSVGElements, sampledData);
           mergedAny = true;
-
-          // Update adjacency graph
-          if (sampledData && sampledData.adjacencyGraph.has(region.id)) {
-            const neighbors = sampledData.adjacencyGraph.get(region.id)!;
-            const targetNeighbors = sampledData.adjacencyGraph.get(targetId);
-            if (targetNeighbors) {
-              neighbors.forEach((n) => {
-                if (n !== targetId) targetNeighbors.add(n);
-              });
-            }
-            // Remove from other neighbors and redirect to target
-            sampledData.adjacencyGraph.forEach((ns, nid) => {
-              if (ns.has(region.id)) {
-                ns.delete(region.id);
-                if (nid !== targetId && !regionsToRemove.has(nid)) {
-                  ns.add(targetId!);
-                }
-              }
-            });
-            sampledData.adjacencyGraph.delete(region.id);
-          }
         }
       }
     }
@@ -693,50 +707,8 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
       }
 
       if (targetId) {
-        const targetEl = regionSVGElements.get(targetId)!;
-        const dA = absolutizePathStart(el.getAttribute("d") || "");
-        const dB = absolutizePathStart(targetEl.getAttribute("d") || "");
-        targetEl.setAttribute("d", `${dB} ${dA}`);
-
-        // Update target bounding box
-        const b1 = region.boundingBox;
-        const b2 = regionBounds.find((r) => r.id === targetId)!.boundingBox;
-        const minX = Math.min(b1.x, b2.x);
-        const minY = Math.min(b1.y, b2.y);
-        const maxX = Math.max(b1.x + b1.width, b2.x + b2.width);
-        const maxY = Math.max(b1.y + b1.height, b2.y + b2.height);
-        b2.x = minX;
-        b2.y = minY;
-        b2.width = maxX - minX;
-        b2.height = maxY - minY;
-        targetEl.setAttribute("data-bbox", `${b2.width.toFixed(2)},${b2.height.toFixed(2)},${b2.x.toFixed(2)},${b2.y.toFixed(2)}`);
-
-        // Remove the swallowed region
-        el.remove();
-        regionSVGElements.delete(region.id);
-        regionsToRemove.add(region.id);
+        mergeRegions(region.id, targetId, regionsToRemove, regionBounds, regionSVGElements, sampledData);
         mergedSameColor = true;
-
-        // Update adjacency graph
-        if (sampledData && sampledData.adjacencyGraph.has(region.id)) {
-          const neighbors = sampledData.adjacencyGraph.get(region.id)!;
-          const targetNeighbors = sampledData.adjacencyGraph.get(targetId);
-          if (targetNeighbors) {
-            neighbors.forEach((n) => {
-              if (n !== targetId) targetNeighbors.add(n);
-            });
-          }
-          // Remove from other neighbors and redirect to target
-          sampledData.adjacencyGraph.forEach((ns, nid) => {
-            if (ns.has(region.id)) {
-              ns.delete(region.id);
-              if (nid !== targetId && !regionsToRemove.has(nid)) {
-                ns.add(targetId!);
-              }
-            }
-          });
-          sampledData.adjacencyGraph.delete(region.id);
-        }
       }
     }
 
