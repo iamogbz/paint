@@ -1,4 +1,13 @@
-import { COLOR_COLLAPSE_DELTA_E_THRESHOLD, FALLBACK_IMAGE_SIZE_PX, FILLABLE_SVG_ELEMENTS_SELECTOR, PAINTABLE_REGION_HEX, TRANSPARENT_HEX, TRUE_BLACK_HEX } from "./constants.js";
+import {
+  COLOR_COLLAPSE_DELTA_E_THRESHOLD,
+  FALLBACK_IMAGE_SIZE_PX,
+  FILLABLE_SVG_ELEMENTS_SELECTOR,
+  MICROSCOPIC_REGION_SURFACE_AREA_RATIO,
+  PAINTABLE_REGION_HEX,
+  SMALL_REGION_SURFACE_AREA_RATIO,
+  TRANSPARENT_HEX,
+  TRUE_BLACK_HEX,
+} from "./constants.js";
 import { processingImageHeightSignal, processingImageWidthSignal } from "../state/store.js";
 import { ProcessedArtwork } from "../types";
 import { deltaE, getHexCode, hexToRgb, normalizeHex, rgbToHex, rgbToLab } from "./color.js";
@@ -202,17 +211,19 @@ function sampleAndClusterRegionColors(
 ): {
   regionColors: Map<string, string>;
   adjacencyGraph: Map<string, Set<string>>;
+  regionPixelCounts: Map<string, number>;
 } {
   const regionCount = fillableElements.length;
   const regionColors = new Map<string, string>();
   const adjacencyGraph = new Map<string, Set<string>>();
+  const regionPixelCounts = new Map<string, number>();
 
   fillableElements.forEach((_, idx) => {
     adjacencyGraph.set(`region-${idx}`, new Set<string>());
   });
 
   if (regionCount === 0) {
-    return { regionColors, adjacencyGraph };
+    return { regionColors, adjacencyGraph, regionPixelCounts };
   }
 
   // 1. Offscreen ID-map rendering canvas
@@ -365,6 +376,7 @@ function sampleAndClusterRegionColors(
   for (let i = 1; i <= regionCount; i++) {
     const count = pixelCounts[i];
     const regionId = `region-${i - 1}`;
+    regionPixelCounts.set(regionId, count);
     let r: number, g: number, b: number;
 
     if (count > 0) {
@@ -511,7 +523,7 @@ function sampleAndClusterRegionColors(
     }
   }
 
-  return { regionColors, adjacencyGraph };
+  return { regionColors, adjacencyGraph, regionPixelCounts };
 }
 
 function absolutizePathStart(d: string): string {
@@ -544,7 +556,8 @@ function mergeRegions(
   regionsToRemove: Set<string>,
   regionBoundsMap: Map<string, { width: number; height: number; x: number; y: number }>,
   regionSVGElements: Map<string, SVGElement>,
-  sampledData: any
+  sampledData: any,
+  regionPixelAreaMap: Map<string, number>
 ) {
   const el = regionSVGElements.get(sourceId)!;
   const targetEl = regionSVGElements.get(targetId)!;
@@ -567,6 +580,12 @@ function mergeRegions(
     b2.height = maxY - minY;
     targetEl.setAttribute("data-bbox", `${b2.width.toFixed(2)},${b2.height.toFixed(2)},${b2.x.toFixed(2)},${b2.y.toFixed(2)}`);
   }
+
+  // Update target pixel surface area
+  const srcPixelArea = regionPixelAreaMap.get(sourceId) || 0;
+  const tgtPixelArea = regionPixelAreaMap.get(targetId) || 0;
+  regionPixelAreaMap.set(targetId, srcPixelArea + tgtPixelArea);
+  regionPixelAreaMap.delete(sourceId);
 
   // Remove small region
   el.remove();
@@ -698,6 +717,8 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
   const sampledData = origImgDataForSampling !== null ? sampleAndClusterRegionColors(origImgDataForSampling, processingImageWidthSignal.get(), processingImageHeightSignal.get(), allFillableElements) : null;
   origImgDataForSampling = null;
 
+  const regionPixelAreaMap: Map<string, number> = new Map();
+
   allFillableElements.forEach((fillElement, key) => {
     const fillRegionId = `region-${key}`;
     fillElement.setAttribute("data-region-id", fillRegionId);
@@ -720,6 +741,9 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     regionBoundsMap.set(fillRegionId, { ...bbox });
     fillElement.setAttribute("data-bbox", `${bbox.width.toFixed(2)},${bbox.height.toFixed(2)},${bbox.x.toFixed(2)},${bbox.y.toFixed(2)}`);
 
+    const pixelArea = sampledData?.regionPixelCounts?.get(fillRegionId) ?? (bbox.width * bbox.height);
+    regionPixelAreaMap.set(fillRegionId, pixelArea);
+
     if (elementFill === "none") {
       fillElement.setAttribute("assigned-fill", TRANSPARENT_HEX);
       fillElement.setAttribute("fill", TRANSPARENT_HEX);
@@ -741,12 +765,11 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
 
   const imgW = processingImageWidthSignal.get();
   const imgH = processingImageHeightSignal.get();
-  const totalArea = imgW * imgH;
-  const maxEdge = Math.max(imgW, imgH);
-  const minDim = Math.max(2, maxEdge * 0.002);
-  const minArea = Math.max(8, totalArea * 0.0001);
+  const totalImageSurfaceArea = imgW * imgH;
+  const minRegionPixelArea = Math.max(8, totalImageSurfaceArea * SMALL_REGION_SURFACE_AREA_RATIO);
+  const microscopicPixelArea = Math.max(2, totalImageSurfaceArea * MICROSCOPIC_REGION_SURFACE_AREA_RATIO);
 
-  // Merge small regions based on dynamic thresholds while strictly preserving shape, coherence, and color definition
+  // Merge small regions based on pixel surface area vs total image surface area while strictly preserving shape, coherence, and color definition
   const colorLabCache = new Map<string, readonly [number, number, number]>();
   const getLabForHex = (hex: string) => {
     let lab = colorLabCache.get(hex);
@@ -763,10 +786,10 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     mergedSmall = false;
     const regionsToRemove = new Set<string>();
 
-    // Sort candidate regions by area ascending so smallest speckles merge first
-    const sortedRegions = Array.from(regionBoundsMap.entries())
-      .map(([id, boundingBox]) => ({ id, boundingBox }))
-      .sort((a, b) => a.boundingBox.width * a.boundingBox.height - b.boundingBox.width * b.boundingBox.height);
+    // Sort candidate regions by pixel surface area ascending so smallest speckles merge first
+    const sortedRegions = Array.from(regionPixelAreaMap.entries())
+      .map(([id, pixelArea]) => ({ id, pixelArea }))
+      .sort((a, b) => a.pixelArea - b.pixelArea);
 
     for (let i = 0; i < sortedRegions.length; i++) {
       const region = sortedRegions[i];
@@ -775,11 +798,9 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
       const el = regionSVGElements.get(region.id);
       if (!el || el.tagName.toLowerCase() !== "path") continue;
 
-      const w = region.boundingBox.width;
-      const h = region.boundingBox.height;
-      const area = w * h;
+      const pixelArea = region.pixelArea;
 
-      if (w < minDim || h < minDim || area < minArea) {
+      if (pixelArea < minRegionPixelArea) {
         const assignedColor = el.getAttribute("assigned-fill");
         if (!assignedColor || assignedColor === TRANSPARENT_HEX) continue;
 
@@ -815,13 +836,13 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
           }
         }
 
-        // For microscopic / sub-pixel artifacts (< 1/3 threshold), ALWAYS merge into nearest adjacent neighbor to clean unpaintable noise.
+        // For microscopic / sub-pixel artifacts (< microscopic threshold), ALWAYS merge into nearest adjacent neighbor to clean unpaintable noise.
         // For moderately small regions, merge into neighbor if color is perceptually similar (DeltaE within tolerance).
-        const isMicroscopicSpeckle = w < minDim * 0.35 || h < minDim * 0.35 || area < minArea * 0.2;
+        const isMicroscopicSpeckle = pixelArea < microscopicPixelArea;
         const maxAllowedDeltaE = isMicroscopicSpeckle ? Infinity : COLOR_COLLAPSE_DELTA_E_THRESHOLD;
 
         if (bestNeighborId && (isMicroscopicSpeckle || bestDeltaE <= maxAllowedDeltaE)) {
-          mergeRegions(region.id, bestNeighborId, regionsToRemove, regionBoundsMap, regionSVGElements, sampledData);
+          mergeRegions(region.id, bestNeighborId, regionsToRemove, regionBoundsMap, regionSVGElements, sampledData, regionPixelAreaMap);
           mergedSmall = true;
         }
       }
@@ -833,7 +854,7 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
   while (mergedSameColor) {
     mergedSameColor = false;
     const regionsToRemove = new Set<string>();
-    const currentRegionIds = Array.from(regionBoundsMap.keys());
+    const currentRegionIds = Array.from(regionPixelAreaMap.keys());
 
     for (let i = 0; i < currentRegionIds.length; i++) {
       const regionId = currentRegionIds[i];
@@ -863,20 +884,16 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
       }
 
       if (targetId) {
-        mergeRegions(regionId, targetId, regionsToRemove, regionBoundsMap, regionSVGElements, sampledData);
+        mergeRegions(regionId, targetId, regionsToRemove, regionBoundsMap, regionSVGElements, sampledData, regionPixelAreaMap);
         mergedSameColor = true;
       }
     }
   }
 
-  // Sort remaining elements in DOM so smaller paths render above larger ones
-  const finalSortedRegionBounds = Array.from(regionBoundsMap.entries())
-    .map(([id, boundingBox]) => ({ id, boundingBox }))
-    .sort((a, b) => {
-      const areaA = a.boundingBox.width * a.boundingBox.height;
-      const areaB = b.boundingBox.width * b.boundingBox.height;
-      return areaB - areaA; // Largest first (rendered behind), smallest last (rendered on top)
-    });
+  // Sort remaining elements in DOM so smaller paths render above larger ones (using pixel surface area)
+  const finalSortedRegionBounds = Array.from(regionPixelAreaMap.entries())
+    .sort((a, b) => b[1] - a[1])
+    .map(([id]) => ({ id, boundingBox: regionBoundsMap.get(id)! }));
 
   finalSortedRegionBounds.forEach(({ id }) => {
     const el = regionSVGElements.get(id);
