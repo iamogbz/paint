@@ -144,6 +144,7 @@ function eraseFromStrokesRecord(strokes: Record<string, { points: Array<{ x: num
 @customElement("easel-board")
 export class EaselBoard extends SignalElement {
   private containerElement: HTMLElement | null = null;
+  private transformElement: HTMLElement | null = null;
   private requestedTransformAnimationFrame: number | null = null;
   private requestedRepaintAnimationFrame: number | null = null;
 
@@ -180,6 +181,16 @@ export class EaselBoard extends SignalElement {
   private brushPositionBuffer = [] as Array<{ x: number; y: number }>;
 
   private setupContainerListeners() {
+    const transformEl = this.querySelector<HTMLElement>("#easel-transform-element");
+    if (transformEl && transformEl !== this.transformElement) {
+      if (this.transformElement && this.rectCacheObserver) {
+        this.rectCacheObserver.unobserve(this.transformElement);
+      }
+      this.transformElement = transformEl;
+      if (this.rectCacheObserver) {
+        this.rectCacheObserver.observe(this.transformElement);
+      }
+    }
     const container = this.querySelector<HTMLElement>("#easel-zoom-container");
     if (container && container !== this.containerElement) {
       if (this.containerElement) {
@@ -872,21 +883,19 @@ export class EaselBoard extends SignalElement {
   };
 
   private clampPanX(x: number): number {
-    const w = this.containerElement?.clientWidth || 350;
+    const w = this.transformElement?.clientWidth || 350;
     const maxPan = w / 2;
     return clamp(x, -maxPan, maxPan);
   }
 
   private clampPanY(y: number): number {
-    const h = this.containerElement?.clientHeight || 350;
-    const basePan = h / 2;
-    const maxPanUp = basePan + window.innerHeight * 0.3;
-    const maxPanDown = basePan;
-    return clamp(y, -maxPanUp, maxPanDown);
+    const h = this.transformElement?.clientHeight || 350;
+    const maxPan = h / 2;
+    return clamp(y, -maxPan, maxPan);
   }
 
   private getTransformCssProperty = () => {
-    return `translate(calc(-50% + ${this.panX + this.dragDeltaX / this.zoomScale}px), calc(-30% + ${this.panY + this.dragDeltaY / this.zoomScale}px))`;
+    return `translate(calc(-50% + ${this.panX + this.dragDeltaX / this.zoomScale}px), calc(-50% + ${this.panY + this.dragDeltaY / this.zoomScale}px))`;
   };
 
   private getTransitionCssProperty = () => {
@@ -994,6 +1003,8 @@ export class EaselBoard extends SignalElement {
       this.rectCacheObserver.disconnect();
       this.rectCacheObserver = null;
     }
+    this.containerElement = null;
+    this.transformElement = null;
     window.removeEventListener("blur", this.handleFocusOut);
     window.removeEventListener("easel-pan-delta", this.handlePanDelta as EventListener);
     window.removeEventListener("easel-reset-pan", this.handlePanReset);
@@ -1005,8 +1016,14 @@ export class EaselBoard extends SignalElement {
   }
 
   private updateRectCache = () => {
-    if (this.containerElement) {
-      this.cachedContainerRect = this.containerElement.getBoundingClientRect();
+    const transformEl = this.transformElement || this.querySelector<HTMLElement>("#easel-transform-element");
+    if (transformEl) {
+      this.transformElement = transformEl;
+    }
+    const containerEl = this.containerElement || this.querySelector<HTMLElement>("#easel-zoom-container");
+    if (containerEl) {
+      this.containerElement = containerEl;
+      this.cachedContainerRect = containerEl.getBoundingClientRect();
     }
     const svg = this.querySelector<SVGSVGElement>("#fill-layer>svg");
     if (svg) {
@@ -1016,7 +1033,7 @@ export class EaselBoard extends SignalElement {
   };
 
   private updateZoom = () => {
-    const transformEl = this.querySelector<HTMLElement>("#easel-transform-element");
+    const transformEl = this.transformElement || this.querySelector<HTMLElement>("#easel-transform-element");
     if (transformEl) {
       transformEl.style.zoom = this.zoomScale.toString();
     }
@@ -1030,7 +1047,7 @@ export class EaselBoard extends SignalElement {
     this.requestedTransformAnimationFrame = window.requestAnimationFrame(() => {
       this.requestedTransformAnimationFrame = null;
 
-      const transformEl = this.querySelector<HTMLElement>("#easel-transform-element");
+      const transformEl = this.transformElement || this.querySelector<HTMLElement>("#easel-transform-element");
       if (transformEl) {
         transformEl.style.transform = this.getTransformCssProperty();
         transformEl.style.transition = this.getTransitionCssProperty();
@@ -1152,6 +1169,7 @@ export class EaselBoard extends SignalElement {
   };
 
   updated() {
+    this.setupContainerListeners();
     this.updateArtwork();
   }
 
