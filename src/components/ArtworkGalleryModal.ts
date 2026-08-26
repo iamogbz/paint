@@ -152,7 +152,7 @@ export class ArtworkGalleryModal extends SignalElement {
                       ${isActive ? html`<div style="position: absolute; top: 0.375rem; left: 0.375rem; background-color: #E63946; color: #FFFFFF; font-size: 0.625rem; font-weight: 900; padding: 0.125rem 0.5rem; border-radius: 0.75rem; border: 1px solid #FFFFFF; text-transform: uppercase;">ACTIVE</div>` : ""}
                     </div>
                     <!-- Details -->
-                    <div style="flex: 1; min-width: 200px; display: flex; flex-direction: column; justify-content: space-between;">
+                    <div style="width: calc(100% - 7.75rem); display: flex; flex-direction: column; justify-content: space-between;">
                       ${this.editingId === art.id
                         ? html`
                             <input
@@ -179,7 +179,7 @@ export class ArtworkGalleryModal extends SignalElement {
                           `
                         : html`
                             <h3
-                              style="display: flex; align-items: center; font-weight: 900; color: #000000; font-size: 1rem; margin: 0; cursor: pointer; width: 90%;"
+                              style="display: flex; align-items: center; font-weight: 900; color: #000000; font-size: 1rem; margin: 0; cursor: pointer;"
                               @click="${() => {
                                 if (!art.name.startsWith("Daily Challenge")) {
                                   this.editingId = art.id;
@@ -201,12 +201,13 @@ export class ArtworkGalleryModal extends SignalElement {
                                 </button>
                             </h3>
                           `}
-                      <p style="font-size: 0.75rem; color: #4A2810; font-weight: 700; margin: 0.25rem 0 0 0;">Created: ${dateStr} • ${Math.round(art.width)}×${Math.round(art.height)}px</p>
+                      <p style="font-size: 0.75rem; color: #4A2810; font-weight: 700; margin: 0.25rem 0 0 0;">${dateStr}</p>
+                      <p style="font-size: 0.75rem; color: #4A2810; font-weight: 700; margin: 0.25rem 0 0 0;">${Math.round(art.width)}×${Math.round(art.height)}px</p>
 
                       <!-- Color Swatches -->
                       <div style="display: flex; align-items: center; gap: 0.25rem; margin-top: 0.5rem; flex-wrap: wrap;">
                         <span style="font-size: 0.625rem; font-weight: 900; color: #000000; text-transform: uppercase; margin-right: 0.25rem;">${regionCount} cells & ${art.usedColorsCount} colours: </span>
-                        ${colorsToDisplay.map((hexCode) => html` <div style="width: 1rem; height: 1rem; border-radius: 9999px; border: 1px solid #000000; background-color: ${hexCode};" title="${hexCode}"></div> `)}
+                        <div style="display: flex; flex-direction: row; gap: 0.25rem;">${colorsToDisplay.map((hexCode) => html` <div style="width: 1rem; height: 1rem; border-radius: 9999px; border: 1px solid #000000; background-color: ${hexCode};" title="${hexCode}"></div> `)}</div>
                       </div>
                     </div>
                   </div>
