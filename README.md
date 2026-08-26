@@ -14,17 +14,19 @@
 - <https://www.visioncortex.org/vtracer>
 - <https://pixabay.com/>
 
-| Daily Challenges | [Art Link](https://pixabay.com/vectors/search/?order=ec)                  |
-| ---------------  | ------------------------------------------------------------------------- |
-| 2026-08-24       | <https://pixabay.com/vectors/rio-de-janeiro-cristo-redentore-10152663/>   |
-| 2026-08-23       | <https://pixabay.com/vectors/music-sound-audio-entry-brick-9249800/>      |
-| 2026-08-22       | <https://pixabay.com/vectors/brazil-brazilian-favela-favelas-10104348/>   |
-| 2026-08-21       | <https://pixabay.com/vectors/river-forest-mountain-landscape-8286407/>    |
-| 2026-08-20       | <https://pixabay.com/vectors/anime-girl-stars-falling-fantasy-9063542/>   |
-| 2026-08-19       | <https://pixabay.com/vectors/mountain-snow-cold-blue-north-9979198/>      |
-| 2026-08-18       | <https://pixabay.com/vectors/woman-stars-mind-sky-night-clouds-8706492/>  |
-| 2026-08-17       | <https://pixabay.com/vectors/painted-landscape-house-chicken-10246533/>   |
-| 2026-08-16       | <https://pixabay.com/vectors/girl-clouds-stars-art-calm-anime-8435340/>   |
-| 2026-08-15       | <https://pixabay.com/vectors/flower-seamless-textile-vintage-9294773/>    |
-| 2026-08-14       | <https://pixabay.com/vectors/girl-anime-manga-cloud-blue-star-10137717/>  |
-| 2026-08-13       | <https://pixabay.com/illustrations/digital-art-jungle-colorful-10356325/> |
+| Daily Challenges | [Art Link](https://pixabay.com/vectors/search/?order=ec)                          |
+| ---------------  | --------------------------------------------------------------------------------- |
+| 2026-08-26       | <https://pixabay.com/illustrations/sea-ocean-phone-wallpaper-wallpaper-8504503/>  |
+| 2026-08-25       | <https://pixabay.com/photos/hoian-bike-streets-bicycle-4988319/>                  |
+| 2026-08-24       | <https://pixabay.com/vectors/rio-de-janeiro-cristo-redentore-10152663/>           |
+| 2026-08-23       | <https://pixabay.com/vectors/music-sound-audio-entry-brick-9249800/>              |
+| 2026-08-22       | <https://pixabay.com/vectors/brazil-brazilian-favela-favelas-10104348/>           |
+| 2026-08-21       | <https://pixabay.com/vectors/river-forest-mountain-landscape-8286407/>            |
+| 2026-08-20       | <https://pixabay.com/vectors/anime-girl-stars-falling-fantasy-9063542/>           |
+| 2026-08-19       | <https://pixabay.com/vectors/mountain-snow-cold-blue-north-9979198/>              |
+| 2026-08-18       | <https://pixabay.com/vectors/woman-stars-mind-sky-night-clouds-8706492/>          |
+| 2026-08-17       | <https://pixabay.com/vectors/painted-landscape-house-chicken-10246533/>           |
+| 2026-08-16       | <https://pixabay.com/vectors/girl-clouds-stars-art-calm-anime-8435340/>           |
+| 2026-08-15       | <https://pixabay.com/vectors/flower-seamless-textile-vintage-9294773/>            |
+| 2026-08-14       | <https://pixabay.com/vectors/girl-anime-manga-cloud-blue-star-10137717/>          |
+| 2026-08-13       | <https://pixabay.com/illustrations/digital-art-jungle-colorful-10356325/>         |
