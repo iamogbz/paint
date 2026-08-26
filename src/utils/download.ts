@@ -67,7 +67,7 @@ export function exportArtworkSvgDataUrl(artwork: ProcessedArtwork, overrideWidth
   const w = `${overrideWidth || originalW}`;
   const h = `${overrideHeight || originalH}`;
 
-  const artworkSVG = renderArtworkToSVG(artwork);
+  const artworkSVG = renderArtworkToSVG(artwork, true);
 
   if (!artworkSVG) {
     return artwork.cartoonDataUrl;
