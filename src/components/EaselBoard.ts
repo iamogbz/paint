@@ -1208,7 +1208,8 @@ export class EaselBoard extends SignalElement {
     this.zoomScale = zoomScaleSignal.get();
 
     const outerContainerStyle = {
-      width: "95vmin",
+      width: "95vw",
+      height: "95vh",
       margin: "0 auto",
       paddingTop: "0.5em",
       paddingBottom: "1em",
@@ -1278,7 +1279,7 @@ export class EaselBoard extends SignalElement {
     };
 
     const easelTransformElementStyle = {
-      width: "95vmin",
+      minWidth: "95vmin",
       position: "absolute",
       top: "50%",
       left: "50%",
