@@ -246,12 +246,8 @@ export class EaselBoard extends SignalElement {
 
     const newZoomScale = zoom(this.zoomScale, e.deltaY > 0);
 
-    if (!this.cachedContainerRect) {
-      this.updateRectCache();
-    }
-
-    if (newZoomScale !== this.zoomScale && this.cachedContainerRect) {
-      const rect = this.cachedContainerRect;
+    if (newZoomScale !== this.zoomScale) {
+      const rect = this.containerElement?.getBoundingClientRect() || this.getBoundingClientRect();
       const cx = rect.left + rect.width / 2;
       const cy = rect.top + rect.height / 2;
 
@@ -385,15 +381,11 @@ export class EaselBoard extends SignalElement {
       const currentMidX = (pointers[0].clientX + pointers[1].clientX) / 2;
       const currentMidY = (pointers[0].clientY + pointers[1].clientY) / 2;
 
-      if (!this.cachedContainerRect) {
-        this.updateRectCache();
-      }
-
-      if (this.initialPinchDistance && this.initialPinchDistance > 0 && this.cachedContainerRect) {
+      if (this.initialPinchDistance && this.initialPinchDistance > 0) {
         const scaleFactor = currentDistance / this.initialPinchDistance;
         const newZoom = zoom(this.initialZoomScale * scaleFactor, true);
 
-        const rect = this.cachedContainerRect;
+        const rect = this.containerElement?.getBoundingClientRect() || this.getBoundingClientRect();
         const cx = rect.left + rect.width / 2;
         const cy = rect.top + rect.height / 2;
 
@@ -906,7 +898,6 @@ export class EaselBoard extends SignalElement {
     return ["transform", "width", "zoom"].map((p) => `${p} ${transitionSettings}`).join(", ");
   };
 
-  private cachedContainerRect: DOMRect | null = null;
   private cachedSvgRect: DOMRect | null = null;
   private cachedSvgCtm: DOMMatrix | null = null;
   private rectCacheIntervalId: number | null = null;
@@ -1023,7 +1014,6 @@ export class EaselBoard extends SignalElement {
     const containerEl = this.containerElement || this.querySelector<HTMLElement>("#easel-zoom-container");
     if (containerEl) {
       this.containerElement = containerEl;
-      this.cachedContainerRect = containerEl.getBoundingClientRect();
     }
     const svg = this.querySelector<SVGSVGElement>("#fill-layer>svg");
     if (svg) {
