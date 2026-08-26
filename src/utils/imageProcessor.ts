@@ -3,6 +3,8 @@ import {
   FALLBACK_IMAGE_SIZE_PX,
   FILLABLE_SVG_ELEMENTS_SELECTOR,
   MICROSCOPIC_REGION_SURFACE_AREA_RATIO,
+  MIN_REGION_DIMENSION_PX,
+  MIN_REGION_DIMENSION_RATIO,
   PAINTABLE_REGION_HEX,
   SMALL_REGION_SURFACE_AREA_RATIO,
   TRANSPARENT_HEX,
@@ -768,6 +770,8 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
   const totalImageSurfaceArea = imgW * imgH;
   const minRegionPixelArea = Math.max(8, totalImageSurfaceArea * SMALL_REGION_SURFACE_AREA_RATIO);
   const microscopicPixelArea = Math.max(2, totalImageSurfaceArea * MICROSCOPIC_REGION_SURFACE_AREA_RATIO);
+  const minRegionWidth = Math.max(MIN_REGION_DIMENSION_PX, imgW * MIN_REGION_DIMENSION_RATIO);
+  const minRegionHeight = Math.max(MIN_REGION_DIMENSION_PX, imgH * MIN_REGION_DIMENSION_RATIO);
 
   // Merge small regions based on pixel surface area vs total image surface area while strictly preserving shape, coherence, and color definition
   const colorLabCache = new Map<string, readonly [number, number, number]>();
@@ -798,9 +802,11 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
       const el = regionSVGElements.get(region.id);
       if (!el || el.tagName.toLowerCase() !== "path") continue;
 
+      const bbox = regionBoundsMap.get(region.id);
+      const isNarrowStreak = bbox !== undefined && (bbox.width <= minRegionWidth || bbox.height <= minRegionHeight);
       const pixelArea = region.pixelArea;
 
-      if (pixelArea < minRegionPixelArea) {
+      if (pixelArea < minRegionPixelArea || isNarrowStreak) {
         const assignedColor = el.getAttribute("assigned-fill");
         if (!assignedColor || assignedColor === TRANSPARENT_HEX) continue;
 
@@ -836,9 +842,9 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
           }
         }
 
-        // For microscopic / sub-pixel artifacts (< microscopic threshold), ALWAYS merge into nearest adjacent neighbor to clean unpaintable noise.
+        // For microscopic / sub-pixel artifacts (< microscopic threshold) or single point wide/tall streaks, ALWAYS merge into nearest adjacent neighbor to clean unpaintable noise.
         // For moderately small regions, merge into neighbor if color is perceptually similar (DeltaE within tolerance).
-        const isMicroscopicSpeckle = pixelArea < microscopicPixelArea;
+        const isMicroscopicSpeckle = pixelArea < microscopicPixelArea || isNarrowStreak;
         const maxAllowedDeltaE = isMicroscopicSpeckle ? Infinity : COLOR_COLLAPSE_DELTA_E_THRESHOLD;
 
         if (bestNeighborId && (isMicroscopicSpeckle || bestDeltaE <= maxAllowedDeltaE)) {
