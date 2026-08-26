@@ -1017,7 +1017,7 @@ export function renderArtworkToSVG(artwork: ProcessedArtwork, fillEdges = false)
   if (artwork.height) svgElem.setAttribute("height", artwork.height.toString());
   const artSurfaceArea = artwork.height * artwork.width;
   if (fillEdges) {
-    svgElem.querySelectorAll(`[fill]`).forEach((elem) => {
+    svgElem.querySelectorAll(`[assigned-fill]`).forEach((elem) => {
       elem.setAttribute("stroke", elem.getAttribute("fill")!);
       elem.setAttribute("stroke-width", (artSurfaceArea / 10000000).toString());
     });
