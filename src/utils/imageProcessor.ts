@@ -288,7 +288,11 @@ function sampleAndClusterRegionColors(
     } else if (tag === "polygon" || tag === "polyline") {
       const pointsAttr = elem.getAttribute("points");
       if (pointsAttr) {
-        const nums = pointsAttr.trim().split(/[\s,]+/).map(Number).filter((n) => !isNaN(n));
+        const nums = pointsAttr
+          .trim()
+          .split(/[\s,]+/)
+          .map(Number)
+          .filter((n) => !isNaN(n));
         if (nums.length >= 4) {
           idCtx.fillStyle = colorStr;
           idCtx.beginPath();
@@ -745,7 +749,7 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     regionBoundsMap.set(fillRegionId, { ...bbox });
     fillElement.setAttribute("data-bbox", `${bbox.width.toFixed(2)},${bbox.height.toFixed(2)},${bbox.x.toFixed(2)},${bbox.y.toFixed(2)}`);
 
-    const pixelArea = sampledData?.regionPixelCounts?.get(fillRegionId) ?? (bbox.width * bbox.height);
+    const pixelArea = sampledData?.regionPixelCounts?.get(fillRegionId) ?? bbox.width * bbox.height;
     regionPixelAreaMap.set(fillRegionId, pixelArea);
 
     if (elementFill === "none") {
@@ -1006,11 +1010,18 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
   });
 }
 
-export function renderArtworkToSVG(artwork: ProcessedArtwork) {
+export function renderArtworkToSVG(artwork: ProcessedArtwork, fillEdges = false) {
   const svgElem = parseSVG(artwork.cartoonSVG) as SVGSVGElement;
   updateArtworkSvgWithUserPaints(svgElem, artwork);
   if (artwork.width) svgElem.setAttribute("width", artwork.width.toString());
   if (artwork.height) svgElem.setAttribute("height", artwork.height.toString());
+  const artSurfaceArea = artwork.height * artwork.width;
+  if (fillEdges) {
+    svgElem.querySelectorAll(`[fill]`).forEach((elem) => {
+      elem.setAttribute("stroke", elem.getAttribute("fill")!);
+      elem.setAttribute("stroke-width", (artSurfaceArea / 10000000).toString());
+    });
+  }
   return svgElem;
 }
 

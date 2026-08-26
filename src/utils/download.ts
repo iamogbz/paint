@@ -154,8 +154,8 @@ export async function exportArtworkPdfDataUrl(artwork: ProcessedArtwork): Promis
   });
 
   // Get svg element
-  const svgElement = renderArtworkToSVG(artwork);
-  
+  const svgElement = renderArtworkToSVG(artwork, true);
+
   // Set the scaled dimensions on the SVG so the PDF renders it to fit the page
   svgElement.setAttribute("width", String(w));
   svgElement.setAttribute("height", String(h));
