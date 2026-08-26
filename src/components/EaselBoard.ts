@@ -170,6 +170,8 @@ export class EaselBoard extends SignalElement {
   private initialPanY: number = 0;
   private initialPinchMidX: number | null = null;
   private initialPinchMidY: number | null = null;
+  private initialPinchCenterX: number | null = null;
+  private initialPinchCenterY: number | null = null;
   private isPinchAction = false;
 
   // Brush Painting State
@@ -191,16 +193,14 @@ export class EaselBoard extends SignalElement {
         this.rectCacheObserver.observe(this.transformElement);
       }
     }
+    this.updateRectCache();
     const container = this.querySelector<HTMLElement>("#easel-zoom-container");
     if (container && container !== this.containerElement) {
       if (this.containerElement) {
-        if (this.rectCacheObserver) this.rectCacheObserver.unobserve(this.containerElement);
         this.containerElement.removeEventListener("wheel", this.handleWheel);
         this.containerElement.removeEventListener("pointerleave", this.handlePointerLeave);
       }
       this.containerElement = container;
-      if (this.rectCacheObserver) this.rectCacheObserver.observe(this.containerElement);
-      this.updateRectCache();
       this.containerElement.addEventListener("wheel", this.handleWheel, { passive: false });
       this.containerElement.addEventListener("pointerleave", this.handlePointerLeave);
     }
@@ -246,21 +246,33 @@ export class EaselBoard extends SignalElement {
 
     const newZoomScale = zoom(this.zoomScale, e.deltaY > 0);
 
-    if (newZoomScale !== this.zoomScale) {
-      const rect = this.containerElement?.getBoundingClientRect() || this.getBoundingClientRect();
+    if (!this.cachedTransformRect) {
+      this.updateRectCache();
+    }
+
+    if (newZoomScale !== this.zoomScale && this.cachedTransformRect) {
+      const rect = this.cachedTransformRect;
       const cx = rect.left + rect.width / 2;
       const cy = rect.top + rect.height / 2;
 
       const mx = e.clientX - cx;
       const my = e.clientY - cy;
 
-      const newPanX = this.panX + mx / newZoomScale - mx / this.zoomScale;
-      const newPanY = this.panY + my / newZoomScale - my / this.zoomScale;
+      const newPanX = this.panX * (this.zoomScale / newZoomScale) + mx * (1 / newZoomScale - 1 / this.zoomScale);
+      const newPanY = this.panY * (this.zoomScale / newZoomScale) + my * (1 / newZoomScale - 1 / this.zoomScale);
 
+      const oldZoom = this.zoomScale;
       this.zoomScale = newZoomScale;
 
       this.panX = this.clampPanX(newPanX);
       this.panY = this.clampPanY(newPanY);
+
+      // Keep cachedTransformRect updated synchronously for rapid sequential wheel ticks
+      const newCx = e.clientX - mx * (newZoomScale / oldZoom);
+      const newCy = e.clientY - my * (newZoomScale / oldZoom);
+      const newWidth = (rect.width / oldZoom) * newZoomScale;
+      const newHeight = (rect.height / oldZoom) * newZoomScale;
+      this.cachedTransformRect = new DOMRect(newCx - newWidth / 2, newCy - newHeight / 2, newWidth, newHeight);
 
       this.wheelSpinningTimeoutId = window.setTimeout(() => {
         this.wheelSpinningTimeoutId = undefined;
@@ -357,6 +369,11 @@ export class EaselBoard extends SignalElement {
       this.initialPanY = this.panY;
       this.initialPinchMidX = (pointers[0].clientX + pointers[1].clientX) / 2;
       this.initialPinchMidY = (pointers[0].clientY + pointers[1].clientY) / 2;
+      const rect = this.cachedTransformRect || this.transformElement?.getBoundingClientRect();
+      if (rect) {
+        this.initialPinchCenterX = rect.left + rect.width / 2;
+        this.initialPinchCenterY = rect.top + rect.height / 2;
+      }
 
       this.containerElement?.setPointerCapture(e.pointerId);
     }
@@ -381,24 +398,28 @@ export class EaselBoard extends SignalElement {
       const currentMidX = (pointers[0].clientX + pointers[1].clientX) / 2;
       const currentMidY = (pointers[0].clientY + pointers[1].clientY) / 2;
 
-      if (this.initialPinchDistance && this.initialPinchDistance > 0) {
+      if (!this.cachedTransformRect) {
+        this.updateRectCache();
+      }
+
+      if (this.initialPinchDistance && this.initialPinchDistance > 0 && this.cachedTransformRect) {
+        if (this.initialPinchCenterX === null || this.initialPinchCenterY === null) {
+          const rect = this.cachedTransformRect;
+          this.initialPinchCenterX = rect.left + rect.width / 2;
+          this.initialPinchCenterY = rect.top + rect.height / 2;
+        }
+
         const scaleFactor = currentDistance / this.initialPinchDistance;
         const newZoom = zoom(this.initialZoomScale * scaleFactor, true);
-
-        const rect = this.containerElement?.getBoundingClientRect() || this.getBoundingClientRect();
-        const cx = rect.left + rect.width / 2;
-        const cy = rect.top + rect.height / 2;
 
         const initMidX = this.initialPinchMidX ?? currentMidX;
         const initMidY = this.initialPinchMidY ?? currentMidY;
 
-        const m_x = initMidX - cx;
-        const m_y = initMidY - cy;
-        const m_prime_x = currentMidX - cx;
-        const m_prime_y = currentMidY - cy;
+        const m_x = initMidX - this.initialPinchCenterX;
+        const m_y = initMidY - this.initialPinchCenterY;
 
-        const newPanX = this.initialPanX + m_prime_x / newZoom - m_x / this.initialZoomScale;
-        const newPanY = this.initialPanY + m_prime_y / newZoom - m_y / this.initialZoomScale;
+        const newPanX = this.initialPanX * (this.initialZoomScale / newZoom) + (currentMidX - initMidX) / newZoom + m_x * (1 / newZoom - 1 / this.initialZoomScale);
+        const newPanY = this.initialPanY * (this.initialZoomScale / newZoom) + (currentMidY - initMidY) / newZoom + m_y * (1 / newZoom - 1 / this.initialZoomScale);
 
         this.zoomScale = newZoom;
 
@@ -495,6 +516,8 @@ export class EaselBoard extends SignalElement {
       this.initialPinchDistance = null;
       this.initialPinchMidX = null;
       this.initialPinchMidY = null;
+      this.initialPinchCenterX = null;
+      this.initialPinchCenterY = null;
     }
 
     if (this.isPointerDown) {
@@ -666,10 +689,12 @@ export class EaselBoard extends SignalElement {
     const svg = this.querySelector<SVGSVGElement>("#fill-layer>svg");
     if (!svg) return null;
 
+    const svgDimensions = getSvgDimensions(svg);
+
     const rect = this.cachedSvgRect || svg.getBoundingClientRect();
     if (rect.width === 0 || rect.height === 0) return null;
 
-    const ctmMatrix = this.cachedSvgCtm || svg.getScreenCTM();
+    const ctmMatrix = this.cachedSvgCtm || this.calculateSvgScreenCTM(rect, svgDimensions, svg);
     if (!ctmMatrix) return null;
 
     const screenPoint = svg.createSVGPoint();
@@ -678,7 +703,7 @@ export class EaselBoard extends SignalElement {
 
     const svgTouchPoint = screenPoint.matrixTransform(ctmMatrix.inverse());
 
-    const { width: vbW, height: vbH } = getSvgDimensions(svg);
+    const { width: vbW, height: vbH } = svgDimensions;
 
     const scaleX = vbW / rect.width;
     const scaleY = vbH / rect.height;
@@ -898,6 +923,7 @@ export class EaselBoard extends SignalElement {
     return ["transform", "width", "zoom"].map((p) => `${p} ${transitionSettings}`).join(", ");
   };
 
+  private cachedTransformRect: DOMRect | null = null;
   private cachedSvgRect: DOMRect | null = null;
   private cachedSvgCtm: DOMMatrix | null = null;
   private rectCacheIntervalId: number | null = null;
@@ -941,6 +967,11 @@ export class EaselBoard extends SignalElement {
     this.touchStartY = null;
     this.isDragCanvasAction = false;
     this.isPinchAction = false;
+    this.initialPinchDistance = null;
+    this.initialPinchMidX = null;
+    this.initialPinchMidY = null;
+    this.initialPinchCenterX = null;
+    this.initialPinchCenterY = null;
     this.dragDeltaX = 0;
     this.dragDeltaY = 0;
     this.isBrushPainting = false;
@@ -1009,11 +1040,10 @@ export class EaselBoard extends SignalElement {
   private updateRectCache = () => {
     const transformEl = this.transformElement || this.querySelector<HTMLElement>("#easel-transform-element");
     if (transformEl) {
-      this.transformElement = transformEl;
-    }
-    const containerEl = this.containerElement || this.querySelector<HTMLElement>("#easel-zoom-container");
-    if (containerEl) {
-      this.containerElement = containerEl;
+      if (!this.transformElement) {
+        this.transformElement = transformEl;
+      }
+      this.cachedTransformRect = transformEl.getBoundingClientRect();
     }
     const svg = this.querySelector<SVGSVGElement>("#fill-layer>svg");
     if (svg) {
