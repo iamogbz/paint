@@ -10,10 +10,11 @@ export const MIN_ZOOM = 0.5;
 export const MAX_ZOOM = 16.0;
 
 export const COLOR_COLLAPSE_DELTA_E_THRESHOLD = 3.0;
-export const SMALL_REGION_SURFACE_AREA_RATIO = 0.0001;
-export const MICROSCOPIC_REGION_SURFACE_AREA_RATIO = 0.00002;
+export const TINY_REGION_SURFACE_AREA = 8.0;
+export const SMALL_REGION_SURFACE_AREA_RATIO = 0.000002;
 export const MIN_REGION_DIMENSION_RATIO = 0.004;
 export const MIN_REGION_DIMENSION_PX = 2;
+export const MIN_REGION_BBOX_FILL_RATIO = 0.1;
 
 const fillableSvgElements = ["circle", "ellipse", "path", "polyline", "polygon", "rect", "text", "textPath", "tspan"] as const;
 export const FILLABLE_SVG_ELEMENTS = new Set(fillableSvgElements);

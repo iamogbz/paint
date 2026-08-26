@@ -2,11 +2,12 @@ import {
   COLOR_COLLAPSE_DELTA_E_THRESHOLD,
   FALLBACK_IMAGE_SIZE_PX,
   FILLABLE_SVG_ELEMENTS_SELECTOR,
-  MICROSCOPIC_REGION_SURFACE_AREA_RATIO,
+  MIN_REGION_BBOX_FILL_RATIO,
   MIN_REGION_DIMENSION_PX,
   MIN_REGION_DIMENSION_RATIO,
   PAINTABLE_REGION_HEX,
   SMALL_REGION_SURFACE_AREA_RATIO,
+  TINY_REGION_SURFACE_AREA,
   TRANSPARENT_HEX,
   TRUE_BLACK_HEX,
 } from "./constants.js";
@@ -561,8 +562,9 @@ function mergeRegions(
   sampledData: any,
   regionPixelAreaMap: Map<string, number>
 ) {
-  const el = regionSVGElements.get(sourceId)!;
-  const targetEl = regionSVGElements.get(targetId)!;
+  const el = regionSVGElements.get(sourceId);
+  const targetEl = regionSVGElements.get(targetId);
+  if (!el || !targetEl) return;
 
   const dA = absolutizePathStart(el.getAttribute("d") || "");
   const dB = absolutizePathStart(targetEl.getAttribute("d") || "");
@@ -601,7 +603,7 @@ function mergeRegions(
     const targetNeighbors = sampledData.adjacencyGraph.get(targetId);
     if (targetNeighbors) {
       neighbors.forEach((n: string) => {
-        if (n !== targetId) targetNeighbors.add(n);
+        if (n !== targetId && n !== sourceId && !regionsToRemove.has(n)) targetNeighbors.add(n);
       });
     }
     // Remove from other neighbors and redirect to target
@@ -768,12 +770,11 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
   const imgW = processingImageWidthSignal.get();
   const imgH = processingImageHeightSignal.get();
   const totalImageSurfaceArea = imgW * imgH;
-  const minRegionPixelArea = Math.max(8, totalImageSurfaceArea * SMALL_REGION_SURFACE_AREA_RATIO);
-  const microscopicPixelArea = Math.max(2, totalImageSurfaceArea * MICROSCOPIC_REGION_SURFACE_AREA_RATIO);
+  const minRegionPixelArea = Math.max(TINY_REGION_SURFACE_AREA, totalImageSurfaceArea * SMALL_REGION_SURFACE_AREA_RATIO);
   const minRegionWidth = Math.max(MIN_REGION_DIMENSION_PX, imgW * MIN_REGION_DIMENSION_RATIO);
   const minRegionHeight = Math.max(MIN_REGION_DIMENSION_PX, imgH * MIN_REGION_DIMENSION_RATIO);
 
-  // Merge small regions based on pixel surface area vs total image surface area while strictly preserving shape, coherence, and color definition
+  // Helper to get LAB color with cache
   const colorLabCache = new Map<string, readonly [number, number, number]>();
   const getLabForHex = (hex: string) => {
     let lab = colorLabCache.get(hex);
@@ -785,72 +786,99 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     return lab;
   };
 
-  let mergedSmall = true;
-  while (mergedSmall) {
-    mergedSmall = false;
+  // Helper to determine if a region is thin or small based on 4 criteria:
+  // 1. Height is less than image-relative height threshold
+  // 2. Width is less than image-relative width threshold
+  // 3. Surface area is less than image-relative surface area threshold
+  // 4. Surface area is less than fill ratio relative to the region's bounding box area
+  const isRegionThinOrSmall = (id: string, pixelArea: number) => {
+    const bbox = regionBoundsMap.get(id);
+    if (!bbox) return false;
+    if (bbox.height <= minRegionHeight) return true;
+    if (bbox.width <= minRegionWidth) return true;
+    if (pixelArea < minRegionPixelArea) return true;
+    const bboxArea = bbox.width * bbox.height;
+    if (bboxArea > 0 && pixelArea / bboxArea < MIN_REGION_BBOX_FILL_RATIO) return true;
+    return false;
+  };
+
+  // Recursively eliminate ALL thin and small regions until none remain, merging each with its closest-color neighbor
+  let hasRemainingThinRegions = true;
+  let eliminationPasses = 0;
+  const maxPasses = Math.max(100, regionPixelAreaMap.size * 2);
+
+  while (hasRemainingThinRegions && eliminationPasses < maxPasses) {
+    eliminationPasses++;
+    hasRemainingThinRegions = false;
     const regionsToRemove = new Set<string>();
 
-    // Sort candidate regions by pixel surface area ascending so smallest speckles merge first
-    const sortedRegions = Array.from(regionPixelAreaMap.entries())
-      .map(([id, pixelArea]) => ({ id, pixelArea }))
-      .sort((a, b) => a.pixelArea - b.pixelArea);
+    if (regionPixelAreaMap.size <= 1) break;
 
-    for (let i = 0; i < sortedRegions.length; i++) {
-      const region = sortedRegions[i];
+    // Collect and sort candidate thin regions so thinnest/smallest merge first
+    const candidateRegions = Array.from(regionPixelAreaMap.entries())
+      .filter(([id, pixelArea]) => isRegionThinOrSmall(id, pixelArea))
+      .map(([id, pixelArea]) => {
+        const bbox = regionBoundsMap.get(id) || { width: 0, height: 0, x: 0, y: 0 };
+        const maxDim = Math.max(bbox.width, bbox.height, 1);
+        const thickness = Math.min(bbox.width, bbox.height, pixelArea / maxDim);
+        return { id, pixelArea, thickness };
+      })
+      .sort((a, b) => a.thickness - b.thickness || a.pixelArea - b.pixelArea);
+
+    if (candidateRegions.length === 0) break;
+
+    for (let i = 0; i < candidateRegions.length; i++) {
+      const region = candidateRegions[i];
       if (regionsToRemove.has(region.id)) continue;
+
+      const currentArea = regionPixelAreaMap.get(region.id);
+      if (currentArea === undefined) continue;
+      if (!isRegionThinOrSmall(region.id, currentArea)) continue;
 
       const el = regionSVGElements.get(region.id);
       if (!el || el.tagName.toLowerCase() !== "path") continue;
 
-      const bbox = regionBoundsMap.get(region.id);
-      const isNarrowStreak = bbox !== undefined && (bbox.width <= minRegionWidth || bbox.height <= minRegionHeight);
-      const pixelArea = region.pixelArea;
+      const assignedColor = el.getAttribute("assigned-fill");
+      if (!assignedColor || assignedColor === TRANSPARENT_HEX) continue;
 
-      if (pixelArea < minRegionPixelArea || isNarrowStreak) {
-        const assignedColor = el.getAttribute("assigned-fill");
-        if (!assignedColor || assignedColor === TRANSPARENT_HEX) continue;
+      const candidateNeighbors: string[] = [];
 
-        const candidateNeighbors: string[] = [];
-
-        // 1. Check topological adjacency graph for direct physical contact
-        if (sampledData && sampledData.adjacencyGraph && sampledData.adjacencyGraph.has(region.id)) {
-          const neighbors = sampledData.adjacencyGraph.get(region.id)!;
-          for (const n of neighbors) {
-            if (!regionsToRemove.has(n)) {
-              candidateNeighbors.push(n);
-            }
+      // 1. Check topological adjacency graph for direct physical pixel contact only
+      if (sampledData && sampledData.adjacencyGraph && sampledData.adjacencyGraph.has(region.id)) {
+        const neighbors = sampledData.adjacencyGraph.get(region.id)!;
+        for (const n of neighbors) {
+          if (!regionsToRemove.has(n) && n !== region.id && regionSVGElements.has(n)) {
+            candidateNeighbors.push(n);
           }
         }
+      }
 
-        const sourceLab = getLabForHex(assignedColor);
-        let bestNeighborId: string | null = null;
-        let bestDeltaE = Infinity;
+      if (candidateNeighbors.length === 0) continue;
 
-        for (const n of candidateNeighbors) {
-          const nEl = regionSVGElements.get(n);
-          if (!nEl || nEl.tagName.toLowerCase() !== "path") continue;
+      const sourceLab = getLabForHex(assignedColor);
+      let bestNeighborId: string | null = null;
+      let bestDeltaE = Infinity;
 
-          const nColor = nEl.getAttribute("assigned-fill");
-          if (!nColor || nColor === TRANSPARENT_HEX) continue;
+      for (const n of candidateNeighbors) {
+        const nEl = regionSVGElements.get(n);
+        if (!nEl || nEl.tagName.toLowerCase() !== "path") continue;
 
-          const nLab = getLabForHex(nColor);
-          const dist = deltaE(sourceLab, nLab);
+        const nColor = nEl.getAttribute("assigned-fill");
+        if (!nColor || nColor === TRANSPARENT_HEX) continue;
 
-          if (dist < bestDeltaE) {
-            bestDeltaE = dist;
-            bestNeighborId = n;
-          }
+        const nLab = getLabForHex(nColor);
+        const dist = deltaE(sourceLab, nLab);
+
+        if (dist < bestDeltaE) {
+          bestDeltaE = dist;
+          bestNeighborId = n;
         }
+      }
 
-        // For microscopic / sub-pixel artifacts (< microscopic threshold) or single point wide/tall streaks, ALWAYS merge into nearest adjacent neighbor to clean unpaintable noise.
-        // For moderately small regions, merge into neighbor if color is perceptually similar (DeltaE within tolerance).
-        const isMicroscopicSpeckle = pixelArea < microscopicPixelArea || isNarrowStreak;
-        const maxAllowedDeltaE = isMicroscopicSpeckle ? Infinity : COLOR_COLLAPSE_DELTA_E_THRESHOLD;
-
-        if (bestNeighborId && (isMicroscopicSpeckle || bestDeltaE <= maxAllowedDeltaE)) {
-          mergeRegions(region.id, bestNeighborId, regionsToRemove, regionBoundsMap, regionSVGElements, sampledData, regionPixelAreaMap);
-          mergedSmall = true;
-        }
+      // Merge with closest color neighbor amongst direct pixel adjacent neighbors
+      if (bestNeighborId) {
+        mergeRegions(region.id, bestNeighborId, regionsToRemove, regionBoundsMap, regionSVGElements, sampledData, regionPixelAreaMap);
+        hasRemainingThinRegions = true;
       }
     }
   }
