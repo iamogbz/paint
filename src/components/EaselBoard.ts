@@ -1138,6 +1138,7 @@ export class EaselBoard extends SignalElement {
       const fillSvg = fillLayer.querySelector("svg");
       if (fillSvg) updateArtworkSvgWithUserPaints(fillSvg, currentArtwork);
       if (guideLayer) {
+        const { mode: dropperMode } = draggedColorPositionSignal.get() ?? {};
         // update the guide layer with current user interaction
         currentArtwork?.regionsDrawingInfo.forEach((region) => {
           const expectedColorHex = region.fillColor;
@@ -1160,9 +1161,9 @@ export class EaselBoard extends SignalElement {
           strokeWidth = baseStrokeWidth * (isPaintedWrong ? 1.2 : 1.0);
 
           if (isHovered) {
-            const isTransparentPaintFill = activeHexUpper.substring(7) === "00";
-            stroke = (!isTransparentPaintFill && activeColor) || "#000000";
-            elemClass = isTransparentPaintFill ? hueLoopCls : "";
+            const isEraserSelected = activeHexUpper.substring(7) === "00";
+            stroke = (dropperMode === "select" && currentHexUpper) || (!isEraserSelected && activeColor) || "#000000";
+            elemClass = isEraserSelected ? hueLoopCls : "";
           } else {
             if (isTarget) {
               if (isPaintedCorrect) {
