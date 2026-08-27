@@ -81,13 +81,38 @@ export default defineConfig(({ mode }) => {
         registerType: "autoUpdate",
         devOptions: { enabled: false },
         manifestFilename: "manifest.json",
-        includeAssets: ["**/*.{png,jpg,jpeg,svg,gif,ico,webp}"],
+        includeAssets: ["favicon.png", "favicon.svg"],
         workbox: {
           globPatterns: ["**/*.{js,css,html,ico,png,svg,jpg,jpeg,gif,webp,webmanifest}"],
+          globIgnores: ["daily-challenge/**", "media/**", "**/drawing_*.{png,jpg,jpeg,svg,gif,webp}", "**/demo-*.{gif,mp4,webm}"],
           cleanupOutdatedCaches: true,
           clientsClaim: false,
           skipWaiting: false,
-          maximumFileSizeToCacheInBytes: 15 * 1024 * 1024,
+          maximumFileSizeToCacheInBytes: 5 * 1024 * 1024,
+          runtimeCaching: [
+            {
+              urlPattern: /^\/daily-challenge\/.*\.(png|jpg|jpeg|svg|gif|webp)$/i,
+              handler: "StaleWhileRevalidate",
+              options: {
+                cacheName: "daily-challenges-cache",
+                expiration: {
+                  maxEntries: 10,
+                  maxAgeSeconds: 60 * 60 * 24 * 7, // 1 week
+                },
+              },
+            },
+            {
+              urlPattern: /^\/media\/.*\.(gif|mp4|webm)$/i,
+              handler: "CacheFirst",
+              options: {
+                cacheName: "media-cache",
+                expiration: {
+                  maxEntries: 5,
+                  maxAgeSeconds: 60 * 60 * 24 * 30, // 30 days
+                },
+              },
+            },
+          ],
         },
         manifest: manifestJson as ManifestOptions,
       }),

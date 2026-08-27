@@ -21,10 +21,8 @@ if ("serviceWorker" in navigator && !import.meta.env.DEV) {
 
 document.addEventListener("visibilitychange", () => {
   if (document.visibilityState === "visible") {
-    navigator.serviceWorker?.ready.then((registration) => {
-      registration.update().catch(() => {
-        // Ignore update errors (e.g. offline)
-      });
-    });
+    // We intentionally removed the aggressive registration.update() here
+    // to prevent background asset churn and potential CPU spikes when the user 
+    // switches back to the app mid-painting.
   }
 });
