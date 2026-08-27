@@ -4,7 +4,7 @@ import { ProcessedArtwork, ArtworkSummary, UndoHistoryItem } from "../types";
 import { processImageToCartoonPalette, serializeArtworkToSvg, hydrateArtworkFromSvg } from "../utils/imageProcessor";
 import { soundEffects } from "../utils/soundEffects";
 import confetti from "canvas-confetti";
-import { copyMapSet, deepCopy } from "../utils/object";
+import { copyMapSet, copyBrushStrokePaths } from "../utils/object";
 import { TRANSPARENT_HEX, PAINTABLE_REGION_HEX, FALLBACK_IMAGE_SIZE_PX } from "../utils/constants";
 import { normalizeHex } from "../utils/color";
 import { exportArtworkSvgDataUrl } from "../utils/download";
@@ -588,7 +588,7 @@ export function pushUndoState(currentArtwork: ProcessedArtwork) {
       /** For the painting state */
       regionsCurrentFillInfo: new Map(currentArtwork.regionsCurrentFillInfo),
       /** For the custom brush strokes */
-      brushStrokePaths: deepCopy(currentArtwork.brushStrokePaths),
+      brushStrokePaths: copyBrushStrokePaths(currentArtwork.brushStrokePaths),
     } as const,
   ];
 

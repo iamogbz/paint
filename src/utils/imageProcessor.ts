@@ -1176,6 +1176,8 @@ export function hydrateArtworkFromSvg(svgString: string, fallback?: Partial<Proc
   };
 }
 
+const svgElemCache = new WeakMap<SVGSVGElement, { fillElems: Map<string, SVGElement>; strokesContainers: Map<string, SVGGElement> }>();
+
 export function updateArtworkSvgWithUserPaints(svgElem: SVGSVGElement, artwork: ProcessedArtwork) {
   if (artwork.id) svgElem.setAttribute("data-id", artwork.id);
   if (artwork.name) svgElem.setAttribute("data-name", artwork.name);
@@ -1184,8 +1186,18 @@ export function updateArtworkSvgWithUserPaints(svgElem: SVGSVGElement, artwork: 
   svgElem.setAttribute("width", "100%");
   svgElem.setAttribute("height", "100%");
 
+  let cache = svgElemCache.get(svgElem);
+  if (!cache) {
+    cache = { fillElems: new Map(), strokesContainers: new Map() };
+    svgElemCache.set(svgElem, cache);
+  }
+
   artwork.regionsCurrentFillInfo.forEach((currentFill, regionId) => {
-    const fillElem = svgElem.querySelector(`[data-region-id="${regionId}"]`) as SVGElement;
+    let fillElem = cache!.fillElems.get(regionId);
+    if (!fillElem) {
+      fillElem = svgElem.querySelector(`[data-region-id="${regionId}"]`) as SVGElement;
+      if (fillElem) cache!.fillElems.set(regionId, fillElem);
+    }
     if (!fillElem) return;
     const fill = normalizeHex(currentFill) || TRANSPARENT_HEX;
     fillElem.setAttribute("fill", fill);
@@ -1195,7 +1207,11 @@ export function updateArtworkSvgWithUserPaints(svgElem: SVGSVGElement, artwork: 
       fillElem.setAttribute("assigned-fill", assigned);
     }
 
-    const strokesContainer = svgElem.querySelector(`#brush-strokes-${regionId}`) as SVGGElement;
+    let strokesContainer = cache!.strokesContainers.get(regionId);
+    if (!strokesContainer) {
+      strokesContainer = svgElem.querySelector(`#brush-strokes-${regionId}`) as SVGGElement;
+      if (strokesContainer) cache!.strokesContainers.set(regionId, strokesContainer);
+    }
     if (!strokesContainer) return;
 
     const strokesRecord = artwork.brushStrokePaths[regionId];

@@ -1081,6 +1081,8 @@ export class EaselBoard extends SignalElement {
     });
   };
 
+  private guideElemCache = new WeakMap<HTMLElement, Map<string, Element>>();
+
   private updateArtwork = () => {
     if (this.requestedRepaintAnimationFrame !== null) {
       window.cancelAnimationFrame(this.requestedRepaintAnimationFrame);
@@ -1094,6 +1096,12 @@ export class EaselBoard extends SignalElement {
       const currentArtwork = currentArtworkSignal.get();
 
       if (guideLayer) {
+        let cache = this.guideElemCache.get(guideLayer);
+        if (!cache || this.artworkId !== currentArtwork?.id) {
+          cache = new Map<string, Element>();
+          this.guideElemCache.set(guideLayer, cache);
+        }
+
         const guideSvg = guideLayer.querySelector("svg");
         if (guideSvg) {
           guideSvg.setAttribute("width", "100%");
@@ -1139,6 +1147,8 @@ export class EaselBoard extends SignalElement {
       if (fillSvg) updateArtworkSvgWithUserPaints(fillSvg, currentArtwork);
       if (guideLayer) {
         const { mode: dropperMode } = draggedColorPositionSignal.get() ?? {};
+        const cache = this.guideElemCache.get(guideLayer);
+        
         // update the guide layer with current user interaction
         currentArtwork?.regionsDrawingInfo.forEach((region) => {
           const expectedColorHex = region.fillColor;
@@ -1179,11 +1189,17 @@ export class EaselBoard extends SignalElement {
             }
           }
 
-          const guideElem = guideLayer.querySelector(`[data-region-id=${region.id}]`);
-          guideElem?.setAttribute("fill", "none");
-          guideElem?.setAttribute("stroke", stroke);
-          guideElem?.setAttribute("stroke-width", strokeWidth.toString());
-          guideElem?.setAttribute("class", elemClass);
+          let guideElem = cache!.get(region.id);
+          if (!guideElem) {
+            guideElem = guideLayer.querySelector(`[data-region-id=${region.id}]`) || undefined;
+            if (guideElem) cache!.set(region.id, guideElem);
+          }
+          if (guideElem) {
+            guideElem.setAttribute("fill", "none");
+            guideElem.setAttribute("stroke", stroke);
+            guideElem.setAttribute("stroke-width", strokeWidth.toString());
+            guideElem.setAttribute("class", elemClass);
+          }
         });
       }
     });
