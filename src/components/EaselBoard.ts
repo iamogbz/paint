@@ -1081,7 +1081,7 @@ export class EaselBoard extends SignalElement {
     });
   };
 
-  private guideElemCache = new WeakMap<HTMLElement, Map<string, Element>>();
+  private guideElemCache = new WeakMap<SVGSVGElement, Map<string, Element>>();
 
   private updateArtwork = () => {
     if (this.requestedRepaintAnimationFrame !== null) {
@@ -1096,17 +1096,19 @@ export class EaselBoard extends SignalElement {
       const currentArtwork = currentArtworkSignal.get();
 
       if (guideLayer) {
-        let cache = this.guideElemCache.get(guideLayer);
-        if (!cache || this.artworkId !== currentArtwork?.id) {
-          cache = new Map<string, Element>();
-          this.guideElemCache.set(guideLayer, cache);
-        }
-
         const guideSvg = guideLayer.querySelector("svg");
+        
+        let cache: Map<string, Element> | undefined;
         if (guideSvg) {
+          cache = this.guideElemCache.get(guideSvg);
+          if (!cache) {
+            cache = new Map<string, Element>();
+            this.guideElemCache.set(guideSvg, cache);
+          }
           guideSvg.setAttribute("width", "100%");
           guideSvg.setAttribute("height", "100%");
         }
+
         if (guideSvg && currentArtwork) {
           const livePathId = "live-brush-stroke";
           let livePath = guideSvg.querySelector(`#${livePathId}`) as SVGPathElement;
@@ -1146,8 +1148,9 @@ export class EaselBoard extends SignalElement {
       const fillSvg = fillLayer.querySelector("svg");
       if (fillSvg) updateArtworkSvgWithUserPaints(fillSvg, currentArtwork);
       if (guideLayer) {
+        const guideSvg = guideLayer.querySelector("svg");
         const { mode: dropperMode } = draggedColorPositionSignal.get() ?? {};
-        const cache = this.guideElemCache.get(guideLayer);
+        const cache = guideSvg ? this.guideElemCache.get(guideSvg) : undefined;
         
         // update the guide layer with current user interaction
         currentArtwork?.regionsDrawingInfo.forEach((region) => {
@@ -1189,10 +1192,10 @@ export class EaselBoard extends SignalElement {
             }
           }
 
-          let guideElem = cache!.get(region.id);
+          let guideElem = cache?.get(region.id);
           if (!guideElem) {
             guideElem = guideLayer.querySelector(`[data-region-id=${region.id}]`) || undefined;
-            if (guideElem) cache!.set(region.id, guideElem);
+            if (guideElem && cache) cache.set(region.id, guideElem);
           }
           if (guideElem) {
             guideElem.setAttribute("fill", "none");
