@@ -307,6 +307,12 @@ export class EaselBoard extends SignalElement {
     } catch (err) {}
   };
 
+  private handleGlobalPointerClick = (e: MouseEvent) => {
+    // handle clicks by simulating pointer down and up
+    this.handleGlobalPointerDown(e as PointerEvent);
+    this.handleGlobalPointerUp(e as PointerEvent);
+  }
+
   private handleGlobalPointerDown = (e: PointerEvent) => {
     if (!this.containerElement) return;
 
@@ -1013,6 +1019,7 @@ export class EaselBoard extends SignalElement {
     window.addEventListener("blur", this.handleFocusOut);
     window.addEventListener("easel-pan-delta", this.handlePanDelta as EventListener);
     window.addEventListener("easel-reset-pan", this.handlePanReset);
+    window.addEventListener("click", this.handleGlobalPointerClick);
     window.addEventListener("pointerdown", this.handleGlobalPointerDown);
     window.addEventListener("pointermove", this.handleGlobalPointerMove);
     window.addEventListener("pointerup", this.handleGlobalPointerUp);
@@ -1030,6 +1037,7 @@ export class EaselBoard extends SignalElement {
     window.removeEventListener("blur", this.handleFocusOut);
     window.removeEventListener("easel-pan-delta", this.handlePanDelta as EventListener);
     window.removeEventListener("easel-reset-pan", this.handlePanReset);
+    window.removeEventListener("click", this.handleGlobalPointerClick);
     window.removeEventListener("pointerdown", this.handleGlobalPointerDown);
     window.removeEventListener("pointermove", this.handleGlobalPointerMove);
     window.removeEventListener("pointerup", this.handleGlobalPointerUp);
@@ -1097,7 +1105,7 @@ export class EaselBoard extends SignalElement {
 
       if (guideLayer) {
         const guideSvg = guideLayer.querySelector("svg");
-        
+
         let cache: Map<string, Element> | undefined;
         if (guideSvg) {
           cache = this.guideElemCache.get(guideSvg);
@@ -1151,7 +1159,7 @@ export class EaselBoard extends SignalElement {
         const guideSvg = guideLayer.querySelector("svg");
         const { mode: dropperMode } = draggedColorPositionSignal.get() ?? {};
         const cache = guideSvg ? this.guideElemCache.get(guideSvg) : undefined;
-        
+
         // update the guide layer with current user interaction
         currentArtwork?.regionsDrawingInfo.forEach((region) => {
           const expectedColorHex = region.fillColor;
