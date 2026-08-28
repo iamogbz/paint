@@ -16,6 +16,7 @@
 
 | Daily Challenges | [Art Link](https://pixabay.com/vectors/search/?order=ec)                          |
 | ---------------  | --------------------------------------------------------------------------------- |
+| 2026-08-28       | <https://pixabay.com/photos/flower-nature-bloom-plant-flora-10394542/>            |
 | 2026-08-27       | <https://pixabay.com/photos/giraffe-animal-safari-mammal-165200/>                 |
 | 2026-08-26       | <https://pixabay.com/illustrations/sea-ocean-phone-wallpaper-wallpaper-8504503/>  |
 | 2026-08-25       | <https://pixabay.com/photos/hoian-bike-streets-bicycle-4988319/>                  |
