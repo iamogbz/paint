@@ -383,7 +383,6 @@ function sampleAndClusterRegionColors(
   for (let i = 1; i <= regionCount; i++) {
     const count = pixelCounts[i];
     const regionId = `region-${i - 1}`;
-    regionPixelCounts.set(regionId, count);
     let r: number, g: number, b: number;
 
     if (count > 0) {
@@ -418,6 +417,7 @@ function sampleAndClusterRegionColors(
         b = (fallbackPixel >> 16) & 0xff;
       }
     }
+    regionPixelCounts.set(regionId, count);
     rawRgbList.push({ id: regionId, r, g, b, count });
   }
 
@@ -589,10 +589,29 @@ function mergeRegions(
     targetEl.setAttribute("data-bbox", `${b2.width.toFixed(2)},${b2.height.toFixed(2)},${b2.x.toFixed(2)},${b2.y.toFixed(2)}`);
   }
 
-  // Update target pixel surface area
+  // Update target pixel surface area and surface-area-weighted color
   const srcPixelArea = regionPixelAreaMap.get(sourceId) || 0;
   const tgtPixelArea = regionPixelAreaMap.get(targetId) || 0;
-  regionPixelAreaMap.set(targetId, srcPixelArea + tgtPixelArea);
+  const totalArea = srcPixelArea + tgtPixelArea;
+
+  const srcColor = el.getAttribute("assigned-fill");
+  const tgtColor = targetEl.getAttribute("assigned-fill");
+  if (srcColor && tgtColor && srcColor !== TRANSPARENT_HEX && tgtColor !== TRANSPARENT_HEX && totalArea > 0) {
+    const rgbSrc = hexToRgb(srcColor);
+    const rgbTgt = hexToRgb(tgtColor);
+    if (rgbSrc && rgbTgt) {
+      const newR = Math.round((rgbSrc[0] * srcPixelArea + rgbTgt[0] * tgtPixelArea) / totalArea);
+      const newG = Math.round((rgbSrc[1] * srcPixelArea + rgbTgt[1] * tgtPixelArea) / totalArea);
+      const newB = Math.round((rgbSrc[2] * srcPixelArea + rgbTgt[2] * tgtPixelArea) / totalArea);
+      const newHex = rgbToHex(newR, newG, newB);
+      targetEl.setAttribute("assigned-fill", newHex);
+      if (sampledData?.regionColors) {
+        sampledData.regionColors.set(targetId, newHex);
+      }
+    }
+  }
+
+  regionPixelAreaMap.set(targetId, totalArea);
   regionPixelAreaMap.delete(sourceId);
 
   // Remove small region
@@ -749,7 +768,7 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     regionBoundsMap.set(fillRegionId, { ...bbox });
     fillElement.setAttribute("data-bbox", `${bbox.width.toFixed(2)},${bbox.height.toFixed(2)},${bbox.x.toFixed(2)},${bbox.y.toFixed(2)}`);
 
-    const pixelArea = sampledData?.regionPixelCounts?.get(fillRegionId) ?? bbox.width * bbox.height;
+    const pixelArea = sampledData?.regionPixelCounts?.get(fillRegionId) ?? 0;
     regionPixelAreaMap.set(fillRegionId, pixelArea);
 
     if (elementFill === "none") {
