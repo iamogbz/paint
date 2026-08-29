@@ -81,7 +81,7 @@ export default defineConfig(({ mode }) => {
         registerType: "autoUpdate",
         devOptions: { enabled: false },
         manifestFilename: "manifest.json",
-        includeAssets: ["favicon.png", "favicon.svg"],
+        includeAssets: ["favicon.png", "favicon.ico"],
         workbox: {
           globPatterns: ["**/*.{js,css,html,ico,png,svg,jpg,jpeg,gif,webp,webmanifest}"],
           globIgnores: ["daily-challenge/**", "media/**", "**/drawing_*.{png,jpg,jpeg,svg,gif,webp}", "**/demo-*.{gif,mp4,webm}"],
