@@ -16,6 +16,8 @@
 
 | Daily Challenges | [Art Link](https://pixabay.com/vectors/search/?order=ec)                          |
 | ---------------  | --------------------------------------------------------------------------------- |
+| 2026-08-30       | <https://pixabay.com/illustrations/man-read-cat-boy-book-plant-lover-8685735/>    |
+| 2026-08-29       | <https://pixabay.com/illustrations/fall-autumn-window-woman-girl-8321122/>        |
 | 2026-08-28       | <https://pixabay.com/photos/flower-nature-bloom-plant-flora-10394542/>            |
 | 2026-08-27       | <https://pixabay.com/photos/giraffe-animal-safari-mammal-165200/>                 |
 | 2026-08-26       | <https://pixabay.com/illustrations/sea-ocean-phone-wallpaper-wallpaper-8504503/>  |
