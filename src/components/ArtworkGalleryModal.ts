@@ -307,6 +307,7 @@ export class ArtworkGalleryModal extends SignalElement {
             <button
               @click=${() => {
                 isGalleryOpenSignal.set(false);
+                handleSelectArtwork(null);
               }}
               style="background-color: #FFFFFF; color: #000000; border: 2.5px solid #000000; font-weight: 900; padding: 0.625rem 1.25rem; border-radius: 20px; font-size: 0.75rem; box-shadow: 2px 2px 0px 0px #000000; text-transform: uppercase; cursor: pointer;"
             >
