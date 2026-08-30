@@ -6,6 +6,7 @@ import {
   MIN_REGION_DIMENSION_PX,
   MIN_REGION_DIMENSION_RATIO,
   PAINTABLE_REGION_HEX,
+  SIGNIFICANT_REGION_SURFACE_AREA_RATIO,
   SMALL_REGION_SURFACE_AREA_RATIO,
   TINY_REGION_SURFACE_AREA,
   TRANSPARENT_HEX,
@@ -203,14 +204,15 @@ function downscaleCanvasMultiStep(source: HTMLCanvasElement | HTMLImageElement, 
 
 /**
  * Samples pixel colors from the original bitmap for each SVG region using an offscreen ID-map pass,
- * detects direct topological adjacency (touching boundaries), and clusters perceptually similar colors
- * while strictly ensuring that directly adjacent regions receive distinct palette colors.
+ * detects direct topological adjacency (touching boundaries), and optionally clusters perceptually similar colors
+ * and strictly collapses pairwise close colors.
  */
 function sampleAndClusterRegionColors(
   origImgData: ImageData,
   width: number,
   height: number,
-  fillableElements: SVGFillableElement[]
+  fillableElements: SVGFillableElement[],
+  clusterAndCollapse: boolean = true
 ): {
   regionColors: Map<string, string>;
   adjacencyGraph: Map<string, Set<string>>;
@@ -221,8 +223,12 @@ function sampleAndClusterRegionColors(
   const adjacencyGraph = new Map<string, Set<string>>();
   const regionPixelCounts = new Map<string, number>();
 
-  fillableElements.forEach((_, idx) => {
-    adjacencyGraph.set(`region-${idx}`, new Set<string>());
+  const regionIdMap = new Map<number, string>();
+  fillableElements.forEach((elem, idx) => {
+    const regionNum = idx + 1; // 1-based ID
+    const regionId = elem.getAttribute("data-region-id") || elem.getAttribute("id") || `region-${idx}`;
+    regionIdMap.set(regionNum, regionId);
+    adjacencyGraph.set(regionId, new Set<string>());
   });
 
   if (regionCount === 0) {
@@ -371,10 +377,12 @@ function sampleAndClusterRegionColors(
   touchingPairs.forEach((packed) => {
     const minNum = Math.floor(packed / 1000000);
     const maxNum = packed % 1000000;
-    const idA = `region-${minNum - 1}`;
-    const idB = `region-${maxNum - 1}`;
-    adjacencyGraph.get(idA)?.add(idB);
-    adjacencyGraph.get(idB)?.add(idA);
+    const idA = regionIdMap.get(minNum);
+    const idB = regionIdMap.get(maxNum);
+    if (idA && idB) {
+      adjacencyGraph.get(idA)?.add(idB);
+      adjacencyGraph.get(idB)?.add(idA);
+    }
   });
 
   // 3. Compute base sampled representative color for each region
@@ -382,7 +390,7 @@ function sampleAndClusterRegionColors(
 
   for (let i = 1; i <= regionCount; i++) {
     const count = pixelCounts[i];
-    const regionId = `region-${i - 1}`;
+    const regionId = regionIdMap.get(i)!;
     let r: number, g: number, b: number;
 
     if (count > 0) {
@@ -392,9 +400,9 @@ function sampleAndClusterRegionColors(
     } else {
       // Fallback for sub-pixel / thin vector paths: check element's existing fill first
       const elem = fillableElements[i - 1];
-      const existingFill = elem.getAttribute("fill");
+      const existingFill = elem.getAttribute("assigned-fill") || elem.getAttribute("fill");
       let fallbackRgb: readonly [number, number, number, number] | null = null;
-      if (existingFill && existingFill !== "none") {
+      if (existingFill && existingFill !== "none" && existingFill !== TRANSPARENT_HEX) {
         fallbackRgb = hexToRgb(getHexCode(existingFill));
       }
 
@@ -419,6 +427,14 @@ function sampleAndClusterRegionColors(
     }
     regionPixelCounts.set(regionId, count);
     rawRgbList.push({ id: regionId, r, g, b, count });
+  }
+
+  // If clustering & collapsing is not requested, assign raw sampled colors directly
+  if (!clusterAndCollapse) {
+    for (const item of rawRgbList) {
+      regionColors.set(item.id, rgbToHex(item.r, item.g, item.b));
+    }
+    return { regionColors, adjacencyGraph, regionPixelCounts };
   }
 
   // 4. Color Clumping / Palette Clustering
@@ -740,9 +756,8 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
   });
   allFillableElements.forEach((elem) => elem.parentElement?.appendChild(elem));
 
-  // Determine fill colors: if bitmap, sample directly from pristine pixels with graph adjacency-constrained palette clumping
-  const sampledData = origImgDataForSampling !== null ? sampleAndClusterRegionColors(origImgDataForSampling, processingImageWidthSignal.get(), processingImageHeightSignal.get(), allFillableElements) : null;
-  origImgDataForSampling = null;
+  // Determine initial fill colors: if bitmap, sample directly from pristine pixels for raw colors, adjacency graph, and pixel counts without color collapsing
+  let sampledData = origImgDataForSampling !== null ? sampleAndClusterRegionColors(origImgDataForSampling, processingImageWidthSignal.get(), processingImageHeightSignal.get(), allFillableElements, false) : null;
 
   const regionPixelAreaMap: Map<string, number> = new Map();
 
@@ -794,6 +809,7 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
   const imgH = processingImageHeightSignal.get();
   const totalImageSurfaceArea = imgW * imgH;
   const minRegionPixelArea = Math.max(TINY_REGION_SURFACE_AREA, totalImageSurfaceArea * SMALL_REGION_SURFACE_AREA_RATIO);
+  const minSignificantRegionPixelArea = totalImageSurfaceArea * SIGNIFICANT_REGION_SURFACE_AREA_RATIO;
   const minRegionWidth = Math.max(MIN_REGION_DIMENSION_PX, imgW * MIN_REGION_DIMENSION_RATIO);
   const minRegionHeight = Math.max(MIN_REGION_DIMENSION_PX, imgH * MIN_REGION_DIMENSION_RATIO);
 
@@ -809,12 +825,16 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
     return lab;
   };
 
-  // Helper to determine if a region is thin or small based on 4 criteria:
+  // Helper to determine if a region is thin or small:
+  // Note: A region is not considered small or thin if its surface area is at least SIGNIFICANT_REGION_SURFACE_AREA_RATIO
+  // of the total image, even if it is not dense (i.e. low bounding box fill ratio).
+  // Otherwise, it is thin or small based on 4 criteria:
   // 1. Height is less than image-relative height threshold
   // 2. Width is less than image-relative width threshold
   // 3. Surface area is less than image-relative surface area threshold
   // 4. Surface area is less than fill ratio relative to the region's bounding box area
   const isRegionThinOrSmall = (id: string, pixelArea: number) => {
+    if (pixelArea >= minSignificantRegionPixelArea) return false;
     const bbox = regionBoundsMap.get(id);
     if (!bbox) return false;
     if (bbox.height <= minRegionHeight) return true;
@@ -904,6 +924,29 @@ export async function processImageToCartoonPalette(imageSrc: string, artworkName
         hasRemainingThinRegions = true;
       }
     }
+  }
+
+  // Sample and cluster palette colors as the final step on the merged regions, collapsing close shades
+  const remainingFillableElements = Array.from(regionSVGElements.values()) as SVGFillableElement[];
+  const finalSampledData =
+    origImgDataForSampling !== null
+      ? sampleAndClusterRegionColors(origImgDataForSampling, processingImageWidthSignal.get(), processingImageHeightSignal.get(), remainingFillableElements, true)
+      : null;
+  origImgDataForSampling = null;
+
+  if (finalSampledData) {
+    sampledData = finalSampledData;
+    remainingFillableElements.forEach((fillElement) => {
+      const regionId = fillElement.getAttribute("data-region-id") || "";
+      const fillColor = finalSampledData.regionColors.get(regionId);
+      if (fillColor) {
+        fillElement.setAttribute("assigned-fill", fillColor);
+      }
+      const pixelCount = finalSampledData.regionPixelCounts.get(regionId);
+      if (pixelCount !== undefined) {
+        regionPixelAreaMap.set(regionId, pixelCount);
+      }
+    });
   }
 
   // Merge adjacent regions that have the same assigned color
