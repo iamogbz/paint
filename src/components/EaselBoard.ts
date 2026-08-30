@@ -161,6 +161,7 @@ export class EaselBoard extends SignalElement {
   private dragDeltaY = 0;
   private panX = 0;
   private panY = 0;
+  private possibleClickHandled = false;
 
   // Pinch Zoom State
   private activePointers: Map<number, PointerEvent> = new Map();
@@ -308,6 +309,10 @@ export class EaselBoard extends SignalElement {
   };
 
   private handleGlobalPointerClick = (e: MouseEvent) => {
+    if (this.possibleClickHandled) {
+      this.possibleClickHandled = false;
+      return;
+    }
     // handle clicks by simulating pointer down and up
     this.handleGlobalPointerDown(e as PointerEvent);
     this.handleGlobalPointerUp(e as PointerEvent);
@@ -315,6 +320,7 @@ export class EaselBoard extends SignalElement {
 
   private handleGlobalPointerDown = (e: PointerEvent) => {
     if (!this.containerElement) return;
+    this.possibleClickHandled = false;
 
     // Check if the tap happened outside the canvas container
     const isOutsideCanvas = !e.composedPath().includes(this.containerElement);
@@ -367,6 +373,7 @@ export class EaselBoard extends SignalElement {
       this.isPinchAction = true;
       this.isDragCanvasAction = true;
       this.isBrushPainting = false;
+      this.possibleClickHandled = true;
 
       const pointers = Array.from(this.activePointers.values());
       this.initialPinchDistance = Math.hypot(pointers[0].clientX - pointers[1].clientX, pointers[0].clientY - pointers[1].clientY);
@@ -450,6 +457,7 @@ export class EaselBoard extends SignalElement {
         this.updateArtwork();
       }
     } else if (this.isPointerDown && !this.isPinchAction && this.touchStartX !== null && this.touchStartY !== null) {
+      this.possibleClickHandled = true;
       const dx = e.clientX - this.touchStartX;
       const dy = e.clientY - this.touchStartY;
       const distance = Math.hypot(dx, dy);
@@ -481,6 +489,7 @@ export class EaselBoard extends SignalElement {
   };
 
   private handleGlobalPointerUp = (e: PointerEvent) => {
+    this.possibleClickHandled = true;
     const previousHoveredRegionId = this.hoveredRegionId;
     const dragPos = draggedColorPositionSignal.get();
     if (dragPos !== null) {
