@@ -14,8 +14,9 @@
 - <https://www.visioncortex.org/vtracer>
 - <https://pixabay.com/>
 
-| Daily Challenges | [Art Link](https://pixabay.com/vectors/search/?order=ec)                          |
+| Daily Challenges | [Art Link](https://pixabay.com/illustrations/search/?order=ec)                    |
 | ---------------  | --------------------------------------------------------------------------------- |
+| 2026-08-31       | <https://github.com/user-attachments/assets/21d832c2-9e09-4cb0-a3a3-dfd1c0f2f4e7> |
 | 2026-08-30       | <https://pixabay.com/illustrations/man-read-cat-boy-book-plant-lover-8685735/>    |
 | 2026-08-29       | <https://pixabay.com/illustrations/fall-autumn-window-woman-girl-8321122/>        |
 | 2026-08-28       | <https://pixabay.com/photos/flower-nature-bloom-plant-flora-10394542/>            |
