@@ -15,7 +15,8 @@
 - <https://pixabay.com/>
 
 | Daily Challenges | [Art Link](https://pixabay.com/illustrations/search/?order=ec)                    |
-| ---------------  | --------------------------------------------------------------------------------- |
+| ---------------- | --------------------------------------------------------------------------------- |
+| 2026-09-01       | <https://pixabay.com/illustrations/flowers-pastel-colors-drawing-10443569/>       |
 | 2026-08-31       | <https://github.com/user-attachments/assets/21d832c2-9e09-4cb0-a3a3-dfd1c0f2f4e7> |
 | 2026-08-30       | <https://pixabay.com/illustrations/man-read-cat-boy-book-plant-lover-8685735/>    |
 | 2026-08-29       | <https://pixabay.com/illustrations/fall-autumn-window-woman-girl-8321122/>        |
