@@ -316,7 +316,7 @@ export class EaselBoard extends SignalElement {
     // handle clicks by simulating pointer down and up
     this.handleGlobalPointerDown(e as PointerEvent);
     this.handleGlobalPointerUp(e as PointerEvent);
-  }
+  };
 
   private handleGlobalPointerDown = (e: PointerEvent) => {
     if (!this.containerElement) return;
@@ -567,9 +567,7 @@ export class EaselBoard extends SignalElement {
               const toleranceX = 4 * svgPoints[0].scaleX + strokeWidth;
               const toleranceY = 4 * svgPoints[0].scaleY + strokeWidth;
 
-              const regionPoints = boundingBox
-                ? svgPoints.filter((pos) => pos.x >= boundingBox.x - toleranceX && pos.x <= boundingBox.x + boundingBox.width + toleranceX && pos.y >= boundingBox.y - toleranceY && pos.y <= boundingBox.y + boundingBox.height + toleranceY)
-                : svgPoints;
+              const regionPoints = boundingBox ? svgPoints.filter((pos) => pos.x >= boundingBox.x - toleranceX && pos.x <= boundingBox.x + boundingBox.width + toleranceX && pos.y >= boundingBox.y - toleranceY && pos.y <= boundingBox.y + boundingBox.height + toleranceY) : svgPoints;
 
               if (regionPoints.length > 0) {
                 const originalStrokes = currentArtwork.brushStrokePaths[regionId];
@@ -1394,16 +1392,6 @@ export class EaselBoard extends SignalElement {
                           </div>
                         </div>
                       </div>
-                      <footer style=${this.renderStyleObject(footerStyleSignal.get())}>
-                        <p style="margin: 0;">
-                          PAINT by COLOURS
-                          <a href="https://github.com/sponsors/iamogbz" target="_blank" style="color: inherit; text-decoration: inherit; cursor: pointer;">❤️ QBRKTS</a>
-                          ©️ ${new Date().getFullYear()}
-                        </p>
-                        <div style="margin-top: 1em; display: inline-flex; align-items: center; justify-content: center; padding: 0.2em 0.5em; background-color: rgba(0, 0, 0, 0.01); border: 0.05em solid rgba(0, 0, 0, 0.05); border-radius: 0.75em;" title="version">
-                          <a href="https://github.com/iamogbz/paint/commit/${__COMMIT_HASH__ || ""}" target="_blank" style="font-family: monospace; font-size: 0.7em; font-weight: 700; letter-spacing: 0.05em; color: inherit; text-decoration: none; text-transform: uppercase">${typeof __COMMIT_HASH__ !== "undefined" ? __COMMIT_HASH__.slice(0, 7) : ""}</a>
-                        </div>
-                      </footer>
                     `
                   : ""}
                 ${currentArtwork && !isProcessing
@@ -1435,6 +1423,13 @@ export class EaselBoard extends SignalElement {
               <div style="width: 1.5em; height: 4em; background-color: #845442; border: 0.125em solid #845442; border-bottom-left-radius: 0.5em; border-bottom-right-radius: 0.5em; transform: rotate(-12deg); box-shadow: 0 0.25em 0.375em rgba(0,0,0,0.1);"></div>
             </div>
           </div>
+
+          <footer style=${this.renderStyleObject(footerStyleSignal.get())}>
+            <games-footer></games-footer>
+            <div style="margin-top: 1em; display: inline-flex; align-items: center; justify-content: center; padding: 0.2em 0.5em; background-color: rgba(0, 0, 0, 0.01); border: 0.05em solid rgba(0, 0, 0, 0.05); border-radius: 0.75em;" title="version">
+              <a href="https://github.com/iamogbz/paint/commit/${__COMMIT_HASH__ || ""}" target="_blank" style="font-family: monospace; font-size: 0.7em; font-weight: 700; letter-spacing: 0.05em; color: inherit; text-decoration: none; text-transform: uppercase">${typeof __COMMIT_HASH__ !== "undefined" ? __COMMIT_HASH__.slice(0, 7) : ""}</a>
+            </div>
+          </footer>
         </div>
       </div>
     `;
